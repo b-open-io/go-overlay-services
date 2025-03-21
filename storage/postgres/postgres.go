@@ -4,8 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/4chain-ag/go-overlay-services/storage"
-	"github.com/4chain-ag/go-overlay-services/types"
+	"github.com/4chain-ag/go-overlay-services/engine"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/jackc/pgx/v5"
@@ -24,7 +23,7 @@ func NewPostgresStorage(ctx context.Context, conn string) (*PostgresStorage, err
 	}
 }
 
-func (s *PostgresStorage) InsertOutput(ctx context.Context, utxo *types.Output) error {
+func (s *PostgresStorage) InsertOutput(ctx context.Context, utxo *engine.Output) error {
 	_, err := s.DB.Exec(ctx, `
 		INSERT INTO outputs(outpoint, topic, height, idx, satoshis, script, spent)
 		VALUES($1, $2, $3, $4, $5, $6, $7)
@@ -40,7 +39,7 @@ func (s *PostgresStorage) InsertOutput(ctx context.Context, utxo *types.Output) 
 	return err
 }
 
-func (s *PostgresStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoint, topic string, spent bool, includeBEEF bool) (*types.Output, error) {
+func (s *PostgresStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoint, topic string, spent bool, includeBEEF bool) (*engine.Output, error) {
 	var sql strings.Builder
 	if includeBEEF {
 		sql.WriteString("SELECT o.outpoint, o.topic, o.height, o.idx, o.satoshis, o.script, o.spent, t.beef ")
@@ -55,17 +54,17 @@ func (s *PostgresStorage) FindOutput(ctx context.Context, outpoint *overlay.Outp
 		sql.WriteString("AND spent != '\\x' ")
 	}
 
-	var utxo types.Output
+	var utxo engine.Output
 	row := s.DB.QueryRow(ctx, sql.String(), outpoint, topic)
 	err := row.Scan(&utxo.Outpoint, &utxo.Topic, &utxo.BlockHeight, &utxo.BlockIdx, &utxo.Satoshis, &utxo.Script, &utxo.Spent)
 	if err == pgx.ErrNoRows {
-		err = storage.ErrNotFound
+		err = engine.ErrNotFound
 	}
 
 	return &utxo, err
 }
 
-func (s *PostgresStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent bool, includeBEEF bool) ([]*types.Output, error) {
+func (s *PostgresStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent bool, includeBEEF bool) ([]*engine.Output, error) {
 	var sql strings.Builder
 	if includeBEEF {
 		sql.WriteString("SELECT o.outpoint, o.topic, o.height, o.idx, o.satoshis, o.script, o.spent, t.beef ")
@@ -86,17 +85,17 @@ func (s *PostgresStorage) FindOutputs(ctx context.Context, outpoints []*overlay.
 	} else {
 		defer rows.Close()
 
-		var utxosByOutpoint = make(map[string]*types.Output)
-		// var utxos []*types.Output
+		var utxosByOutpoint = make(map[string]*engine.Output)
+		// var utxos []*engine.Output
 		for rows.Next() {
-			var utxo types.Output
+			var utxo engine.Output
 			if err := rows.Scan(&utxo.Outpoint, &utxo.Topic, &utxo.BlockHeight, &utxo.BlockIdx, &utxo.Satoshis, &utxo.Script, &utxo.Spent); err != nil {
 				return nil, err
 			}
 			utxosByOutpoint[utxo.Outpoint.String()] = &utxo
 		}
 
-		utxos := make([]*types.Output, len(outpoints))
+		utxos := make([]*engine.Output, len(outpoints))
 		for i, outpoint := range outpoints {
 			utxos[i] = utxosByOutpoint[outpoint.String()]
 		}
@@ -104,7 +103,7 @@ func (s *PostgresStorage) FindOutputs(ctx context.Context, outpoints []*overlay.
 	}
 }
 
-func (s *PostgresStorage) FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*types.Output, error) {
+func (s *PostgresStorage) FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error) {
 	var sql strings.Builder
 	if includeBEEF {
 		sql.WriteString("SELECT o.outpoint, o.topic, o.height, o.idx, o.satoshis, o.script, o.spent, t.beef ")
@@ -122,9 +121,9 @@ func (s *PostgresStorage) FindOutputsForTransaction(ctx context.Context, txid *c
 	} else {
 		defer rows.Close()
 
-		var utxos []*types.Output
+		var utxos []*engine.Output
 		for rows.Next() {
-			var utxo types.Output
+			var utxo engine.Output
 			if err := rows.Scan(&utxo.Outpoint, &utxo.Topic, &utxo.BlockHeight, &utxo.BlockIdx, &utxo.Satoshis, &utxo.Script, &utxo.Spent); err != nil {
 				return nil, err
 			}
@@ -134,7 +133,7 @@ func (s *PostgresStorage) FindOutputsForTransaction(ctx context.Context, txid *c
 	}
 }
 
-func (s *PostgresStorage) FindUTXOsForTopic(ctx context.Context, topic string, since float64, includeBEEF bool) ([]*types.Output, error) {
+func (s *PostgresStorage) FindUTXOsForTopic(ctx context.Context, topic string, since float64, includeBEEF bool) ([]*engine.Output, error) {
 	var sql strings.Builder
 	if includeBEEF {
 		sql.WriteString("SELECT o.outpoint, o.topic, o.height, o.idx, o.satoshis, o.script, o.spent, t.beef ")
@@ -152,9 +151,9 @@ func (s *PostgresStorage) FindUTXOsForTopic(ctx context.Context, topic string, s
 	} else {
 		defer rows.Close()
 
-		var utxos []*types.Output
+		var utxos []*engine.Output
 		for rows.Next() {
-			var utxo types.Output
+			var utxo engine.Output
 			if err := rows.Scan(&utxo.Outpoint, &utxo.Topic, &utxo.BlockHeight, &utxo.BlockIdx, &utxo.Satoshis, &utxo.Script, &utxo.Spent, &utxo.Beef); err != nil {
 				return nil, err
 			}

@@ -8,8 +8,6 @@ import (
 
 	"github.com/4chain-ag/go-overlay-services/advertiser"
 	"github.com/4chain-ag/go-overlay-services/gasp"
-	"github.com/4chain-ag/go-overlay-services/storage"
-	"github.com/4chain-ag/go-overlay-services/types"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
@@ -29,9 +27,9 @@ var (
 )
 
 type Engine struct {
-	Managers       map[string]types.TopicManager
-	LookupServices map[string]types.LookupService
-	Storage        storage.Storage
+	Managers       map[string]TopicManager
+	LookupServices map[string]LookupService
+	Storage        Storage
 	ChainTracker   chaintracker.ChainTracker
 	Broadcaster    transaction.Broadcaster
 	SHIPTrackers   []string
@@ -43,7 +41,7 @@ var ErrUnknownTopic = errors.New("unknown-topic")
 var ErrInvalidTransaction = errors.New("invalid-transaction")
 var ErrMissingInput = errors.New("missing-input")
 
-func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady func(steak overlay.Steak)) (map[string]*types.TopicContext, error) {
+func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady func(steak overlay.Steak)) (map[string]*TopicContext, error) {
 	for _, topic := range taggedBEEF.Topics {
 		if _, ok := e.Managers[topic]; !ok {
 			return nil, ErrUnknownTopic
@@ -61,10 +59,10 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	}
 }
 
-func (e *Engine) submitTx(ctx context.Context, tx *transaction.Transaction, topics []string, mode SumbitMode, onSteakReady func(steak overlay.Steak)) (map[string]*types.TopicContext, error) {
+func (e *Engine) submitTx(ctx context.Context, tx *transaction.Transaction, topics []string, mode SumbitMode, onSteakReady func(steak overlay.Steak)) (map[string]*TopicContext, error) {
 	txid := tx.TxID()
 	steak := make(overlay.Steak, len(topics))
-	contexts := make(map[string]*types.TopicContext, len(topics))
+	contexts := make(map[string]*TopicContext, len(topics))
 	inpoints := make([]*overlay.Outpoint, 0, len(tx.Inputs))
 	for _, input := range tx.Inputs {
 		inpoints = append(inpoints, &overlay.Outpoint{
@@ -83,13 +81,13 @@ func (e *Engine) submitTx(ctx context.Context, tx *transaction.Transaction, topi
 			steak[topic] = &overlay.AdmittanceInstructions{}
 			continue
 		}
-		tCtx := &types.TopicContext{
-			Inputs:  make(map[uint32]*types.Output, len(tx.Inputs)),
-			Outputs: make(map[uint32]*types.Output, len(tx.Outputs)),
+		tCtx := &TopicContext{
+			Inputs:  make(map[uint32]*Output, len(tx.Inputs)),
+			Outputs: make(map[uint32]*Output, len(tx.Outputs)),
 		}
 		contexts[topic] = tCtx
 		var err error
-		if tCtx.Result, err = manager.IdentifyAdmissableOutputs(tx, func(vin uint32) (output *types.Output, err error) {
+		if tCtx.Result, err = manager.IdentifyAdmissableOutputs(tx, func(vin uint32) (output *Output, err error) {
 			if vin >= uint32(len(tx.Inputs)) {
 				return nil, ErrMissingInput
 			}
@@ -114,7 +112,7 @@ func (e *Engine) submitTx(ctx context.Context, tx *transaction.Transaction, topi
 						return nil, err
 					} else if output = tCtx[topic].Outputs[input.SourceTxOutIndex]; output == nil {
 						out := input.SourceTransaction.Outputs[input.SourceTxOutIndex]
-						output = &types.Output{
+						output = &Output{
 							Outpoint: outpoint,
 							Script:   out.LockingScript,
 							Satoshis: out.Satoshis,
@@ -149,7 +147,7 @@ func (e *Engine) submitTx(ctx context.Context, tx *transaction.Transaction, topi
 		tCtx := contexts[topic]
 		admittance := steak[topic]
 		consumedOutpoints := make([]*overlay.Outpoint, 0, len(admittance.CoinsToRetain))
-		consumedOutputs := make([]*types.Output, 0, len(admittance.CoinsToRetain))
+		consumedOutputs := make([]*Output, 0, len(admittance.CoinsToRetain))
 
 		for vin, input := range tCtx.Inputs {
 			if input == nil {
@@ -188,7 +186,7 @@ func (e *Engine) submitTx(ctx context.Context, tx *transaction.Transaction, topi
 				Txid:        txid,
 				OutputIndex: uint32(vout),
 			}
-			output := &types.Output{
+			output := &Output{
 				Outpoint:        outpoint,
 				Script:          out.LockingScript,
 				Satoshis:        out.Satoshis,
@@ -259,7 +257,7 @@ func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*
 	}
 }
 
-func (e *Engine) GetUTXOHistory(ctx context.Context, output *types.Output, historySelector func(beef []byte, outputIndex uint32, currentDepth uint32) bool, currentDepth uint32) (*types.Output, error) {
+func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySelector func(beef []byte, outputIndex uint32, currentDepth uint32) bool, currentDepth uint32) (*Output, error) {
 	if historySelector == nil {
 		return output, nil
 	}
@@ -271,7 +269,7 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *types.Output, histo
 		return output, nil
 	}
 	outputsConsumed := output.OutputsConsumed[:]
-	childHistories := make(map[string]*types.Output, len(outputsConsumed))
+	childHistories := make(map[string]*Output, len(outputsConsumed))
 	for _, outpoint := range outputsConsumed {
 		if output, err := e.Storage.FindOutput(ctx, outpoint, nil, nil, true); err != nil {
 			return nil, err
@@ -325,7 +323,7 @@ func (e *Engine) ProvideForeignGASPNode(graphId string, txid string, outputIndex
 	return nil, nil
 }
 
-func (e *Engine) deleteUTXODeep(ctx context.Context, output *types.Output) error {
+func (e *Engine) deleteUTXODeep(ctx context.Context, output *Output) error {
 	if len(output.ConsumedBy) == 0 {
 		if err := e.Storage.DeleteOutput(ctx, output.Outpoint, output.Topic); err != nil {
 			return err
@@ -387,7 +385,7 @@ func (e *Engine) updateInputProofs(ctx context.Context, tx *transaction.Transact
 	return nil
 }
 
-func (e *Engine) updateMerkleProof(ctx context.Context, output *types.Output, txid chainhash.Hash, proof *transaction.MerklePath) error {
+func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid chainhash.Hash, proof *transaction.MerklePath) error {
 	if len(output.Beef) == 0 {
 		return errors.New("missing beef")
 	} else if tx, err := transaction.NewTransactionFromBEEF(output.Beef); err != nil {

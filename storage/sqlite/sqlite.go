@@ -7,8 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/4chain-ag/go-overlay-services/storage"
-	"github.com/4chain-ag/go-overlay-services/types"
+	"github.com/4chain-ag/go-overlay-services/engine"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 )
@@ -25,7 +24,7 @@ func NewSQLiteStorage(ctx context.Context, conn string) (*SQLiteStorage, error) 
 	}
 }
 
-func (s *SQLiteStorage) InsertOutput(ctx context.Context, utxo *types.Output) (err error) {
+func (s *SQLiteStorage) InsertOutput(ctx context.Context, utxo *engine.Output) (err error) {
 	consumed := []byte("[]")
 	if len(utxo.OutputsConsumed) > 0 {
 		if consumed, err = json.Marshal(utxo.OutputsConsumed); err != nil {
@@ -61,8 +60,8 @@ func (s *SQLiteStorage) InsertOutput(ctx context.Context, utxo *types.Output) (e
 	return
 }
 
-func (s *SQLiteStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (output *types.Output, err error) {
-	output = &types.Output{
+func (s *SQLiteStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (output *engine.Output, err error) {
+	output = &engine.Output{
 		Outpoint: outpoint,
 	}
 	query := `SELECT topic, height, idx, satoshis, script, spent, consumes, consumed_by
@@ -89,7 +88,7 @@ func (s *SQLiteStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoi
 		&consumes,
 		&consumedBy,
 	); err == sql.ErrNoRows {
-		return nil, storage.ErrNotFound
+		return nil, engine.ErrNotFound
 	} else if err != nil {
 		return nil, err
 	}
@@ -110,8 +109,8 @@ func (s *SQLiteStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoi
 	return
 }
 
-func (s *SQLiteStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*types.Output, error) {
-	var outputs []*types.Output
+func (s *SQLiteStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+	var outputs []*engine.Output
 	if len(outpoints) == 0 {
 		return nil, nil
 	}
@@ -143,7 +142,7 @@ func (s *SQLiteStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Ou
 	}
 	defer rows.Close()
 	for rows.Next() {
-		output := &types.Output{
+		output := &engine.Output{
 			Outpoint: &overlay.Outpoint{},
 		}
 		var txid string
@@ -184,8 +183,8 @@ func (s *SQLiteStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Ou
 	return outputs, nil
 }
 
-func (s *SQLiteStorage) FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*types.Output, error) {
-	var outputs []*types.Output
+func (s *SQLiteStorage) FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error) {
+	var outputs []*engine.Output
 	query := `SELECT topic, vout, height, idx, satoshis, script, spent, consumes, consumed_by
         FROM outputs
         WHERE txid = ?
@@ -196,7 +195,7 @@ func (s *SQLiteStorage) FindOutputsForTransaction(ctx context.Context, txid *cha
 	}
 	defer rows.Close()
 	for rows.Next() {
-		output := &types.Output{
+		output := &engine.Output{
 			Outpoint: &overlay.Outpoint{Txid: txid},
 		}
 		var consumes []byte
@@ -232,8 +231,8 @@ func (s *SQLiteStorage) FindOutputsForTransaction(ctx context.Context, txid *cha
 	return outputs, nil
 }
 
-func (s *SQLiteStorage) FindUTXOsForTopic(ctx context.Context, topic string, since float64, includeBEEF bool) ([]*types.Output, error) {
-	var outputs []*types.Output
+func (s *SQLiteStorage) FindUTXOsForTopic(ctx context.Context, topic string, since float64, includeBEEF bool) ([]*engine.Output, error) {
+	var outputs []*engine.Output
 	query := `
         SELECT txid, vout, height, idx, satoshis, script, spent, consumes, consumed_by
         FROM outputs
@@ -245,7 +244,7 @@ func (s *SQLiteStorage) FindUTXOsForTopic(ctx context.Context, topic string, sin
 	}
 	defer rows.Close()
 	for rows.Next() {
-		output := &types.Output{
+		output := &engine.Output{
 			Outpoint: &overlay.Outpoint{},
 			Topic:    topic,
 		}
