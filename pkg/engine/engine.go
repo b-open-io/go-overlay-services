@@ -11,6 +11,7 @@ import (
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
+	"github.com/bsv-blockchain/go-sdk/overlay/topic"
 	"github.com/bsv-blockchain/go-sdk/spv"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/go-sdk/transaction/chaintracker"
@@ -26,15 +27,82 @@ var (
 	SubmitModeCurrent    SumbitMode = "current-tx"
 )
 
+type SyncConfigurationType int
+
+const (
+	SyncConfigurationPeers SyncConfigurationType = iota
+	SyncConfigurationSHIP
+	SyncConfigurationNone
+)
+
+type SyncConfiguration struct {
+	Type  SyncConfigurationType
+	Peers []string
+}
+
 type Engine struct {
-	Managers       map[string]TopicManager
-	LookupServices map[string]LookupService
-	Storage        Storage
-	ChainTracker   chaintracker.ChainTracker
-	Broadcaster    transaction.Broadcaster
-	SHIPTrackers   []string
-	SLAPTrackers   []string
-	Advertiser     *advertiser.Advertiser
+	Managers                map[string]TopicManager
+	LookupServices          map[string]LookupService
+	Storage                 Storage
+	ChainTracker            chaintracker.ChainTracker
+	HostingURL              string
+	SHIPTrackers            []string
+	SLAPTrackers            []string
+	Broadcaster             transaction.Broadcaster
+	Advertiser              *advertiser.Advertiser
+	SyncConfiguration       map[string]SyncConfiguration
+	LogTime                 bool
+	LogPrefix               string
+	ErrorOnBroadcastFailure bool
+	BroadcastFacilitator    topic.Facilitator
+	// Logger				  Logger //TODO: Implement Logger Interface
+}
+
+func NewEngine(cfg Engine) (engine *Engine, err error) {
+	engine = &cfg
+	if engine.SyncConfiguration == nil {
+		engine.SyncConfiguration = make(map[string]SyncConfiguration)
+	}
+	if engine.Managers == nil {
+		engine.Managers = make(map[string]TopicManager)
+	} else {
+		for name, manager := range engine.Managers {
+			config := engine.SyncConfiguration[name]
+
+			if name == "tm_ship" && len(engine.SHIPTrackers) > 0 && manager != nil && config.Type == SyncConfigurationPeers {
+				combined := make(map[string]struct{}, len(engine.SHIPTrackers)+len(config.Peers))
+				for _, peer := range engine.SHIPTrackers {
+					combined[peer] = struct{}{}
+				}
+				for _, peer := range config.Peers {
+					combined[peer] = struct{}{}
+				}
+				config.Peers = make([]string, 0, len(combined))
+				for peer := range combined {
+					config.Peers = append(config.Peers, peer)
+				}
+				engine.SyncConfiguration[name] = config
+			} else if name == "tm_slap" && len(engine.SLAPTrackers) > 0 && manager != nil && config.Type == SyncConfigurationPeers {
+				combined := make(map[string]struct{}, len(engine.SHIPTrackers)+len(config.Peers))
+				for _, peer := range engine.SLAPTrackers {
+					combined[peer] = struct{}{}
+				}
+				for _, peer := range config.Peers {
+					combined[peer] = struct{}{}
+				}
+				config.Peers = make([]string, 0, len(combined))
+				for peer := range combined {
+					config.Peers = append(config.Peers, peer)
+				}
+				engine.SyncConfiguration[name] = config
+			}
+		}
+	}
+	if engine.LookupServices == nil {
+		engine.LookupServices = make(map[string]LookupService)
+	}
+
+	return engine, nil
 }
 
 var ErrUnknownTopic = errors.New("unknown-topic")
