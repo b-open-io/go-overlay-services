@@ -3,12 +3,13 @@ package engine
 import (
 	"encoding/json"
 
+	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/script"
 )
 
 type Output struct {
-	Outpoint        *overlay.Outpoint   `json:"-"`
+	Outpoint        overlay.Outpoint    `json:"-"`
 	Topic           string              `json:"topic"`
 	Script          *script.Script      `json:"-"`
 	Satoshis        uint64              `json:"satoshis"`
@@ -18,6 +19,7 @@ type Output struct {
 	BlockHeight     uint32
 	BlockIdx        uint64
 	Beef            []byte
+	Dependenies     []*chainhash.Hash
 }
 
 func (o *Output) MarshalJSON() ([]byte, error) {
