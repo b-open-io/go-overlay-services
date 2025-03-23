@@ -19,7 +19,7 @@ type Output struct {
 	BlockHeight     uint32
 	BlockIdx        uint64
 	Beef            []byte
-	Dependenies     []*chainhash.Hash
+	Dependencies    []*chainhash.Hash
 }
 
 func (o *Output) MarshalJSON() ([]byte, error) {

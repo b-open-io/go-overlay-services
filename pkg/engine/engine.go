@@ -214,7 +214,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					Topic:           topic,
 					OutputsConsumed: outpointsConsumed,
 					Beef:            taggedBEEF.Beef,
-					Dependenies:     admit.Dependencies[vout],
+					Dependencies:    admit.Dependencies[vout],
 				}
 				if err := e.Storage.InsertOutput(ctx, output); err != nil {
 					return nil, err
