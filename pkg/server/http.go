@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/engine"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
@@ -50,7 +49,7 @@ type HTTP struct {
 
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.
 func New(opts ...HTTPOption) *HTTP {
-	overlayAPI := app.New(&engine.Engine{})
+	overlayAPI := app.New(&NoopEngineProvider{})
 	http := HTTP{
 		app: fiber.New(fiber.Config{
 			CaseSensitive: true,

@@ -3,7 +3,7 @@ module github.com/4chain-ag/go-overlay-services
 go 1.24.0
 
 require (
-	github.com/bsv-blockchain/go-sdk v0.0.0-00010101000000-000000000000
+	github.com/bsv-blockchain/go-sdk v1.1.22
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/gookit/slog v0.5.8
 )

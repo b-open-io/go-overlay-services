@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/advertiser"
-	"github.com/4chain-ag/go-overlay-services/pkg/gasp"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/advertiser"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
@@ -446,12 +446,16 @@ func (e *Engine) ListLookupServiceProviders() map[string]*overlay.MetaData {
 	return result
 }
 
-func (e *Engine) GetDocumentationForLookupServiceProvider(provider string) string {
-	if l, ok := e.LookupServices[provider]; ok {
-		return "No documentation found!"
+func (e *Engine) GetDocumentationForLookupServiceProvider(provider string) (string, error) {
+	if l, ok := e.LookupServices[provider]; !ok {
+		return "", errors.New("no documentation found")
 	} else {
-		return l.GetDocumentation()
+		return l.GetDocumentation(), nil
 	}
+}
+
+func (e *Engine) GetDocumentationForTopicManager(manager string) (string, error) {
+	return "", nil
 }
 
 func FindPreviousTx(tx *transaction.Transaction, txid chainhash.Hash) *transaction.Transaction {
