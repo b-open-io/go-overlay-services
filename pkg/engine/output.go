@@ -19,13 +19,13 @@ type Output struct {
 	BlockHeight     uint32
 	BlockIdx        uint64
 	Beef            []byte
-	Dependencies    []*chainhash.Hash
+	Dependenies     []*chainhash.Hash
 }
 
 func (o *Output) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
 		"txid":             o.Outpoint.Txid.String(),
-		"vout":             o.Outpoint.OutputIndex,
+		"outputIndex":      o.Outpoint.OutputIndex,
 		"height":           o.BlockHeight,
 		"idx":              o.BlockIdx,
 		"satoshis":         o.Satoshis,

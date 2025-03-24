@@ -126,7 +126,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	} else {
 		steak := make(overlay.Steak, len(taggedBEEF.Topics))
 		tx := beef.FindTransaction(txid.String())
-		previousCoins := make(map[string]map[uint32]*Output, len(tx.Inputs))
+		topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
 		inpoints := make([]*overlay.Outpoint, 0, len(tx.Inputs))
 		for _, input := range tx.Inputs {
 			inpoints = append(inpoints, &overlay.Outpoint{
@@ -144,25 +144,22 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				steak[topic] = &overlay.AdmittanceInstructions{}
 				continue
 			} else {
+				previousCoins := make([]uint32, 0, len(tx.Inputs))
 				if inputs, err := e.Storage.FindOutputs(ctx, inpoints, &topic, &FALSE, false); err != nil {
 					return nil, err
 				} else {
-					previousCoins[topic] = make(map[uint32]*Output, len(inputs))
-					for _, input := range inputs {
-						previousCoins[topic][input.Outpoint.OutputIndex] = input
+					topicInputs[topic] = make(map[uint32]*Output, len(inputs))
+					for vin, input := range inputs {
+						if input != nil {
+							previousCoins = append(previousCoins, uint32(vin))
+							topicInputs[topic][input.Outpoint.OutputIndex] = input
+						}
 					}
 				}
-				if admit, err := e.Managers[topic].IdentifyAdmissableOutputs(beef, txid, previousCoins[topic]); err != nil {
+				if admit, err := e.Managers[topic].IdentifyAdmissableOutputs(beef, txid, previousCoins); err != nil {
 					return nil, err
 				} else {
 					steak[topic] = &admit
-					for _, deps := range admit.Dependencies {
-						for _, dep := range deps {
-							if beef.FindTransaction(dep.String()) == nil {
-								return nil, ErrMissingInput
-							}
-						}
-					}
 				}
 			}
 		}
@@ -186,15 +183,15 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			outputsConsumed := make([]*Output, 0, len(admit.CoinsToRetain))
 			outpointsConsumed := make([]*overlay.Outpoint, 0, len(admit.CoinsToRetain))
 			for _, vin := range admit.CoinsToRetain {
-				output := previousCoins[topic][vin]
+				output := topicInputs[topic][vin]
 				if output == nil {
 					return nil, ErrMissingInput
 				}
 				outputsConsumed = append(outputsConsumed, output)
 				outpointsConsumed = append(outpointsConsumed, &output.Outpoint)
-				delete(previousCoins[topic], vin)
+				delete(topicInputs[topic], vin)
 			}
-			for vin, output := range previousCoins[topic] {
+			for vin, output := range topicInputs[topic] {
 				if err := e.deleteUTXODeep(ctx, output); err != nil {
 					return nil, err
 				}
@@ -214,7 +211,6 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					Topic:           topic,
 					OutputsConsumed: outpointsConsumed,
 					Beef:            taggedBEEF.Beef,
-					Dependencies:    admit.Dependencies[vout],
 				}
 				if err := e.Storage.InsertOutput(ctx, output); err != nil {
 					return nil, err
