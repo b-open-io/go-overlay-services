@@ -9,7 +9,6 @@ import (
 type TopicManager interface {
 	IdentifyAdmissableOutputs(beef *transaction.Beef, txid *chainhash.Hash, previousCoins []uint32) (overlay.AdmittanceInstructions, error)
 	IdentifyNeededInputs(beef *transaction.Beef, txid *chainhash.Hash) ([]*overlay.Outpoint, error)
-	GetDependencies() []string
 	GetDocumentation() string
 	GetMetaData() *overlay.MetaData
 }
