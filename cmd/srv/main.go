@@ -1,25 +1,34 @@
 package main
 
 import (
-	"log"
 	"net/http"
 
+	"github.com/4chain-ag/go-overlay-services/pkg/config"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
 	"github.com/gookit/slog"
 )
 
 func main() {
+	loader := config.NewLoader("OVERLAY")
+	cfg, err := loader.Load()
+	if err != nil {
+		slog.Fatalf("failed to load config: %v", err)
+	}
+
 	opts := []server.HTTPOption{
 		server.WithConfig(&server.Config{
-			Addr: "localhost",
-			Port: 8080,
+			Addr: cfg.Address,
+			Port: cfg.Port,
 		}),
 		server.WithMiddleware(loggingMiddleware),
 	}
 
 	httpAPI := server.New(opts...)
 
-	log.Fatal(httpAPI.ListenAndServe())
+	slog.Infof("Starting server on %s:%d...", cfg.Address, cfg.Port)
+	if err := httpAPI.ListenAndServe(); err != nil {
+		slog.Fatalf("HTTP server failed: %v", err)
+	}
 }
 
 // loggingMiddleware is a custom definition of the logging middleware format accepted by the HTTP API.
