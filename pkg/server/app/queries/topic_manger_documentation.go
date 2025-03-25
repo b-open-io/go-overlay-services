@@ -1,7 +1,6 @@
 package queries
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/dto"
@@ -13,7 +12,7 @@ import (
 // Note: The contract definition is still in development and will be updated after
 // migrating the engine code.
 type TopicManagerDocumentationProvider interface {
-	GetTopicManagerDocumentation(ctx context.Context) error
+	GetDocumentationForTopicManager(provider string) (string, error)
 }
 
 // TopicManagerDocumentationHandler orchestrates the processing flow of a topic documentation
@@ -30,7 +29,7 @@ type TopicManagerDocumentationHandler struct {
 // with the appropriate status code based on the engine's response.
 func (t *TopicManagerDocumentationHandler) Handle(c *fiber.Ctx) error {
 	// TODO: Add custom validation logic.
-	err := t.provider.GetTopicManagerDocumentation(c.Context())
+	_, err := t.provider.GetDocumentationForTopicManager("")
 	if err != nil {
 		if inner := c.Status(fiber.StatusInternalServerError).JSON(dto.HandlerResponseNonOK); inner != nil {
 			return fmt.Errorf("failed to send JSON response: %w", inner)

@@ -76,6 +76,7 @@ linters-settings:
         exclude:
           - "**/testabilities/**"
           - "**/internal/**"
+          - "**/core/**"
 
 issues:
   # List of regexps of issue texts to exclude, empty list by default.
@@ -101,6 +102,14 @@ issues:
         - gosec
         - wrapcheck
         - bodyclose
+
+    - path: /core/
+      linters:
+        - wrapcheck
+        - unused
+        - unconvert
+        - errcheck
+        - gosec
 
     # Exclude known linters from partially "hard-vendored" code,
     # which is impossible to exclude via "nolint" comments.

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/dto"
+	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -13,7 +15,7 @@ import (
 // Note: The contract definition is still in development and will be updated after
 // migrating the engine code.
 type SubmitTransactionProvider interface {
-	SubmitTransaction(ctx context.Context) error
+	Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode engine.SumbitMode, onSteakReady engine.OnSteakReady) (overlay.Steak, error)
 }
 
 // SubmitTransactionHandler orchestrates the processing flow of a transaction
@@ -28,7 +30,7 @@ type SubmitTransactionHandler struct {
 // sends a JSON response after invoking the engine and returns an HTTP response
 // with the appropriate status code based on the engine's response.
 func (s *SubmitTransactionHandler) Handle(c *fiber.Ctx) error {
-	err := s.provider.SubmitTransaction(c.Context())
+	_, err := s.provider.Submit(c.Context(), overlay.TaggedBEEF{}, engine.SubmitModeCurrent, func(steak overlay.Steak) {})
 	if err != nil {
 		if inner := c.Status(fiber.StatusInternalServerError).JSON(dto.HandlerResponseNonOK); inner != nil {
 			return fmt.Errorf("failed to send JSON response: %w", inner)

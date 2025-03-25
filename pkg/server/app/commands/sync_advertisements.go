@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/dto"
@@ -13,20 +12,20 @@ import (
 // Note: The contract definition is still in development and will be updated after
 // migrating the engine code.
 type SyncAdvertisementsProvider interface {
-	SyncAdvertisments(ctx context.Context) error
+	SyncAdvertisements() error
 }
 
-// SyncAdvertismentsHandler orchestrates the processing flow of a synchronize advertisements
+// SyncAdvertisementsHandler orchestrates the processing flow of a synchronize advertisements
 // request and applies any necessary logic before invoking the engine.
-type SyncAdvertismentsHandler struct {
+type SyncAdvertisementsHandler struct {
 	provider SyncAdvertisementsProvider
 }
 
 // Handle orchestrates the processing flow of a synchronize advertisements request.
 // It prepares and sends a JSON response after invoking the engine and returns an HTTP response
 // with the appropriate status code based on the engine's response.
-func (s *SyncAdvertismentsHandler) Handle(c *fiber.Ctx) error {
-	err := s.provider.SyncAdvertisments(c.Context())
+func (s *SyncAdvertisementsHandler) Handle(c *fiber.Ctx) error {
+	err := s.provider.SyncAdvertisements()
 	if err != nil {
 		if inner := c.Status(fiber.StatusInternalServerError).JSON(dto.HandlerResponseNonOK); inner != nil {
 			return fmt.Errorf("failed to send JSON response: %w", inner)
@@ -40,13 +39,13 @@ func (s *SyncAdvertismentsHandler) Handle(c *fiber.Ctx) error {
 	return nil
 }
 
-// NewSyncAdvertismentsHandler returns an instance of a SyncAdvertismentsHandler, utilizing
+// NewSyncAdvertisementsHandler returns an instance of a SyncAdvertismentsHandler, utilizing
 // an implementation of SyncAdvertisementsProvider. If the provided argument is nil, it triggers a panic.
-func NewSyncAdvertismentsHandler(provider SyncAdvertisementsProvider) *SyncAdvertismentsHandler {
+func NewSyncAdvertisementsHandler(provider SyncAdvertisementsProvider) *SyncAdvertisementsHandler {
 	if provider == nil {
 		panic("sync advertisements provider is nil")
 	}
-	return &SyncAdvertismentsHandler{
+	return &SyncAdvertisementsHandler{
 		provider: provider,
 	}
 }
