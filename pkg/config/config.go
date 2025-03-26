@@ -1,11 +1,14 @@
 package config
 
+// SyncOption represents the sync option
 type SyncOption struct {
 	Keys []string `mapstructure:"keys"`
 }
 
+// SyncConfiguration represents the sync configuration
 type SyncConfiguration map[string]SyncOption
 
+// EngineConfig represents the engine configuration
 type EngineConfig struct {
 	ChainTracker            string            `mapstructure:"chain_tracker"`
 	SyncConfiguration       SyncConfiguration `mapstructure:"sync_configuration"`
@@ -14,27 +17,32 @@ type EngineConfig struct {
 	ThrowOnBroadcastFailure bool              `mapstructure:"throw_on_broadcast_failure"`
 }
 
+// DatabaseConfig represents the database configuration
 type DatabaseConfig struct {
 	Enabled bool   `mapstructure:"enabled"`
 	URL     string `mapstructure:"url"`
 }
 
+// MongoConfig represents the mongo configuration
 type MongoConfig struct {
 	Enabled          bool   `mapstructure:"enabled"`
 	ConnectionString string `mapstructure:"connection_string"`
 }
 
+// MigrationConfig represents the migration configuration
 type MigrationConfig struct {
 	Enabled       bool   `mapstructure:"enabled"`
 	MigrationsDir string `mapstructure:"migrations_dir"`
 }
 
+// LoggerConfig represents the logger configuration
 type LoggerConfig struct {
 	Level       string `mapstructure:"level"`
 	Format      string `mapstructure:"format"`
 	PrettyPrint bool   `mapstructure:"pretty_print"`
 }
 
+// ServerConfig represents the server configuration
 type ServerConfig struct {
 	Name                  string          `mapstructure:"name"`
 	PrivateKey            string          `mapstructure:"private_key"`
@@ -52,6 +60,7 @@ type ServerConfig struct {
 	LoggerConfig          LoggerConfig    `mapstructure:"logger_config"`
 }
 
+// DefaultConfig returns the default server configuration
 func DefaultConfig() ServerConfig {
 	return ServerConfig{
 		Address: "localhost",

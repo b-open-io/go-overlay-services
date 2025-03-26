@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// DefaultConfigFilePath is the default path to the configuration file
 const DefaultConfigFilePath = "config.yaml"
 
 // Load implements the Loader and Exporter interfaces
@@ -22,6 +23,7 @@ type Load struct {
 	viper          *viper.Viper
 }
 
+// NewLoader creates a new configuration loader
 func NewLoader(envPrefix string) *Load {
 	return &Load{
 		cfg:            DefaultConfig(),
@@ -31,6 +33,7 @@ func NewLoader(envPrefix string) *Load {
 	}
 }
 
+// SetConfigFilePath sets the path to the configuration file
 func (l *Load) SetConfigFilePath(path string) error {
 	ext := strings.TrimPrefix(filepath.Ext(path), ".")
 	if ext != "yaml" && ext != "yml" && ext != "json" {
@@ -41,6 +44,7 @@ func (l *Load) SetConfigFilePath(path string) error {
 	return nil
 }
 
+// Load reads the configuration from the file and environment variables
 func (l *Load) Load() (ServerConfig, error) {
 	l.setViperDefaults()
 	l.prepareViper()
