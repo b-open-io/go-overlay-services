@@ -3,8 +3,10 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
@@ -71,7 +73,7 @@ func New(opts ...HTTPOption) *HTTP {
 	v1.Post("/request-foreign-gasp-node", adaptor.HTTPHandlerFunc(overlayAPI.Commands.RequestForeignGASPNodeHandler.Handle))
 
 	// Admin:
-	admin := v1.Group("/admin")
+	admin := v1.Group("/admin", adaptor.HTTPMiddleware(AdminAuth(http.cfg.AdminBearerToken)))
 	admin.Post("/advertisements-sync", adaptor.HTTPHandlerFunc(overlayAPI.Commands.SyncAdvertismentsHandler.Handle))
 	admin.Post("/start-gasp-sync", adaptor.HTTPHandlerFunc(overlayAPI.Commands.StartGASPSyncHandler.Handle))
 
@@ -84,4 +86,46 @@ func (h *HTTP) ListenAndServe() error {
 		return fmt.Errorf("http server: fiber app listen failed: %w", err)
 	}
 	return nil
+}
+
+// AdminAuth is a middleware that checks the Authorization header for a valid Bearer token.
+// protects the HTTP server from unauthorized access.
+// It checks for a Bearer token in the Authorization header and compares it to the expected value.
+func AdminAuth(expectedToken string) func(http.Handler) http.Handler {
+	type AuthorizationFailureResponse struct {
+		Status  string `json:"error"`
+		Message string `json:"message"`
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			if auth == "" {
+				jsonutil.SendHTTPResponse(w, http.StatusUnauthorized, AuthorizationFailureResponse{
+					Status:  http.StatusText(http.StatusUnauthorized),
+					Message: "Missing Authorization header in the request",
+				})
+				return
+			}
+
+			if !strings.HasPrefix(auth, "Bearer ") {
+				jsonutil.SendHTTPResponse(w, http.StatusUnauthorized, AuthorizationFailureResponse{
+					Status:  http.StatusText(http.StatusUnauthorized),
+					Message: "Missing Authorization header Bearer token value",
+				})
+				return
+			}
+
+			token := strings.TrimPrefix(auth, "Bearer ")
+			if token != expectedToken {
+				jsonutil.SendHTTPResponse(w, http.StatusForbidden, AuthorizationFailureResponse{
+					Status:  http.StatusText(http.StatusForbidden),
+					Message: "Invalid Bearer token value",
+				})
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
