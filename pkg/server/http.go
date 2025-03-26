@@ -5,21 +5,22 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/idempotency"
+
 	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
-	"github.com/gofiber/fiber/v2/middleware/idempotency"
 )
 
 // HTTPOption defines a functional option for configuring an HTTP server.
 // These options allow for flexible setup of middlewares and configurations.
 type HTTPOption func(*HTTP) error
 
-// WithMiddleware adds custom middleware to the HTTP server.
-// The execution order depends on the sequence in which the middlewares are passed
+// WithMiddleware adds net/http-style middleware to the HTTP server.
 func WithMiddleware(f func(http.Handler) http.Handler) HTTPOption {
 	return func(h *HTTP) error {
 		h.middlewares = append(h.middlewares, adaptor.HTTPMiddleware(f))
@@ -27,7 +28,18 @@ func WithMiddleware(f func(http.Handler) http.Handler) HTTPOption {
 	}
 }
 
+<<<<<<< HEAD
 // WithConfig sets the configuration for the HTTP server.
+=======
+// WithFiberMiddleware adds a Fiber-style middleware to the HTTP server.
+func WithFiberMiddleware(m fiber.Handler) HTTPOption {
+	return func(h *HTTP) {
+		h.middlewares = append(h.middlewares, m)
+	}
+}
+
+// WithConfig sets the HTTP server configuration.
+>>>>>>> 38cbff3 (adding CROS support)
 func WithConfig(cfg *config.Config) HTTPOption {
 	return func(h *HTTP) error {
 		h.cfg = cfg
@@ -50,12 +62,7 @@ func WithMongo() HTTPOption {
 	}
 }
 
-// SocketAddr returns the socket address string based on the configured address and port combination.
-func (h *HTTP) SocketAddr() string { return fmt.Sprintf("%s:%d", h.cfg.Addr, h.cfg.Port) }
-
-// HTTP manages connections to the overlay server instance. It accepts and responds to client sockets,
-// using idempotency to improve fault tolerance and mitigate duplicated requests.
-// It applies all configured options along with the list of middlewares."
+// HTTP manages the Fiber server and its configuration.
 type HTTP struct {
 	middlewares []fiber.Handler
 	app         *fiber.App
@@ -77,7 +84,10 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 			ServerHeader:  "Overlay API",
 			AppName:       "Overlay API v0.0.0",
 		}),
-		middlewares: []fiber.Handler{idempotency.New()},
+		middlewares: []fiber.Handler{
+			idempotency.New(),
+			cors.New(),
+		},
 	}
 
 	for _, o := range opts {
@@ -107,7 +117,12 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	return http, nil
 }
 
-// ListenAndServe handles HTTP requests from the configured socket address."
+// SocketAddr builds the address string for binding.
+func (h *HTTP) SocketAddr() string {
+	return fmt.Sprintf("%s:%d", h.cfg.Addr, h.cfg.Port)
+}
+
+// ListenAndServe starts the Fiber app using the configured socket address.
 func (h *HTTP) ListenAndServe() error {
 	if err := h.app.Listen(h.SocketAddr()); err != nil {
 		return fmt.Errorf("http server: fiber app listen failed: %w", err)
@@ -155,4 +170,9 @@ func AdminAuth(expectedToken string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// App exposes the underlying Fiber app.
+func (h *HTTP) App() *fiber.App {
+	return h.app
 }
