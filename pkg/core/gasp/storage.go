@@ -32,7 +32,7 @@ func NewOverlayGASPStorage(topic string, engine engine.Engine, maxNodesInGraph *
 	}
 }
 
-func (s *overlayGASPStorage) FindKnownUTXOs(ctx context.Context, since uint64) ([]*overlay.Outpoint, error) {
+func (s *overlayGASPStorage) FindKnownUTXOs(ctx context.Context, since uint32) ([]*overlay.Outpoint, error) {
 	if utxos, err := s.Engine.Storage.FindUTXOsForTopic(ctx, s.Topic, since, false); err != nil {
 		return nil, err
 	} else {

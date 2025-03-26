@@ -8,12 +8,12 @@ import (
 
 type GASPInitialRequest struct {
 	Version int    `json:"version"`
-	Since   uint64 `json:"since"`
+	Since   uint32 `json:"since"`
 }
 
 type GASPInitialResponse struct {
 	UTXOList []*overlay.Outpoint `json:"utxo_list"`
-	Since    uint64              `json:"since"`
+	Since    uint32              `json:"since"`
 }
 
 type GASPInitialReply struct {

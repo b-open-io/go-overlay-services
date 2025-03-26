@@ -26,7 +26,7 @@ var (
 type GASPParams struct {
 	Storage         GASPStorage
 	Remote          GASPRemote
-	LastInteraction uint64
+	LastInteraction uint32
 	Version         *int
 	LogPrefix       *string
 	Unidirectional  bool
@@ -38,7 +38,7 @@ type GASP struct {
 	Version         int
 	Remote          GASPRemote
 	Storage         GASPStorage
-	LastInteraction uint64
+	LastInteraction uint32
 	LogPrefix       string
 	Unidirectional  bool
 	LogLevel        LogLevel
