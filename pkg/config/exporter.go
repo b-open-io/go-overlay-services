@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -60,11 +61,21 @@ func (l *Load) ToEnv(filePath string) error {
 	return nil
 }
 
+var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
+var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
+
+func camelToUpperSnake(s string) string {
+	snake := matchFirstCap.ReplaceAllString(s, "${1}_${2}")
+	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
+	return strings.ToUpper(snake)
+}
+
 func flattenConfig(prefix string, out map[string]string, v any) {
 	switch t := v.(type) {
 	case map[string]any:
 		for key, value := range t {
-			newPrefix := strings.ToUpper(strings.TrimPrefix(prefix+"_"+key, "_"))
+			snakeKey := camelToUpperSnake(key)
+			newPrefix := strings.TrimPrefix(prefix+"_"+snakeKey, "_")
 			flattenConfig(newPrefix, out, value)
 		}
 	case []any:

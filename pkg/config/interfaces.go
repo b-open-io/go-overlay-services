@@ -2,7 +2,7 @@ package config
 
 // Loader defines methods for loading configuration.
 type Loader interface {
-	Load() (ServerConfig, error)
+	Load() (*Config, error)
 	SetConfigFilePath(path string) error
 }
 

@@ -16,7 +16,7 @@ const DefaultConfigFilePath = "config.yaml"
 
 // Load implements the Loader and Exporter interfaces
 type Load struct {
-	cfg            ServerConfig
+	cfg            *Config
 	envPrefix      string
 	configFilePath string
 	configFileExt  string
@@ -26,7 +26,7 @@ type Load struct {
 // NewLoader creates a new configuration loader
 func NewLoader(envPrefix string) *Load {
 	return &Load{
-		cfg:            DefaultConfig(),
+		cfg:            NewConfig(),
 		envPrefix:      envPrefix,
 		configFilePath: DefaultConfigFilePath,
 		viper:          viper.New(),
@@ -45,7 +45,7 @@ func (l *Load) SetConfigFilePath(path string) error {
 }
 
 // Load reads the configuration from the file and environment variables
-func (l *Load) Load() (ServerConfig, error) {
+func (l *Load) Load() (*Config, error) {
 	l.setViperDefaults()
 	l.prepareViper()
 
@@ -62,7 +62,7 @@ func (l *Load) Load() (ServerConfig, error) {
 
 func (l *Load) setViperDefaults() {
 	defaultsMap := map[string]interface{}{}
-	if err := mapstructure.Decode(DefaultConfig(), &defaultsMap); err != nil {
+	if err := mapstructure.Decode(NewConfig(), &defaultsMap); err != nil {
 		slog.Errorf("error while setting defaults: %v", err)
 		return
 	}
@@ -92,10 +92,9 @@ func (l *Load) loadFromFile() error {
 }
 
 func (l *Load) viperToCfg() error {
-	if err := l.viper.Unmarshal(&l.cfg); err != nil {
+	if err := l.viper.Unmarshal(l.cfg); err != nil {
 		return fmt.Errorf("error unmarshalling config: %w", err)
 	}
-	l.applyDefaults()
 	l.updateViperFromConfig()
 	return nil
 }

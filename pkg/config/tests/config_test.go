@@ -3,7 +3,6 @@ package config_test
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/config"
@@ -19,60 +18,38 @@ func TestLoad_ShouldApplyAllDefaults_WhenNoConfigFileExists(t *testing.T) {
 
 	// Then
 	require.NoError(t, err)
-	require.Equal(t, "localhost", cfg.Address)
+	require.Equal(t, "localhost", cfg.Addr)
 	require.Equal(t, 3000, cfg.Port)
-	require.Equal(t, "main", cfg.Network)
-	require.Equal(t, "debug", cfg.LoggerConfig.Level)
-	require.False(t, cfg.DatabaseConfig.Enabled)
-	require.False(t, cfg.MongoConfig.Enabled)
-	require.False(t, cfg.MigrationConfig.Enabled)
-	require.Equal(t, "./migrations", cfg.MigrationConfig.MigrationsDir)
+	require.Equal(t, "Overlay API v0.0.0", cfg.AppName)
+	require.Equal(t, "Overlay API", cfg.ServerHeader)
+	require.Equal(t, "admin-token-default", cfg.AdminBearerToken)
 }
 
-func TestLoad_ShouldApplyDefaultConfig_WhenNoConfigFileExists(t *testing.T) {
-	// Given: a new config loader with no config file
-	loader := config.NewLoader("OVERLAY")
+func TestLoad_ShouldOverrideDefaults_WhenConfigFileProvidesValues(t *testing.T) {
+	// Given
+	tmpFile := filepath.Join(t.TempDir(), "config.yaml")
+	content := `
+addr: 127.0.0.1
+port: 9999
+appname: CustomApp
+serverheader: CustomHeader
+adminbearertoken: secret-token
+`
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0600))
 
-	// When: loading the configuration
+	loader := config.NewLoader("OVERLAY")
+	require.NoError(t, loader.SetConfigFilePath(tmpFile))
+
+	// When
 	cfg, err := loader.Load()
 
-	// Then: all default values should be correctly applied
+	// Then
 	require.NoError(t, err)
-
-	// Top-level server config
-	require.Equal(t, "", cfg.Name)
-	require.Equal(t, "", cfg.PrivateKey)
-	require.Equal(t, "", cfg.HostingURL)
-	require.Equal(t, "localhost", cfg.Address)
-	require.Equal(t, 3000, cfg.Port)
-	require.Equal(t, "main", cfg.Network)
-	require.False(t, cfg.EnableGASPSync)
-	require.Equal(t, "", cfg.ArcApiKey)
-	require.False(t, cfg.VerboseRequestLogging)
-
-	// Logger config
-	require.Equal(t, "debug", cfg.LoggerConfig.Level)
-	require.Equal(t, "json", cfg.LoggerConfig.Format)
-	require.True(t, cfg.LoggerConfig.PrettyPrint)
-
-	// Engine config
-	require.Equal(t, "", cfg.EngineConfig.ChainTracker)
-	require.False(t, cfg.EngineConfig.ThrowOnBroadcastFailure)
-	require.Equal(t, "", cfg.EngineConfig.LogPrefix)
-	require.False(t, cfg.EngineConfig.LogTime)
-	require.Empty(t, cfg.EngineConfig.SyncConfiguration)
-
-	// Database config
-	require.False(t, cfg.DatabaseConfig.Enabled)
-	require.Equal(t, "", cfg.DatabaseConfig.URL)
-
-	// Mongo config
-	require.False(t, cfg.MongoConfig.Enabled)
-	require.Equal(t, "", cfg.MongoConfig.ConnectionString)
-
-	// Migration config
-	require.False(t, cfg.MigrationConfig.Enabled)
-	require.Equal(t, "./migrations", cfg.MigrationConfig.MigrationsDir)
+	require.Equal(t, "127.0.0.1", cfg.Addr)
+	require.Equal(t, 9999, cfg.Port)
+	require.Equal(t, "CustomApp", cfg.AppName)
+	require.Equal(t, "CustomHeader", cfg.ServerHeader)
+	require.Equal(t, "secret-token", cfg.AdminBearerToken)
 }
 
 func TestSetConfigFilePath_ShouldReturnError_WhenUnsupportedExtension(t *testing.T) {
@@ -101,7 +78,7 @@ func TestExportToYAML_ShouldWriteFile_WhenConfigIsValid(t *testing.T) {
 	require.NoError(t, err)
 	data, err := os.ReadFile(tmpFile)
 	require.NoError(t, err)
-	require.Contains(t, string(data), "address: localhost")
+	require.Contains(t, string(data), "addr: localhost")
 }
 
 func TestExportToJSON_ShouldWriteFile_WhenConfigIsValid(t *testing.T) {
@@ -118,7 +95,7 @@ func TestExportToJSON_ShouldWriteFile_WhenConfigIsValid(t *testing.T) {
 	require.NoError(t, err)
 	data, err := os.ReadFile(tmpFile)
 	require.NoError(t, err)
-	require.Contains(t, string(data), `"Address": "localhost"`)
+	require.Contains(t, string(data), `"Addr": "localhost"`)
 }
 
 func TestExportToEnv_ShouldWriteFlatEnvFile_WhenConfigIsValid(t *testing.T) {
@@ -137,70 +114,19 @@ func TestExportToEnv_ShouldWriteFlatEnvFile_WhenConfigIsValid(t *testing.T) {
 	require.NoError(t, err)
 
 	content := string(data)
-	require.Contains(t, content, "ADDRESS=localhost")
+	require.Contains(t, content, "ADDR=localhost")
 	require.Contains(t, content, "PORT=3000")
-	require.Contains(t, content, "LOGGER_CONFIG_LEVEL=debug")
+	require.Contains(t, content, "APP_NAME=Overlay API v0.0.0")
 }
 
 func TestExportToEnv_ShouldFail_WhenFilePathIsInvalid(t *testing.T) {
-	// Given
+	// Given: a loaded config
 	loader := config.NewLoader("OVERLAY")
 	_, _ = loader.Load()
 
-	// When
+	// When: exporting to an invalid file path
 	err := loader.ToEnv("/invalid/!!/envfile")
 
-	// Then
+	// Then: an error should be returned
 	require.Error(t, err)
-}
-
-func TestToYAML_ShouldExportConfigToYAMLFile_WhenConfigIsLoaded(t *testing.T) {
-	// Given
-	loader := config.NewLoader("TEST")
-	_, _ = loader.Load()
-
-	// When
-	tmpFile := filepath.Join(t.TempDir(), "test_config.yaml")
-	err := loader.ToYAML(tmpFile)
-
-	// Then
-	require.NoError(t, err)
-	data, err := os.ReadFile(tmpFile)
-	require.NoError(t, err)
-	require.Contains(t, string(data), "port: 3000")
-}
-
-func TestToJSON_ShouldExportConfigToJSONFile_WhenConfigIsLoaded(t *testing.T) {
-	// Given
-	loader := config.NewLoader("TEST")
-	_, _ = loader.Load()
-
-	// When
-	tmpFile := filepath.Join(t.TempDir(), "test_config.json")
-	err := loader.ToJSON(tmpFile)
-
-	// Then
-	require.NoError(t, err)
-	data, err := os.ReadFile(tmpFile)
-	require.NoError(t, err)
-	require.Contains(t, string(data), `"Port": 3000`)
-}
-
-func TestToEnv_ShouldFlattenNestedStructsIntoENVKeys_WhenExporting(t *testing.T) {
-	// Given
-	loader := config.NewLoader("TEST")
-	_, _ = loader.Load()
-
-	// When
-	tmpFile := filepath.Join(t.TempDir(), "flatten.env")
-	err := loader.ToEnv(tmpFile)
-
-	// Then
-	require.NoError(t, err)
-	data, err := os.ReadFile(tmpFile)
-	require.NoError(t, err)
-
-	lines := strings.Split(string(data), "\n")
-	require.GreaterOrEqual(t, len(lines), 5)
-	require.Contains(t, string(data), "LOGGER_CONFIG_LEVEL=debug")
 }

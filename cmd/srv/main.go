@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"net/http"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/config"
@@ -9,23 +10,27 @@ import (
 )
 
 func main() {
+	configPath := flag.String("C", config.DefaultConfigFilePath, "Path to the configuration file")
+	flag.Parse()
+
 	loader := config.NewLoader("OVERLAY")
+	if err := loader.SetConfigFilePath(*configPath); err != nil {
+		slog.Fatalf("Invalid config file path: %v", err)
+	}
+
 	cfg, err := loader.Load()
 	if err != nil {
 		slog.Fatalf("failed to load config: %v", err)
 	}
 
 	opts := []server.HTTPOption{
-		server.WithConfig(&server.Config{
-			Addr: cfg.Address,
-			Port: cfg.Port,
-		}),
+		server.WithConfig(cfg),
 		server.WithMiddleware(loggingMiddleware),
 	}
 
 	httpAPI := server.New(opts...)
 
-	slog.Infof("Starting server on %s:%d...", cfg.Address, cfg.Port)
+	slog.Infof("Starting server on %s:%d...", cfg.Addr, cfg.Port)
 	if err := httpAPI.ListenAndServe(); err != nil {
 		slog.Fatalf("HTTP server failed: %v", err)
 	}
