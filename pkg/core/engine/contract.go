@@ -3,7 +3,8 @@ package engine
 import (
 	"context"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
+	// "github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
 )
@@ -17,8 +18,8 @@ type OverlayEngineProvider interface {
 	GetUTXOHistory(ctx context.Context, output *Output, historySelector func(beef []byte, outputIndex uint32, currentDepth uint32) bool, currentDepth uint32) (*Output, error)
 	SyncAdvertisements() error
 	StartGASPSync() error
-	ProvideForeignSyncResponse(initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error)
-	ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*gasp.GASPNode, error)
+	ProvideForeignSyncResponse(initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error)
+	ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*core.GASPNode, error)
 	ListTopicManagers() map[string]*overlay.MetaData
 	ListLookupServiceProviders() map[string]*overlay.MetaData
 	GetDocumentationForLookupServiceProvider(provider string) (string, error)

@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"log"
+	"time"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/advertiser"
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
@@ -55,6 +58,8 @@ type Engine struct {
 	LogPrefix               string
 	ErrorOnBroadcastFailure bool
 	BroadcastFacilitator    topic.Facilitator
+	Verbose                 bool
+	PanicOnError            bool
 	// Logger				  Logger //TODO: Implement Logger Interface
 }
 
@@ -107,8 +112,10 @@ var ErrUnknownTopic = errors.New("unknown-topic")
 var ErrInvalidBeef = errors.New("invalid-beef")
 var ErrInvalidTransaction = errors.New("invalid-transaction")
 var ErrMissingInput = errors.New("missing-input")
+var ErrInputSpent = errors.New("input-spent")
 
 func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady OnSteakReady) (overlay.Steak, error) {
+	start := time.Now()
 	for _, topic := range taggedBEEF.Topics {
 		if _, ok := e.Managers[topic]; !ok {
 			return nil, ErrUnknownTopic
@@ -120,10 +127,20 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	} else if tx := beef.FindTransaction(txid.String()); tx == nil {
 		return nil, ErrInvalidBeef
 	} else if valid, err := spv.Verify(tx, e.ChainTracker, nil); err != nil {
+		if e.PanicOnError {
+			log.Panicln(err)
+		}
 		return nil, err
 	} else if !valid {
+		if e.PanicOnError {
+			log.Panicln(ErrInvalidTransaction)
+		}
 		return nil, ErrInvalidTransaction
 	} else {
+		if e.Verbose {
+			fmt.Println("Validated in", time.Since(start))
+			start = time.Now()
+		}
 		steak := make(overlay.Steak, len(taggedBEEF.Topics))
 		tx := beef.FindTransaction(txid.String())
 		topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
@@ -139,6 +156,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				Txid:  txid,
 				Topic: topic,
 			}); err != nil {
+				if e.PanicOnError {
+					log.Panicln(err)
+				}
 				return nil, err
 			} else if exists {
 				steak[topic] = &overlay.AdmittanceInstructions{}
@@ -146,30 +166,67 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			} else {
 				previousCoins := make([]uint32, 0, len(tx.Inputs))
 				if inputs, err := e.Storage.FindOutputs(ctx, inpoints, &topic, &FALSE, false); err != nil {
+					if e.PanicOnError {
+						log.Panicln(err)
+					}
 					return nil, err
 				} else {
 					topicInputs[topic] = make(map[uint32]*Output, len(inputs))
 					for vin, input := range inputs {
 						if input != nil {
+							// if input.Spent {
+							// 	if e.PanicOnError {
+							// 		log.Panicln("input spent", txid.String(), vin)
+							// 	}
+							// 	return nil, ErrInputSpent
+							// }
 							previousCoins = append(previousCoins, uint32(vin))
-							topicInputs[topic][input.Outpoint.OutputIndex] = input
+							topicInputs[topic][uint32(vin)] = input
 						}
 					}
 				}
-				if admit, err := e.Managers[topic].IdentifyAdmissableOutputs(ctx, beef, txid, previousCoins); err != nil {
+				if admit, err := e.Managers[topic].IdentifyAdmissableOutputs(ctx, taggedBEEF.Beef, previousCoins); err != nil {
+					if e.PanicOnError {
+						log.Panicln(err)
+					}
 					return nil, err
 				} else {
 					steak[topic] = &admit
 				}
 			}
 		}
+		if e.Verbose {
+			fmt.Println("Identified in", time.Since(start))
+			start = time.Now()
+		}
 		for _, topic := range taggedBEEF.Topics {
 			if err := e.Storage.MarkUTXOsAsSpent(ctx, inpoints, topic); err != nil {
+				if e.PanicOnError {
+					log.Panicln(err)
+				}
 				return nil, err
+			} else {
+				for _, l := range e.LookupServices {
+					for _, inpoint := range inpoints {
+						if err := l.OutputSpent(ctx, inpoint, topic); err != nil {
+							if e.PanicOnError {
+								log.Panicln(err)
+							}
+							return nil, err
+						}
+					}
+				}
 			}
+		}
+		if e.Verbose {
+			fmt.Println("Marked spent in", time.Since(start))
+			start = time.Now()
 		}
 		if mode != SubmitModeHistorical && e.Broadcaster != nil {
 			if _, failure := e.Broadcaster.Broadcast(tx); failure != nil {
+				if e.PanicOnError {
+					log.Panicln(err)
+				}
 				return nil, failure
 			}
 		}
@@ -185,6 +242,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			for _, vin := range admit.CoinsToRetain {
 				output := topicInputs[topic][vin]
 				if output == nil {
+					if e.PanicOnError {
+						log.Panicln("missing input", txid.String(), vin)
+					}
 					return nil, ErrMissingInput
 				}
 				outputsConsumed = append(outputsConsumed, output)
@@ -193,6 +253,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 			for vin, output := range topicInputs[topic] {
 				if err := e.deleteUTXODeep(ctx, output); err != nil {
+					if e.PanicOnError {
+						log.Panicln(err)
+					}
 					return nil, err
 				}
 				admit.CoinsRemoved = append(admit.CoinsRemoved, uint32(vin))
@@ -213,27 +276,50 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					Beef:            taggedBEEF.Beef,
 				}
 				if err := e.Storage.InsertOutput(ctx, output); err != nil {
+					if e.PanicOnError {
+						log.Panicln(err)
+					}
 					return nil, err
 				}
 				newOutpoints = append(newOutpoints, &output.Outpoint)
 				for _, l := range e.LookupServices {
 					if err := l.OutputAdded(ctx, output); err != nil {
+						if e.PanicOnError {
+							log.Panicln(err)
+						}
 						return nil, err
 					}
 				}
+			}
+			if e.Verbose {
+				fmt.Println("Outputs added in", time.Since(start))
+				start = time.Now()
 			}
 			for _, output := range outputsConsumed {
 				output.ConsumedBy = append(output.ConsumedBy, newOutpoints...)
 
 				if err := e.Storage.UpdateConsumedBy(ctx, &output.Outpoint, output.Topic, output.ConsumedBy); err != nil {
+					if e.PanicOnError {
+						log.Panicln(err)
+					}
 					return nil, err
 				}
+			}
+			if e.Verbose {
+				fmt.Println("Consumes updated in ", time.Since(start))
+				start = time.Now()
 			}
 			if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
 				Txid:  txid,
 				Topic: topic,
 			}); err != nil {
+				if e.PanicOnError {
+					log.Panicln(err)
+				}
 				return nil, err
+			}
+			if e.Verbose {
+				fmt.Println("Applied in", time.Since(start))
 			}
 		}
 		if e.Advertiser == nil || mode == SubmitModeHistorical {
@@ -334,11 +420,11 @@ func (e *Engine) StartGASPSync() error {
 	return nil
 }
 
-func (e *Engine) ProvideForeignSyncResponse(initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
+func (e *Engine) ProvideForeignSyncResponse(initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
 	return nil, nil
 }
 
-func (e *Engine) ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*gasp.GASPNode, error) {
+func (e *Engine) ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*core.GASPNode, error) {
 	return nil, nil
 }
 
@@ -430,6 +516,24 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 	return nil
 }
 
+func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath, blockHeight *uint32) error {
+	if outputs, err := e.Storage.FindOutputsForTransaction(ctx, txid, true); err != nil {
+		return err
+	} else {
+		for _, output := range outputs {
+			if err := e.updateMerkleProof(ctx, output, *txid, proof); err != nil {
+				return err
+			} else if blockHeight != nil {
+				output.BlockHeight = *blockHeight
+				if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, *blockHeight, 0); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (e *Engine) ListTopicManagers() map[string]*overlay.MetaData {
 	result := make(map[string]*overlay.MetaData, len(e.Managers))
 	for name, manager := range e.Managers {
@@ -446,16 +550,20 @@ func (e *Engine) ListLookupServiceProviders() map[string]*overlay.MetaData {
 	return result
 }
 
+func (e *Engine) GetDocumentationForTopicManager(manager string) (string, error) {
+	if tm, ok := e.Managers[manager]; !ok {
+		return "", errors.New("no documentation found")
+	} else {
+		return tm.GetDocumentation(), nil
+	}
+}
+
 func (e *Engine) GetDocumentationForLookupServiceProvider(provider string) (string, error) {
 	if l, ok := e.LookupServices[provider]; !ok {
 		return "", errors.New("no documentation found")
 	} else {
 		return l.GetDocumentation(), nil
 	}
-}
-
-func (e *Engine) GetDocumentationForTopicManager(manager string) (string, error) {
-	return "", nil
 }
 
 func FindPreviousTx(tx *transaction.Transaction, txid chainhash.Hash) *transaction.Transaction {

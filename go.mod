@@ -32,4 +32,5 @@ require (
 	golang.org/x/text v0.22.0 // indirect
 )
 
-replace github.com/bsv-blockchain/go-sdk => github.com/b-open-io/go-sdk v1.1.22-0.20250322183609-9393b13db571
+// replace github.com/bsv-blockchain/go-sdk => github.com/b-open-io/go-sdk v1.1.22-0.20250322183609-9393b13db571
+replace github.com/bsv-blockchain/go-sdk => ../go-sdk

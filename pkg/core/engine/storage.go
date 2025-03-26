@@ -23,7 +23,7 @@ type Storage interface {
 	FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*Output, error)
 
 	// Finds current UTXOs that have been admitted into a given topic
-	FindUTXOsForTopic(ctx context.Context, topic string, since float64, includeBEEF bool) ([]*Output, error)
+	FindUTXOsForTopic(ctx context.Context, topic string, since uint64, includeBEEF bool) ([]*Output, error)
 
 	// Deletes an output from storage
 	DeleteOutput(ctx context.Context, outpoint *overlay.Outpoint, topic string) error

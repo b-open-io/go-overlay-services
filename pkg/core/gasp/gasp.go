@@ -1,31 +1,21 @@
 package gasp
 
-import "github.com/bsv-blockchain/go-sdk/overlay"
+import (
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/bsv-blockchain/go-sdk/chainhash"
+	"github.com/bsv-blockchain/go-sdk/overlay"
+)
 
-type InitialRequest struct {
-	Version int    `json:"version"`
-	Since   uint32 `json:"since"`
-}
-
-type InitialResponse struct {
-	UTXOList []*overlay.Outpoint `json:"UTXOList"`
-	Since    uint32              `json:"since"`
-}
-
-type InitialReply struct {
-	UTXOList []*overlay.Outpoint `json:"UTXOList"`
-}
-
-type GASPInput struct {
-	Hash string `json:"hash"`
-}
-
-type GASPNode struct {
-	GraphID        string                `json:"graphID"`
-	RawTx          string                `json:"rawTx"`
-	OutputIndex    uint32                `json:"outputIndex"`
-	Proof          string                `json:"proof"`
-	TxMetadata     string                `json:"txMetadata"`
-	OutputMetadata string                `json:"outputMetadata"`
-	Inputs         map[string]*GASPInput `json:"inputs"`
+type GraphNode struct {
+	Txid           *chainhash.Hash            `json:"txid"`
+	GraphID        *overlay.Outpoint          `json:"graphID"`
+	RawTx          string                     `json:"rawTx"`
+	OutputIndex    uint32                     `json:"outputIndex"`
+	SpentBy        *chainhash.Hash            `json:"spentBy"`
+	Proof          string                     `json:"proof"`
+	TxMetadata     string                     `json:"txMetadata"`
+	OutputMetadata string                     `json:"outputMetadata"`
+	Inputs         map[string]*core.GASPInput `json:"inputs"`
+	Children       []*GraphNode               `json:"children"`
+	Parent         *GraphNode                 `json:"parent"`
 }

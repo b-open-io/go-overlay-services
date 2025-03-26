@@ -43,8 +43,8 @@ func (*NoopEngineProvider) ProvideForeignSyncResponse(initialRequest *gasp.Initi
 }
 
 // ProvideForeignGASPNode is a no-op call that always returns an empty GASP node with nil error.
-func (*NoopEngineProvider) ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*gasp.GASPNode, error) {
-	return &gasp.GASPNode{}, nil
+func (*NoopEngineProvider) ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*gasp.GraphNode, error) {
+	return &gasp.GraphNode{}, nil
 }
 
 // ListTopicManagers is a no-op call that always returns an empty topic managers map with nil error.
