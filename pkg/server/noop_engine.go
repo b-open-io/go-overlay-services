@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
 )
@@ -38,13 +38,13 @@ func (*NoopEngineProvider) GetUTXOHistory(ctx context.Context, output *engine.Ou
 func (*NoopEngineProvider) StartGASPSync() error { return nil }
 
 // ProvideForeignSyncResponse is a no-op call that always returns an empty initial GASP response with nil error.
-func (*NoopEngineProvider) ProvideForeignSyncResponse(initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
-	return &gasp.InitialResponse{}, nil
+func (*NoopEngineProvider) ProvideForeignSyncResponse(initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
+	return &core.GASPInitialResponse{}, nil
 }
 
 // ProvideForeignGASPNode is a no-op call that always returns an empty GASP node with nil error.
-func (*NoopEngineProvider) ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*gasp.GraphNode, error) {
-	return &gasp.GraphNode{}, nil
+func (*NoopEngineProvider) ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*core.GASPNode, error) {
+	return &core.GASPNode{}, nil
 }
 
 // ListTopicManagers is a no-op call that always returns an empty topic managers map with nil error.
