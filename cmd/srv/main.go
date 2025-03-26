@@ -18,6 +18,10 @@ func main() {
 		slog.Fatalf("Invalid config file path: %v", err)
 	}
 
+	if err := loader.PrettyPrint(); err != nil {
+		slog.Fatalf("failed to pretty print config: %v", err)
+	}
+
 	cfg, err := loader.Load()
 	if err != nil {
 		slog.Fatalf("failed to load config: %v", err)
