@@ -25,9 +25,9 @@ go.work.sum
 .env
 
 # configs
-config.yaml
-config.yml
-config.json
+/config.yaml
+/config.yml
+/config.json
 
 # Jetbrains
 .idea/
