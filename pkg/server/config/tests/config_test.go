@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/config"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,42 +14,40 @@ func TestLoad_ShouldApplyAllDefaults_WhenNoConfigFileExists(t *testing.T) {
 	loader := config.NewLoader("OVERLAY")
 
 	// When
-	cfg, err := loader.Load()
+	actual, err := loader.Load()
+
+	expected := &config.Config{
+		AppName:          "Overlay API v0.0.0",
+		Port:             3000,
+		Addr:             "localhost",
+		ServerHeader:     "Overlay API",
+		AdminBearerToken: "admin-token-default",
+	}
 
 	// Then
 	require.NoError(t, err)
-	require.Equal(t, "localhost", cfg.Addr)
-	require.Equal(t, 3000, cfg.Port)
-	require.Equal(t, "Overlay API v0.0.0", cfg.AppName)
-	require.Equal(t, "Overlay API", cfg.ServerHeader)
-	require.Equal(t, "admin-token-default", cfg.AdminBearerToken)
+	require.Equal(t, expected, actual)
 }
 
 func TestLoad_ShouldOverrideDefaults_WhenConfigFileProvidesValues(t *testing.T) {
 	// Given
-	tmpFile := filepath.Join(t.TempDir(), "config.yaml")
-	content := `
-addr: 127.0.0.1
-port: 9999
-appname: CustomApp
-serverheader: CustomHeader
-adminbearertoken: secret-token
-`
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0600))
-
 	loader := config.NewLoader("OVERLAY")
-	require.NoError(t, loader.SetConfigFilePath(tmpFile))
+	require.NoError(t, loader.SetConfigFilePath("testdata/config.yaml"))
 
 	// When
-	cfg, err := loader.Load()
+	actual, err := loader.Load()
+
+	expected := &config.Config{
+		AppName:          "CustomApp",
+		Port:             9999,
+		Addr:             "127.0.0.1",
+		ServerHeader:     "CustomHeader",
+		AdminBearerToken: "secret-token",
+	}
 
 	// Then
 	require.NoError(t, err)
-	require.Equal(t, "127.0.0.1", cfg.Addr)
-	require.Equal(t, 9999, cfg.Port)
-	require.Equal(t, "CustomApp", cfg.AppName)
-	require.Equal(t, "CustomHeader", cfg.ServerHeader)
-	require.Equal(t, "secret-token", cfg.AdminBearerToken)
+	require.Equal(t, expected, actual)
 }
 
 func TestSetConfigFilePath_ShouldReturnError_WhenUnsupportedExtension(t *testing.T) {
@@ -120,13 +118,13 @@ func TestExportToEnv_ShouldWriteFlatEnvFile_WhenConfigIsValid(t *testing.T) {
 }
 
 func TestExportToEnv_ShouldFail_WhenFilePathIsInvalid(t *testing.T) {
-	// Given: a loaded config
+	// Given
 	loader := config.NewLoader("OVERLAY")
 	_, _ = loader.Load()
 
-	// When: exporting to an invalid file path
+	// When
 	err := loader.ToEnv("/invalid/!!/envfile")
 
-	// Then: an error should be returned
+	// Then
 	require.Error(t, err)
 }

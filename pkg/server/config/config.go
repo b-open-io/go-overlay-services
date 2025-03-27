@@ -1,12 +1,5 @@
 package config
 
-import (
-	"encoding/json"
-	"fmt"
-
-	"github.com/gookit/slog"
-)
-
 // Config defines the configuration for the application.
 type Config struct {
 	AppName          string
@@ -72,14 +65,4 @@ func NewConfig(opts ...Option) *Config {
 // DefaultConfig is an alias for NewConfig without options
 func DefaultConfig() *Config {
 	return NewConfig()
-}
-
-// PrettyPrint logs the loaded config as indented JSON using slog
-func (l *Load) PrettyPrint() error {
-	data, err := json.MarshalIndent(l.cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-	slog.Infof("Loaded Configuration:\n%s", string(data))
-	return nil
 }

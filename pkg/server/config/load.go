@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gookit/slog"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 )
 
 // DefaultConfigFilePath is the default path to the configuration file
@@ -79,7 +81,6 @@ func (l *Load) prepareViper() {
 
 func (l *Load) loadFromFile() error {
 	if _, err := os.Stat(l.configFilePath); os.IsNotExist(err) {
-		slog.Warnf("Config file not found at %s — using defaults", l.configFilePath)
 		return nil
 	}
 
@@ -108,4 +109,63 @@ func (l *Load) updateViperFromConfig() {
 	for key, value := range configMap {
 		l.viper.Set(key, value)
 	}
+}
+
+// PrettyPrint logs the loaded config as indented JSON using slog
+func (l *Load) PrettyPrint() error {
+	data, err := json.MarshalIndent(l.cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	slog.Infof("Loaded Configuration:\n%s", string(data))
+	return nil
+}
+
+// ToJSON writes the configuration to a JSON file
+func (l *Load) ToJSON(filePath string) error {
+	data, err := json.MarshalIndent(l.cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write JSON file: %w", err)
+	}
+	slog.Infof("JSON config exported to: %s", filePath)
+	return nil
+}
+
+// ToYAML writes the configuration to a YAML file
+func (l *Load) ToYAML(filePath string) error {
+	data, err := yaml.Marshal(l.cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal YAML: %w", err)
+	}
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write YAML file: %w", err)
+	}
+	slog.Infof("YAML config exported to: %s", filePath)
+	return nil
+}
+
+// ToEnv writes the configuration to an environment file
+func (l *Load) ToEnv(filePath string) error {
+	data := map[string]any{}
+	if err := mapstructure.Decode(l.cfg, &data); err != nil {
+		return fmt.Errorf("failed to decode config: %w", err)
+	}
+
+	flattened := map[string]string{}
+	flattenConfig("", flattened, data)
+
+	var content string
+	for key, value := range flattened {
+		content += fmt.Sprintf("%s=%s\n", key, value)
+	}
+
+	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {
+		return fmt.Errorf("failed to write env file: %w", err)
+	}
+
+	slog.Infof("ENV config exported to: %s", filePath)
+	return nil
 }

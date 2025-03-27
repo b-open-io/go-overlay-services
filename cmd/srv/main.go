@@ -4,8 +4,8 @@ import (
 	"flag"
 	"net/http"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/config"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/gookit/slog"
 )
 
@@ -34,7 +34,6 @@ func main() {
 
 	httpAPI := server.New(opts...)
 
-	slog.Infof("Starting server on %s:%d...", cfg.Addr, cfg.Port)
 	if err := httpAPI.ListenAndServe(); err != nil {
 		slog.Fatalf("HTTP server failed: %v", err)
 	}
