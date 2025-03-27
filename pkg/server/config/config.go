@@ -62,7 +62,7 @@ func NewConfig(opts ...Option) *Config {
 	return cfg
 }
 
-// DefaultConfig is an alias for NewConfig without options
+// DefaultConfig is an alias for NewConfig without options.
 func DefaultConfig() *Config {
 	return NewConfig()
 }
