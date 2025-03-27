@@ -18,9 +18,9 @@ func startTestServer(t *testing.T) *httptest.Server {
 	app := fiber.New()
 	noopProvider := server.NewNoopEngineProvider()
 
-	app.Post("/submit", commands.NewSubmitTransactionCommandHandler(noopProvider).Handle)
-	app.Post("/admin/advertisements-sync", commands.NewSyncAdvertisementsHandler(noopProvider).Handle)
-	app.Get("/topic-managers", queries.NewTopicManagerDocumentationHandler(noopProvider).Handle)
+	app.Post("/submit", adaptor.HTTPHandler(http.HandlerFunc(commands.NewSubmitTransactionCommandHandler(noopProvider).Handle)))
+	app.Post("/admin/advertisements-sync", adaptor.HTTPHandler(http.HandlerFunc(commands.NewSyncAdvertisementsHandler(noopProvider).Handle)))
+	app.Get("/topic-managers", adaptor.HTTPHandler(http.HandlerFunc(queries.NewTopicManagerDocumentationHandler(noopProvider).Handle)))
 
 	return httptest.NewServer(adaptor.FiberApp(app))
 }
@@ -41,7 +41,7 @@ func TestSubmitTransactionHandler_ShouldReturnOK(t *testing.T) {
 
 	// Then
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode())
+	require.Equal(t, http.StatusCreated, resp.StatusCode())
 }
 
 func TestSyncAdvertisementsHandler_ShouldReturnOK(t *testing.T) {
