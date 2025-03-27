@@ -37,3 +37,15 @@ func DecodeResponseBody(res *http.Response, dst any) error {
 	}
 	return nil
 }
+
+// DecodeRequestBody attempts to decode the HTTP request body into given destination
+// argument. It returns an error if the internal decoding operation fails; otherwise,
+// it returns nil, indicating successful processing.
+func DecodeRequestBody(r *http.Request, dst any) error {
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(dst)
+	if err != nil {
+		return fmt.Errorf("decoding http request body op failure: %w", err)
+	}
+	return nil
+}
