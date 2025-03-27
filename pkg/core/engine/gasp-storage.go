@@ -1,4 +1,4 @@
-package gasp
+package engine
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
 	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
@@ -16,15 +15,23 @@ import (
 
 var ErrGraphFull = errors.New("graph is full")
 
-type overlayGASPStorage struct {
+type GraphNode struct {
+	core.GASPNode
+	Txid     *chainhash.Hash `json:"txid"`
+	SpentBy  *chainhash.Hash `json:"spentBy"`
+	Children []*GraphNode    `json:"children"`
+	Parent   *GraphNode      `json:"parent"`
+}
+
+type OverlayGASPStorage struct {
 	Topic             string
-	Engine            engine.Engine
+	Engine            *Engine
 	MaxNodesInGraph   *int
 	tempGraphNodeRefs map[string]*GraphNode
 }
 
-func NewOverlayGASPStorage(topic string, engine engine.Engine, maxNodesInGraph *int) *overlayGASPStorage {
-	return &overlayGASPStorage{
+func NewOverlayGASPStorage(topic string, engine *Engine, maxNodesInGraph *int) *OverlayGASPStorage {
+	return &OverlayGASPStorage{
 		Topic:             topic,
 		Engine:            engine,
 		MaxNodesInGraph:   maxNodesInGraph,
@@ -32,7 +39,7 @@ func NewOverlayGASPStorage(topic string, engine engine.Engine, maxNodesInGraph *
 	}
 }
 
-func (s *overlayGASPStorage) FindKnownUTXOs(ctx context.Context, since uint32) ([]*overlay.Outpoint, error) {
+func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since uint32) ([]*overlay.Outpoint, error) {
 	if utxos, err := s.Engine.Storage.FindUTXOsForTopic(ctx, s.Topic, since, false); err != nil {
 		return nil, err
 	} else {
@@ -45,11 +52,11 @@ func (s *overlayGASPStorage) FindKnownUTXOs(ctx context.Context, since uint32) (
 	}
 }
 
-func (s *overlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *overlay.Outpoint, outpoint *overlay.Outpoint, metadata bool) (*core.GASPNode, error) {
+func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *overlay.Outpoint, outpoint *overlay.Outpoint, metadata bool) (*core.GASPNode, error) {
 	if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, nil, nil, true); err != nil {
 		return nil, err
 	} else if output.Beef == nil {
-		return nil, engine.ErrMissingInput
+		return nil, ErrMissingInput
 	} else if tx, err := transaction.NewTransactionFromBEEF(output.Beef); err != nil {
 		return nil, err
 	} else {
@@ -59,20 +66,22 @@ func (s *overlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *overl
 			RawTx:       tx.Hex(),
 		}
 		if tx.MerklePath != nil {
-			node.Proof = tx.MerklePath.Hex()
+			proof := tx.MerklePath.Hex()
+			node.Proof = &proof
 		}
 		return node, nil
 	}
 }
 
-func (s *overlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.GASPNode) (*core.GASPNodeResponse, error) {
+func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.GASPNode) (*core.GASPNodeResponse, error) {
 	response := &core.GASPNodeResponse{
 		RequestedInputs: make(map[string]*core.GASPNodeResponseData),
 	}
-
-	if tx, err := transaction.NewTransactionFromHex(gaspTx.RawTx); err != nil {
+	tx, err := transaction.NewTransactionFromHex(gaspTx.RawTx)
+	if err != nil {
 		return nil, err
-	} else {
+	}
+	if gaspTx.Proof == nil {
 		for _, input := range tx.Inputs {
 			outpoint := &overlay.Outpoint{
 				Txid:        *input.SourceTXID,
@@ -85,9 +94,29 @@ func (s *overlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 
 		return s.stripAlreadyKnowInputs(ctx, response)
 	}
+	if beef, err := tx.AtomicBEEF(false); err != nil {
+		return nil, err
+	} else if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
+		return nil, err
+	} else if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissableOutputs(ctx, beef, nil); err != nil {
+		return nil, err
+	} else if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
+		if neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beef); err != nil {
+			return nil, err
+		} else {
+			for _, outpoint := range neededInputs {
+				response.RequestedInputs[outpoint.String()] = &core.GASPNodeResponseData{
+					Metadata: true,
+				}
+			}
+			return s.stripAlreadyKnowInputs(ctx, response)
+		}
+	}
+
+	return response, nil
 }
 
-func (s *overlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *core.GASPNodeResponse) (*core.GASPNodeResponse, error) {
+func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *core.GASPNodeResponse) (*core.GASPNodeResponse, error) {
 	if response == nil {
 		return nil, nil
 	}
@@ -106,7 +135,7 @@ func (s *overlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, respons
 	return response, nil
 }
 
-func (s *overlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GASPNode, spentBy *chainhash.Hash) error {
+func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GASPNode, spentBy *chainhash.Hash) error {
 	if s.MaxNodesInGraph != nil && len(s.tempGraphNodeRefs) >= *s.MaxNodesInGraph {
 		return ErrGraphFull
 	}
@@ -115,24 +144,18 @@ func (s *overlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 		return err
 	} else {
 		txid := tx.TxID()
-		if len(gaspTx.Proof) > 0 {
-			if tx.MerklePath, err = transaction.NewMerklePathFromHex(gaspTx.Proof); err != nil {
+		if gaspTx.Proof != nil {
+			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
 				return err
 			}
 		}
 		newGraphNode := &GraphNode{
-			Txid:           txid,
-			GraphID:        gaspTx.GraphID,
-			RawTx:          gaspTx.RawTx,
-			OutputIndex:    gaspTx.OutputIndex,
-			Proof:          gaspTx.Proof,
-			TxMetadata:     gaspTx.TxMetadata,
-			OutputMetadata: gaspTx.OutputMetadata,
-			Inputs:         gaspTx.Inputs,
-			Children:       []*GraphNode{},
+			GASPNode: *gaspTx,
+			Txid:     txid,
+			Children: []*GraphNode{},
 		}
-		if spentBy != nil {
-			s.tempGraphNodeRefs[spentBy.String()] = newGraphNode
+		if spentBy == nil {
+			s.tempGraphNodeRefs[gaspTx.GraphID.String()] = newGraphNode
 		} else if parentNode, ok := s.tempGraphNodeRefs[txid.String()]; ok {
 			parentNode.Children = append(parentNode.Children, newGraphNode)
 			newGraphNode.Parent = parentNode
@@ -142,15 +165,15 @@ func (s *overlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 			}
 			s.tempGraphNodeRefs[newGraphOutpoint.String()] = newGraphNode
 		} else {
-			return engine.ErrMissingInput
+			return ErrMissingInput
 		}
 		return nil
 	}
 }
 
-func (s *overlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *overlay.Outpoint) error {
+func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *overlay.Outpoint) error {
 	if rootNode, ok := s.tempGraphNodeRefs[graphID.String()]; !ok {
-		return engine.ErrMissingInput
+		return ErrMissingInput
 	} else if beef, err := s.getBEEFForNode(ctx, rootNode); err != nil {
 		return err
 	} else if tx, err := transaction.NewTransactionFromBEEF(beef); err != nil {
@@ -197,15 +220,16 @@ func (s *overlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *o
 	}
 }
 
-func (s *overlayGASPStorage) DiscardGraph(ctx context.Context, graphID *overlay.Outpoint) {
+func (s *OverlayGASPStorage) DiscardGraph(ctx context.Context, graphID *overlay.Outpoint) error {
 	for nodeId, graphRef := range s.tempGraphNodeRefs {
 		if graphRef.GraphID.String() == graphID.String() {
 			delete(s.tempGraphNodeRefs, nodeId)
 		}
 	}
+	return nil
 }
 
-func (s *overlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *overlay.Outpoint) error {
+func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *overlay.Outpoint) error {
 	if beefs, err := s.computeOrderedBEEFsForGraph(ctx, graphID); err != nil {
 		return err
 	} else {
@@ -216,7 +240,7 @@ func (s *overlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *overlay
 					Topics: []string{s.Topic},
 					Beef:   beef,
 				},
-				engine.SubmitModeHistorical,
+				SubmitModeHistorical,
 				nil,
 			); err != nil {
 				return err
@@ -226,7 +250,7 @@ func (s *overlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *overlay
 	}
 }
 
-func (s *overlayGASPStorage) computeOrderedBEEFsForGraph(ctx context.Context, graphID *overlay.Outpoint) ([][]byte, error) {
+func (s *OverlayGASPStorage) computeOrderedBEEFsForGraph(ctx context.Context, graphID *overlay.Outpoint) ([][]byte, error) {
 	beefs := make([][]byte, 0)
 	var hydrator func(node *GraphNode) error
 	hydrator = func(node *GraphNode) error {
@@ -256,13 +280,13 @@ func (s *overlayGASPStorage) computeOrderedBEEFsForGraph(ctx context.Context, gr
 	}
 }
 
-func (s *overlayGASPStorage) getBEEFForNode(ctx context.Context, node *GraphNode) ([]byte, error) {
+func (s *OverlayGASPStorage) getBEEFForNode(ctx context.Context, node *GraphNode) ([]byte, error) {
 	var hydrator func(node *GraphNode) (*transaction.Transaction, error)
 	hydrator = func(node *GraphNode) (*transaction.Transaction, error) {
 		if tx, err := transaction.NewTransactionFromHex(node.RawTx); err != nil {
 			return nil, err
-		} else if len(node.Proof) > 0 {
-			if tx.MerklePath, err = transaction.NewMerklePathFromHex(node.Proof); err != nil {
+		} else if node.Proof != nil {
+			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*node.Proof); err != nil {
 				return nil, err
 			}
 			return tx, nil

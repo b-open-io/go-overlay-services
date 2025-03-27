@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/advertiser"
@@ -17,6 +18,7 @@ import (
 	"github.com/bsv-blockchain/go-sdk/spv"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/go-sdk/transaction/chaintracker"
+	"golang.org/x/exp/slices"
 )
 
 var TRUE = true
@@ -122,9 +124,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 	}
 
-	if beef, txid, err := transaction.NewBeefFromAtomicBytes(taggedBEEF.Beef); err != nil {
-		return nil, ErrInvalidBeef
-	} else if tx := beef.FindTransaction(txid.String()); tx == nil {
+	if tx, err := transaction.NewTransactionFromBEEF(taggedBEEF.Beef); err != nil {
 		return nil, ErrInvalidBeef
 	} else if valid, err := spv.Verify(tx, e.ChainTracker, nil); err != nil {
 		if e.PanicOnError {
@@ -137,12 +137,12 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 		return nil, ErrInvalidTransaction
 	} else {
+		txid := tx.TxID()
 		if e.Verbose {
 			fmt.Println("Validated in", time.Since(start))
 			start = time.Now()
 		}
 		steak := make(overlay.Steak, len(taggedBEEF.Topics))
-		tx := beef.FindTransaction(txid.String())
 		topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
 		inpoints := make([]*overlay.Outpoint, 0, len(tx.Inputs))
 		for _, input := range tx.Inputs {
@@ -412,20 +412,240 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 	}
 }
 
-func (e *Engine) SyncAdvertisements() error {
+func (e *Engine) SyncAdvertisements(ctx context.Context) error {
+	if e.Advertiser == nil {
+		return nil
+	}
+	configuredTopics := make([]string, 0, len(e.Managers))
+	requiredSHIPAdvertisements := make(map[string]struct{}, len(configuredTopics))
+	for name := range e.Managers {
+		configuredTopics = append(configuredTopics, name)
+		requiredSHIPAdvertisements[name] = struct{}{}
+	}
+	configuredServices := make([]string, 0, len(e.LookupServices))
+	requiredSLAPAdvertisements := make(map[string]struct{}, len(configuredServices))
+	for name := range e.LookupServices {
+		configuredServices = append(configuredServices, name)
+		requiredSLAPAdvertisements[name] = struct{}{}
+	}
+	currentSHIPAdvertisements, err := e.Advertiser.FindAllAdvertisements("SHIP")
+	if err != nil {
+		return err
+	}
+	shipsToCreate := make([]string, 0, len(requiredSHIPAdvertisements))
+	for topic := range requiredSHIPAdvertisements {
+		if slices.IndexFunc(currentSHIPAdvertisements, func(ad *advertiser.Advertisement) bool {
+			return ad.TopicOrService == topic && ad.Domain == e.HostingURL
+		}) != -1 {
+			shipsToCreate = append(shipsToCreate, topic)
+		}
+	}
+	shipsToRevoke := make([]*advertiser.Advertisement, 0, len(currentSHIPAdvertisements))
+	for _, ad := range currentSHIPAdvertisements {
+		if _, ok := requiredSHIPAdvertisements[ad.TopicOrService]; !ok {
+			shipsToRevoke = append(shipsToRevoke, ad)
+		}
+	}
+
+	currentSLAPAdvertisements, err := e.Advertiser.FindAllAdvertisements("SLAP")
+	if err != nil {
+		return err
+	}
+	slapsToCreate := make([]string, 0, len(requiredSLAPAdvertisements))
+	for service := range requiredSLAPAdvertisements {
+		if slices.IndexFunc(currentSLAPAdvertisements, func(ad *advertiser.Advertisement) bool {
+			return ad.TopicOrService == service && ad.Domain == e.HostingURL
+		}) != -1 {
+			slapsToCreate = append(slapsToCreate, service)
+		}
+	}
+	slapsToRevoke := make([]*advertiser.Advertisement, 0, len(currentSLAPAdvertisements))
+	for _, ad := range currentSLAPAdvertisements {
+		if _, ok := requiredSLAPAdvertisements[ad.TopicOrService]; !ok {
+			slapsToRevoke = append(slapsToRevoke, ad)
+		}
+	}
+	advertisementData := make([]*advertiser.AdvertisementData, 0, len(shipsToCreate)+len(slapsToCreate))
+	for _, topic := range shipsToCreate {
+		advertisementData = append(advertisementData, &advertiser.AdvertisementData{
+			Protocol:           "SHIP",
+			TopicOrServiceName: topic,
+		})
+	}
+	for _, service := range slapsToCreate {
+		advertisementData = append(advertisementData, &advertiser.AdvertisementData{
+			Protocol:           "SLAP",
+			TopicOrServiceName: service,
+		})
+	}
+	if len(advertisementData) > 0 {
+		if taggedBEEF, err := e.Advertiser.CreateAdvertisements(advertisementData); err != nil {
+			log.Println("Failed to create SHIP advertisement:", err)
+		} else if _, err := e.Submit(ctx, taggedBEEF, SubmitModeCurrent, nil); err != nil {
+			log.Println("Failed to create SHIP advertisement:", err)
+		}
+	}
+	revokeData := make([]*advertiser.Advertisement, 0, len(shipsToRevoke)+len(slapsToRevoke))
+	revokeData = append(revokeData, shipsToRevoke...)
+	revokeData = append(revokeData, slapsToRevoke...)
+	if len(revokeData) > 0 {
+		if taggedBEEF, err := e.Advertiser.RevokeAdvertisements(revokeData); err != nil {
+			log.Println("Failed to revoke SHIP/SLAP advertisements:", err)
+		} else if _, err := e.Submit(ctx, taggedBEEF, SubmitModeCurrent, nil); err != nil {
+			log.Println("Failed to revoke SHIP/SLAP advertisements:", err)
+		}
+	}
 	return nil
 }
 
-func (e *Engine) StartGASPSync() error {
+func (e *Engine) StartGASPSync(ctx context.Context) error {
+	if e.SyncConfiguration == nil {
+		return errors.New("not configured for topical synchronization")
+	}
+
+	for topic := range e.SyncConfiguration {
+		syncEndpoints, ok := e.SyncConfiguration[topic]
+		if !ok {
+			continue
+		}
+		if syncEndpoints.Type == SyncConfigurationSHIP {
+			resolver := lookup.LookupResolver{
+				Facilitator: &lookup.HTTPSOverlayLookupFacilitator{
+					Client: http.DefaultClient,
+				},
+			}
+			if e.SLAPTrackers != nil {
+				resolver.SLAPTrackers = e.SLAPTrackers
+			}
+
+			if lookupAnswer, err := resolver.Query(ctx, &lookup.LookupQuestion{
+				Service: "ls_ship",
+				Query: map[string]interface{}{
+					"topics": []string{topic},
+				},
+			}, 10*time.Second); err != nil {
+				return err
+			} else if lookupAnswer.Type == lookup.AnswerTypeOutputList {
+				endpointSet := make(map[string]struct{}, len(lookupAnswer.Outputs))
+				for _, output := range lookupAnswer.Outputs {
+					if tx, err := transaction.NewTransactionFromBEEF(output.Beef); err != nil {
+						log.Println("Failed to parse advertisement output:", err)
+					} else if advertisement, err := e.Advertiser.ParseAdvertisement(tx.Outputs[output.OutputIndex].LockingScript); err != nil {
+						log.Println("Failed to parse advertisement output:", err)
+					} else if advertisement != nil && advertisement.Protocol == "SHIP" {
+						endpointSet[advertisement.Domain] = struct{}{}
+					}
+				}
+				syncEndpoints.Peers = make([]string, 0, len(endpointSet))
+				for endpoint := range endpointSet {
+					if endpoint != e.HostingURL {
+						syncEndpoints.Peers = append(syncEndpoints.Peers, endpoint)
+					}
+				}
+			}
+		}
+
+		if len(syncEndpoints.Peers) > 0 {
+			peers := make([]string, 0, len(syncEndpoints.Peers))
+			for _, peer := range syncEndpoints.Peers {
+				if peer != e.HostingURL {
+					peers = append(peers, peer)
+				}
+			}
+			for _, peer := range peers {
+				logPrefix := "[GASP Sync of " + topic + " with " + peer + "]"
+				gasp := core.NewGASP(core.GASPParams{
+					Storage: NewOverlayGASPStorage(topic, e, nil),
+					Remote: &OverlayGASPRemote{
+						EndpointUrl: peer,
+						Topic:       topic,
+						HttpClient:  http.DefaultClient,
+					},
+					LogPrefix:      &logPrefix,
+					Unidirectional: true,
+				})
+				if err := gasp.Sync(ctx); err != nil {
+					log.Println("Failed to sync with peer", peer, ":", err)
+				}
+			}
+		}
+	}
 	return nil
 }
 
-func (e *Engine) ProvideForeignSyncResponse(initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
-	return nil, nil
+func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
+	if utxos, err := e.Storage.FindUTXOsForTopic(ctx, topic, initialRequest.Since, false); err != nil {
+		return nil, err
+	} else {
+		utxoList := make([]*overlay.Outpoint, 0, len(utxos))
+		for _, utxo := range utxos {
+			utxoList = append(utxoList, &utxo.Outpoint)
+		}
+		return &core.GASPInitialResponse{
+			UTXOList: utxoList,
+		}, nil
+	}
 }
 
-func (e *Engine) ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*core.GASPNode, error) {
-	return nil, nil
+func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Outpoint, outpoint *overlay.Outpoint) (*core.GASPNode, error) {
+	var hydrator func(ctx context.Context, output *Output) (*core.GASPNode, error)
+	hydrator = func(ctx context.Context, output *Output) (*core.GASPNode, error) {
+		if output.Beef == nil {
+			return nil, ErrMissingInput
+		} else if tx, err := transaction.NewTransactionFromBEEF(output.Beef); err != nil {
+			return nil, err
+		} else {
+			var correctTx *transaction.Transaction
+			var searchInput func(ctx context.Context, tx *transaction.Transaction) error
+			searchInput = func(ctx context.Context, tx *transaction.Transaction) error {
+				if tx.TxID().Equal(outpoint.Txid) {
+					correctTx = tx
+				} else {
+					for _, input := range tx.Inputs {
+						if input.SourceTransaction == nil {
+							return errors.New("incomplete spv data")
+						} else if err := searchInput(ctx, input.SourceTransaction); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			}
+
+			if err := searchInput(ctx, tx); err != nil {
+				return nil, err
+			} else if correctTx != nil {
+				node := &core.GASPNode{
+					GraphID:     graphId,
+					RawTx:       correctTx.Hex(),
+					OutputIndex: outpoint.OutputIndex,
+				}
+				if correctTx.MerklePath != nil {
+					proof := correctTx.MerklePath.Hex()
+					node.Proof = &proof
+				}
+				return node, nil
+			} else {
+				var node *core.GASPNode
+				for _, outpoint := range output.OutputsConsumed {
+					if output, err := e.Storage.FindOutput(ctx, outpoint, nil, nil, false); err == nil {
+						if node, err = hydrator(ctx, output); err != nil {
+							return nil, err
+						} else {
+							return node, nil
+						}
+					}
+				}
+				return nil, errors.New("unable to find output")
+			}
+		}
+
+	}
+	if output, err := e.Storage.FindOutput(ctx, graphId, nil, nil, true); err != nil {
+		return nil, err
+	} else {
+		return hydrator(ctx, output)
+	}
 }
 
 func (e *Engine) deleteUTXODeep(ctx context.Context, output *Output) error {
@@ -500,7 +720,10 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 		return nil
 	} else if err = e.updateInputProofs(ctx, tx, txid, proof); err != nil {
 		return err
-	} else {
+	} else if beef, err := tx.AtomicBEEF(false); err != nil {
+		return err
+	} else if err = e.Storage.UpdateTransactionBEEF(ctx, &output.Outpoint.Txid, beef); err != nil {
+
 		for _, outpoint := range output.ConsumedBy {
 			if consumedOutputs, err := e.Storage.FindOutputsForTransaction(ctx, &outpoint.Txid, true); err != nil {
 				return err
@@ -516,18 +739,22 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 	return nil
 }
 
-func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath, blockHeight *uint32) error {
+func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
 	if outputs, err := e.Storage.FindOutputsForTransaction(ctx, txid, true); err != nil {
 		return err
 	} else {
 		for _, output := range outputs {
 			if err := e.updateMerkleProof(ctx, output, *txid, proof); err != nil {
 				return err
-			} else if blockHeight != nil {
-				output.BlockHeight = *blockHeight
-				if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, *blockHeight, 0); err != nil {
-					return err
+			}
+			output.BlockHeight = proof.BlockHeight
+			for _, leaf := range proof.Path[0] {
+				if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
+					output.BlockIdx = leaf.Offset
 				}
+			}
+			if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, output.BlockHeight, output.BlockIdx); err != nil {
+				return err
 			}
 		}
 	}

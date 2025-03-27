@@ -1,4 +1,4 @@
-package gasp
+package engine
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
@@ -19,7 +20,7 @@ type OverlayGASPRemote struct {
 	HttpClient  util.HTTPClient
 }
 
-func (r *OverlayGASPRemote) InitialResponse(request *core.GASPInitialRequest) (*core.GASPInitialResponse, error) {
+func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *core.GASPInitialRequest) (*core.GASPInitialResponse, error) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(request); err != nil {
 		return nil, err
@@ -47,19 +48,18 @@ func (r *OverlayGASPRemote) InitialResponse(request *core.GASPInitialRequest) (*
 }
 
 func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *overlay.Outpoint, outpoint *overlay.Outpoint, metadata bool) (*core.GASPNode, error) {
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(map[string]interface{}{
-		"graphID":     graphID,
-		"txid":        outpoint.Txid.String(),
-		"outputIndex": outpoint.OutputIndex,
-		"metadata":    metadata,
+	if j, err := json.Marshal(&core.GASPNodeRequest{
+		GraphID:     graphID,
+		Txid:        &outpoint.Txid,
+		OutputIndex: outpoint.OutputIndex,
+		Metadata:    metadata,
 	}); err != nil {
 		return nil, err
-	} else if req, err := http.NewRequest("POST", r.EndpointUrl+"/requestForeignGASPNode", io.NopCloser(&buf)); err != nil {
+	} else if req, err := http.NewRequest("POST", r.EndpointUrl+"/requestForeignGASPNode", bytes.NewReader(j)); err != nil {
 		return nil, err
 	} else {
+		log.Println("body", string(j))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-BSV-Topic", r.Topic)
 		if resp, err := r.HttpClient.Do(req); err != nil {
 			return nil, err
 		} else {
@@ -78,10 +78,10 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *overlay.Ou
 	}
 }
 
-func (r *OverlayGASPRemote) InitialReplay(response *core.GASPInitialResponse) (*core.GASPInitialReply, error) {
+func (r *OverlayGASPRemote) GetInitialReplay(ctx context.Context, response *core.GASPInitialResponse) (*core.GASPInitialReply, error) {
 	return nil, errors.New("not-implemented")
 }
 
-func (r *OverlayGASPRemote) SubmitNode(node *core.GASPNode) (*core.GASPNodeResponse, error) {
+func (r *OverlayGASPRemote) SubmitNode(ctx context.Context, node *core.GASPNode) (*core.GASPNodeResponse, error) {
 	return nil, errors.New("not-implemented")
 }

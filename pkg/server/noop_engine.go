@@ -19,7 +19,7 @@ func (*NoopEngineProvider) Submit(ctx context.Context, taggedBEEF overlay.Tagged
 }
 
 // SyncAdvertisements is a no-op call that always returns a nil error.
-func (*NoopEngineProvider) SyncAdvertisements() error { return nil }
+func (*NoopEngineProvider) SyncAdvertisements(ctx context.Context) error { return nil }
 
 // GetTopicManagerDocumentation is a no-op call that always returns a nil error.
 func (*NoopEngineProvider) GetTopicManagerDocumentation(ctx context.Context) error { return nil }
@@ -35,7 +35,7 @@ func (*NoopEngineProvider) GetUTXOHistory(ctx context.Context, output *engine.Ou
 }
 
 // StartGASPSync is a no-op call that always returns a nil error.
-func (*NoopEngineProvider) StartGASPSync() error { return nil }
+func (*NoopEngineProvider) StartGASPSync(ctx context.Context) error { return nil }
 
 // ProvideForeignSyncResponse is a no-op call that always returns an empty initial GASP response with nil error.
 func (*NoopEngineProvider) ProvideForeignSyncResponse(initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
@@ -43,7 +43,7 @@ func (*NoopEngineProvider) ProvideForeignSyncResponse(initialRequest *core.GASPI
 }
 
 // ProvideForeignGASPNode is a no-op call that always returns an empty GASP node with nil error.
-func (*NoopEngineProvider) ProvideForeignGASPNode(graphId string, txid string, outputIndex uint32) (*core.GASPNode, error) {
+func (*NoopEngineProvider) ProvideForeignGASPNode(graphId string, outpoint *overlay.Outpoint) (*core.GASPNode, error) {
 	return &core.GASPNode{}, nil
 }
 

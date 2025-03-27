@@ -23,6 +23,13 @@ var (
 	LogLevelDebug LogLevel = 4
 )
 
+type GASPNodeRequest struct {
+	GraphID     *overlay.Outpoint `json:"graphID"`
+	Txid        *chainhash.Hash   `json:"txid"`
+	OutputIndex uint32            `json:"outputIndex"`
+	Metadata    bool              `json:"metadata"`
+}
+
 type GASPParams struct {
 	Storage         GASPStorage
 	Remote          GASPRemote
@@ -56,7 +63,7 @@ func NewGASP(params GASPParams) *GASP {
 	if params.Concurrency > 1 {
 		gasp.limiter = make(chan struct{}, params.Concurrency)
 	} else {
-		gasp.limiter = make(chan struct{})
+		gasp.limiter = make(chan struct{}, 1)
 	}
 	if params.Version != nil {
 		gasp.Version = *params.Version

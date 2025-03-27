@@ -28,7 +28,7 @@ type GASPNode struct {
 	GraphID        *overlay.Outpoint     `json:"graphID"`
 	RawTx          string                `json:"rawTx"`
 	OutputIndex    uint32                `json:"outputIndex"`
-	Proof          string                `json:"proof"`
+	Proof          *string               `json:"proof"`
 	TxMetadata     string                `json:"txMetadata"`
 	OutputMetadata string                `json:"outputMetadata"`
 	Inputs         map[string]*GASPInput `json:"inputs"`

@@ -6,6 +6,7 @@ require (
 	github.com/bsv-blockchain/go-sdk v1.1.22
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/gookit/slog v0.5.8
+	golang.org/x/exp v0.0.0-20220909182711-5c715a9e8561
 )
 
 require (
