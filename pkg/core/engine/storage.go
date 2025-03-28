@@ -42,6 +42,9 @@ type Storage interface {
 	// Updates the beef data for a transaction
 	UpdateTransactionBEEF(ctx context.Context, txid *chainhash.Hash, beef []byte) error
 
+	// Updates the beef data for an output
+	UpdateOutputBEEF(ctx context.Context, outpoint *overlay.Outpoint, topic string, beef []byte, blockHeight uint32, blockIndex uint64) error
+
 	// Updates the block height on an output
 	UpdateOutputBlockHeight(ctx context.Context, outpoint *overlay.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error
 

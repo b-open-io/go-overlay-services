@@ -205,12 +205,13 @@ func (g *GASP) SubmitNode(ctx context.Context, node *GASPNode) (requestedInputs 
 	return requestedInputs, nil
 }
 
-func (g *GASP) CompleteGraph(ctx context.Context, graphID *overlay.Outpoint) error {
-	if err := g.Storage.ValidateGraphAnchor(ctx, graphID); err == nil {
+func (g *GASP) CompleteGraph(ctx context.Context, graphID *overlay.Outpoint) (err error) {
+	if err = g.Storage.ValidateGraphAnchor(ctx, graphID); err == nil {
 		if err := g.Storage.FinalizeGraph(ctx, graphID); err == nil {
 			return nil
 		}
 	}
+	log.Printf("Error completing graph %s: %v", graphID.String(), err)
 	return g.Storage.DiscardGraph(ctx, graphID)
 }
 

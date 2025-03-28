@@ -124,9 +124,20 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 	}
 
-	if tx, err := transaction.NewTransactionFromBEEF(taggedBEEF.Beef); err != nil {
+	var tx *transaction.Transaction
+	_, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
+	if err != nil {
+		if e.PanicOnError {
+			log.Panicln(err)
+		}
+		return nil, err
+	} else if tx == nil {
+		if e.PanicOnError {
+			log.Panicln(ErrInvalidBeef)
+		}
 		return nil, ErrInvalidBeef
-	} else if valid, err := spv.Verify(tx, e.ChainTracker, nil); err != nil {
+	}
+	if valid, err := spv.Verify(tx, e.ChainTracker, nil); err != nil {
 		if e.PanicOnError {
 			log.Panicln(err)
 		}
@@ -137,7 +148,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 		return nil, ErrInvalidTransaction
 	} else {
-		txid := tx.TxID()
+		// txid := tx.TxID()
 		if e.Verbose {
 			fmt.Println("Validated in", time.Since(start))
 			start = time.Now()
@@ -164,27 +175,17 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				steak[topic] = &overlay.AdmittanceInstructions{}
 				continue
 			} else {
+				topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
 				previousCoins := make([]uint32, 0, len(tx.Inputs))
-				if inputs, err := e.Storage.FindOutputs(ctx, inpoints, &topic, &FALSE, false); err != nil {
-					if e.PanicOnError {
-						log.Panicln(err)
-					}
-					return nil, err
-				} else {
-					topicInputs[topic] = make(map[uint32]*Output, len(inputs))
-					for vin, input := range inputs {
-						if input != nil {
-							// if input.Spent {
-							// 	if e.PanicOnError {
-							// 		log.Panicln("input spent", txid.String(), vin)
-							// 	}
-							// 	return nil, ErrInputSpent
-							// }
-							previousCoins = append(previousCoins, uint32(vin))
-							topicInputs[topic][uint32(vin)] = input
-						}
+				for vin, outpoint := range inpoints {
+					if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, false); err != nil {
+						return nil, err
+					} else if output != nil {
+						previousCoins = append(previousCoins, uint32(vin))
+						topicInputs[topic][uint32(vin)] = output
 					}
 				}
+
 				if admit, err := e.Managers[topic].IdentifyAdmissableOutputs(ctx, taggedBEEF.Beef, previousCoins); err != nil {
 					if e.PanicOnError {
 						log.Panicln(err)
@@ -274,6 +275,16 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					Topic:           topic,
 					OutputsConsumed: outpointsConsumed,
 					Beef:            taggedBEEF.Beef,
+					Dependencies:    admit.TxidsToInclude,
+				}
+				if tx.MerklePath != nil {
+					output.BlockHeight = tx.MerklePath.BlockHeight
+					for _, leaf := range tx.MerklePath.Path[0] {
+						if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
+							output.BlockIdx = leaf.Offset
+							break
+						}
+					}
 				}
 				if err := e.Storage.InsertOutput(ctx, output); err != nil {
 					if e.PanicOnError {
@@ -403,7 +414,7 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 				}
 			}
 		}
-		if beef, err := tx.AtomicBEEF(false); err != nil {
+		if beef, err := tx.BEEF(); err != nil {
 			return nil, err
 		} else {
 			output.Beef = beef
@@ -588,56 +599,54 @@ func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest 
 }
 
 func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Outpoint, outpoint *overlay.Outpoint) (*core.GASPNode, error) {
+	log.Println("ProvideForeignGASPNode", graphId.String(), outpoint.String())
 	var hydrator func(ctx context.Context, output *Output) (*core.GASPNode, error)
 	hydrator = func(ctx context.Context, output *Output) (*core.GASPNode, error) {
+		if output == nil {
+			return nil, errors.New("missing output")
+		}
 		if output.Beef == nil {
 			return nil, ErrMissingInput
-		} else if tx, err := transaction.NewTransactionFromBEEF(output.Beef); err != nil {
+		} else if beef, tx, _, err := transaction.ParseBeef(output.Beef); err != nil {
 			return nil, err
+		} else if tx == nil {
+			for _, outpoint := range output.OutputsConsumed {
+				if output, err := e.Storage.FindOutput(ctx, outpoint, nil, nil, false); err == nil {
+					return hydrator(ctx, output)
+				}
+			}
+			return nil, errors.New("unable to find output")
 		} else {
-			var correctTx *transaction.Transaction
-			var searchInput func(ctx context.Context, tx *transaction.Transaction) error
-			searchInput = func(ctx context.Context, tx *transaction.Transaction) error {
-				if tx.TxID().Equal(outpoint.Txid) {
-					correctTx = tx
-				} else {
-					for _, input := range tx.Inputs {
-						if input.SourceTransaction == nil {
-							return errors.New("incomplete spv data")
-						} else if err := searchInput(ctx, input.SourceTransaction); err != nil {
-							return err
-						}
+			node := &core.GASPNode{
+				GraphID:     graphId,
+				RawTx:       tx.Hex(),
+				OutputIndex: outpoint.OutputIndex,
+			}
+			if tx.MerklePath != nil {
+				proof := tx.MerklePath.Hex()
+				node.Proof = &proof
+			}
+			var depsBeef *transaction.Beef
+			if len(output.Dependencies) > 0 {
+				depsBeef = &transaction.Beef{
+					Version:      transaction.BEEF_V2,
+					Transactions: make(map[string]*transaction.BeefTx, len(output.Dependencies)),
+				}
+				for _, dep := range output.Dependencies {
+					if depTx := beef.FindTransaction(dep.String()); depTx == nil {
+						return nil, errors.New("missing dependency transaction")
+					} else if depBeefBytes, err := depTx.BEEF(); err != nil {
+						return nil, err
+					} else if err := depsBeef.MergeBeefBytes(depBeefBytes); err != nil {
+						return nil, err
 					}
 				}
-				return nil
+				if node.DependencyBeef, err = depsBeef.Bytes(); err != nil {
+					return nil, err
+				}
 			}
+			return node, nil
 
-			if err := searchInput(ctx, tx); err != nil {
-				return nil, err
-			} else if correctTx != nil {
-				node := &core.GASPNode{
-					GraphID:     graphId,
-					RawTx:       correctTx.Hex(),
-					OutputIndex: outpoint.OutputIndex,
-				}
-				if correctTx.MerklePath != nil {
-					proof := correctTx.MerklePath.Hex()
-					node.Proof = &proof
-				}
-				return node, nil
-			} else {
-				var node *core.GASPNode
-				for _, outpoint := range output.OutputsConsumed {
-					if output, err := e.Storage.FindOutput(ctx, outpoint, nil, nil, false); err == nil {
-						if node, err = hydrator(ctx, output); err != nil {
-							return nil, err
-						} else {
-							return node, nil
-						}
-					}
-				}
-				return nil, errors.New("unable to find output")
-			}
 		}
 
 	}
@@ -713,30 +722,66 @@ func (e *Engine) updateInputProofs(ctx context.Context, tx *transaction.Transact
 func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid chainhash.Hash, proof *transaction.MerklePath) error {
 	if len(output.Beef) == 0 {
 		return errors.New("missing beef")
-	} else if tx, err := transaction.NewTransactionFromBEEF(output.Beef); err != nil {
+	}
+	beef, tx, _, err := transaction.ParseBeef(output.Beef)
+	if err != nil {
 		return err
-	} else if tx.MerklePath != nil {
-		tx.MerklePath = proof
-		return nil
-	} else if err = e.updateInputProofs(ctx, tx, txid, proof); err != nil {
+	} else if tx == nil {
+		return errors.New("missing transaction")
+	}
+	if tx.MerklePath != nil {
+		if oldRoot, err := tx.MerklePath.ComputeRoot(&txid); err != nil {
+			return err
+		} else if newRoot, err := proof.ComputeRoot(&txid); err != nil {
+			return err
+		} else if oldRoot.Equal(*newRoot) {
+			return nil
+		}
+	}
+	if err = e.updateInputProofs(ctx, tx, txid, proof); err != nil {
 		return err
-	} else if beef, err := tx.AtomicBEEF(false); err != nil {
+	}
+	newBeef, err := transaction.NewBeefFromTransaction(tx)
+	if err != nil {
 		return err
-	} else if err = e.Storage.UpdateTransactionBEEF(ctx, &output.Outpoint.Txid, beef); err != nil {
-
-		for _, outpoint := range output.ConsumedBy {
-			if consumedOutputs, err := e.Storage.FindOutputsForTransaction(ctx, &outpoint.Txid, true); err != nil {
-				return err
-			} else {
-				for _, consumed := range consumedOutputs {
-					if err := e.updateMerkleProof(ctx, consumed, txid, proof); err != nil {
-						return err
-					}
+	}
+	for _, dep := range output.Dependencies {
+		if depTx := beef.FindTransaction(dep.String()); depTx == nil {
+			return errors.New("missing dependency transaction")
+		} else if depBeefBytes, err := depTx.BEEF(); err != nil {
+			return err
+		} else if err := newBeef.MergeBeefBytes(depBeefBytes); err != nil {
+			return err
+		}
+	}
+	output.BlockHeight = proof.BlockHeight
+	for _, leaf := range proof.Path[0] {
+		if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
+			output.BlockIdx = leaf.Offset
+			break
+		}
+	}
+	if beefBytes, err := newBeef.AtomicBytes(&output.Outpoint.Txid); err != nil {
+		return err
+	} else if _, _, _, err := transaction.ParseBeef(beefBytes); err != nil {
+		log.Println("Failed to parse beef:", err)
+		return err
+	} else if err = e.Storage.UpdateOutputBEEF(ctx, &output.Outpoint, output.Topic, beefBytes, output.BlockHeight, output.BlockIdx); err != nil {
+		return err
+	}
+	for _, outpoint := range output.ConsumedBy {
+		if consumingOutputs, err := e.Storage.FindOutputsForTransaction(ctx, &outpoint.Txid, true); err != nil {
+			return err
+		} else {
+			for _, consuming := range consumingOutputs {
+				if err := e.updateMerkleProof(ctx, consuming, txid, proof); err != nil {
+					return err
 				}
 			}
 		}
 	}
 	return nil
+
 }
 
 func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
@@ -747,15 +792,9 @@ func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash,
 			if err := e.updateMerkleProof(ctx, output, *txid, proof); err != nil {
 				return err
 			}
-			output.BlockHeight = proof.BlockHeight
-			for _, leaf := range proof.Path[0] {
-				if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
-					output.BlockIdx = leaf.Offset
-				}
-			}
-			if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, output.BlockHeight, output.BlockIdx); err != nil {
-				return err
-			}
+			// if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, output.BlockHeight, output.BlockIdx); err != nil {
+			// 	return err
+			// }
 		}
 	}
 	return nil

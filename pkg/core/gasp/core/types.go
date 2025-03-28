@@ -32,6 +32,7 @@ type GASPNode struct {
 	TxMetadata     string                `json:"txMetadata"`
 	OutputMetadata string                `json:"outputMetadata"`
 	Inputs         map[string]*GASPInput `json:"inputs"`
+	DependencyBeef []byte                `json:"dependencyBeef"`
 }
 
 type GASPNodeResponseData struct {
