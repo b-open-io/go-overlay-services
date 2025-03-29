@@ -18,8 +18,8 @@ type OverlayEngineProvider interface {
 	GetUTXOHistory(ctx context.Context, output *Output, historySelector func(beef []byte, outputIndex uint32, currentDepth uint32) bool, currentDepth uint32) (*Output, error)
 	SyncAdvertisements(ctx context.Context) error
 	StartGASPSync(ctx context.Context) error
-	ProvideForeignSyncResponse(initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error)
-	ProvideForeignGASPNode(graphId string, outpoint *overlay.Outpoint) (*core.GASPNode, error)
+	ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error)
+	ProvideForeignGASPNode(ctx context.Context, graphId string, outpoint *overlay.Outpoint) (*core.GASPNode, error)
 	ListTopicManagers() map[string]*overlay.MetaData
 	ListLookupServiceProviders() map[string]*overlay.MetaData
 	GetDocumentationForLookupServiceProvider(provider string) (string, error)

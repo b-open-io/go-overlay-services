@@ -38,12 +38,12 @@ func (*NoopEngineProvider) GetUTXOHistory(ctx context.Context, output *engine.Ou
 func (*NoopEngineProvider) StartGASPSync(ctx context.Context) error { return nil }
 
 // ProvideForeignSyncResponse is a no-op call that always returns an empty initial GASP response with nil error.
-func (*NoopEngineProvider) ProvideForeignSyncResponse(initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
+func (*NoopEngineProvider) ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
 	return &core.GASPInitialResponse{}, nil
 }
 
 // ProvideForeignGASPNode is a no-op call that always returns an empty GASP node with nil error.
-func (*NoopEngineProvider) ProvideForeignGASPNode(graphId string, outpoint *overlay.Outpoint) (*core.GASPNode, error) {
+func (*NoopEngineProvider) ProvideForeignGASPNode(ctx context.Context, graphId string, outpoint *overlay.Outpoint) (*core.GASPNode, error) {
 	return &core.GASPNode{}, nil
 }
 
