@@ -742,8 +742,8 @@ func (e *Engine) updateInputProofs(ctx context.Context, tx *transaction.Transact
 		for _, input := range tx.Inputs {
 			if input.SourceTransaction == nil {
 				return errors.New("missing source transaction")
-			} else {
-				e.updateInputProofs(ctx, input.SourceTransaction, txid, proof)
+			} else if err = e.updateInputProofs(ctx, input.SourceTransaction, txid, proof); err != nil {
+				return err
 			}
 		}
 	}
