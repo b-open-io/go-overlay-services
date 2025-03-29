@@ -110,6 +110,7 @@ func (g *GASP) Sync(ctx context.Context) error {
 						wg.Done()
 					}()
 					var resolvedNode *GASPNode
+					var err error
 					if resolvedNode, err = g.Remote.RequestNode(ctx, outpoint, outpoint, true); err == nil {
 						if err = g.processIncomingNode(ctx, resolvedNode, nil, &sync.Map{}); err == nil {
 							if err = g.CompleteGraph(ctx, resolvedNode.GraphID); err == nil {
