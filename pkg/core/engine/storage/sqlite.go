@@ -211,7 +211,7 @@ func (s *SQLiteStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Ou
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint:errcheck
+	defer rows.Close()
 	for rows.Next() {
 		output := &engine.Output{}
 		var consumes []byte
@@ -266,7 +266,7 @@ func (s *SQLiteStorage) FindOutputsForTransaction(ctx context.Context, txid *cha
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint:errcheck
+	defer rows.Close()
 	for rows.Next() {
 		output := &engine.Output{}
 		var consumes []byte
@@ -320,7 +320,7 @@ func (s *SQLiteStorage) FindUTXOsForTopic(ctx context.Context, topic string, sin
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint:errcheck
+	defer rows.Close()
 	for rows.Next() {
 		output := &engine.Output{
 			Topic: topic,
@@ -466,7 +466,7 @@ func (s *SQLiteStorage) DoesAppliedTransactionExist(ctx context.Context, tx *ove
 }
 
 func (s *SQLiteStorage) Close() error {
-	s.rDB.Close() //nolint:errcheck
+	s.rDB.Close()
 	return s.wDB.Close()
 }
 

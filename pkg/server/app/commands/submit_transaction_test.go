@@ -28,7 +28,7 @@ func TestSubmitTransactionHandler_Handle(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 	assert.Equal(t, res.StatusCode, http.StatusCreated)
-	defer res.Body.Close() //nolint:errcheck
+	defer res.Body.Close()
 
 	var actual commands.SubmitTransactionHandlerResponse
 	expected := commands.SubmitTransactionHandlerResponse{Steak: overlay.Steak{}}
