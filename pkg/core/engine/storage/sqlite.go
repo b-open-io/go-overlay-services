@@ -466,7 +466,7 @@ func (s *SQLiteStorage) DoesAppliedTransactionExist(ctx context.Context, tx *ove
 }
 
 func (s *SQLiteStorage) Close() error {
-	s.rDB.Close()
+	_ = s.rDB.Close()
 	return s.wDB.Close()
 }
 
