@@ -178,7 +178,7 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 		}
 		if spentBy == nil {
 			s.tempGraphNodeRefs[gaspTx.GraphID.String()] = newGraphNode
-		} else if parentNode, ok := s.tempGraphNodeRefs[txid.String()]; ok {
+		} else if parentNode, ok := s.tempGraphNodeRefs[gaspTx.GraphID.String()]; ok {
 			parentNode.Children = append(parentNode.Children, newGraphNode)
 			newGraphNode.Parent = parentNode
 			newGraphOutpoint := &overlay.Outpoint{
