@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/idempotency"
@@ -23,20 +24,14 @@ func WithMiddleware(f func(http.Handler) http.Handler) HTTPOption {
 }
 
 // WithConfig sets the HTTP server configuration based on the given definition.
-func WithConfig(cfg *Config) HTTPOption {
+func WithConfig(cfg *config.Config) HTTPOption {
 	return func(h *HTTP) {
 		h.cfg = cfg
 	}
 }
 
-// Config describes the configuration of the HTTP server instance.
-type Config struct {
-	Addr string
-	Port int
-}
-
 // SocketAddr returns the socket address string based on the configured address and port combination.
-func (c *Config) SocketAddr() string { return fmt.Sprintf("%s:%d", c.Addr, c.Port) }
+func (h *HTTP) SocketAddr() string { return fmt.Sprintf("%s:%d", h.cfg.Addr, h.cfg.Port) }
 
 // HTTP manages connections to the overlay server instance. It accepts and responds to client sockets,
 // using idempotency to improve fault tolerance and mitigate duplicated requests.
@@ -44,7 +39,7 @@ func (c *Config) SocketAddr() string { return fmt.Sprintf("%s:%d", c.Addr, c.Por
 type HTTP struct {
 	middlewares []fiber.Handler
 	app         *fiber.App
-	cfg         *Config
+	cfg         *config.Config
 }
 
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.
@@ -71,19 +66,19 @@ func New(opts ...HTTPOption) *HTTP {
 	v1 := api.Group("/v1")
 
 	// Non-Admin:
-	v1.Post("/submit", overlayAPI.Commands.SubmitTransactionHandler.Handle)
-	v1.Get("/topic-managers", overlayAPI.Queries.TopicManagerDocumentationHandler.Handle)
+	v1.Post("/submit", adaptor.HTTPHandlerFunc(overlayAPI.Commands.SubmitTransactionHandler.Handle))
+	v1.Get("/topic-managers", adaptor.HTTPHandlerFunc(overlayAPI.Queries.TopicManagerDocumentationHandler.Handle))
 
 	// Admin:
 	admin := v1.Group("/admin")
-	admin.Post("/advertisements-sync", overlayAPI.Commands.SyncAdvertismentsHandler.Handle)
+	admin.Post("/advertisements-sync", adaptor.HTTPHandlerFunc(overlayAPI.Commands.SyncAdvertismentsHandler.Handle))
 
 	return &http
 }
 
 // ListenAndServe handles HTTP requests from the configured socket address."
 func (h *HTTP) ListenAndServe() error {
-	if err := h.app.Listen(h.cfg.SocketAddr()); err != nil {
+	if err := h.app.Listen(h.SocketAddr()); err != nil {
 		return fmt.Errorf("http server: fiber app listen failed: %w", err)
 	}
 	return nil
