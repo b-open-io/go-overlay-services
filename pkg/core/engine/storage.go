@@ -43,10 +43,10 @@ type Storage interface {
 	UpdateTransactionBEEF(ctx context.Context, txid *chainhash.Hash, beef []byte) error
 
 	// Updates the beef data for an output
-	UpdateOutputBEEF(ctx context.Context, outpoint *overlay.Outpoint, topic string, beef []byte, blockHeight uint32, blockIndex uint64) error
+	// UpdateOutputBEEF(ctx context.Context, outpoint *overlay.Outpoint, topic string, beef []byte, blockHeight uint32, blockIndex uint64, ) error
 
 	// Updates the block height on an output
-	UpdateOutputBlockHeight(ctx context.Context, outpoint *overlay.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error
+	UpdateOutputBlockHeight(ctx context.Context, outpoint *overlay.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error
 
 	// Inserts record of the applied transaction
 	InsertAppliedTransaction(ctx context.Context, tx *overlay.AppliedTransaction) error

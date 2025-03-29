@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -125,7 +126,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	}
 
 	var tx *transaction.Transaction
-	_, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
+	beef, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
 	if err != nil {
 		if e.PanicOnError {
 			log.Panicln(err)
@@ -148,7 +149,6 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 		return nil, ErrInvalidTransaction
 	} else {
-		// txid := tx.TxID()
 		if e.Verbose {
 			fmt.Println("Validated in", time.Since(start))
 			start = time.Now()
@@ -156,12 +156,14 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		steak := make(overlay.Steak, len(taggedBEEF.Topics))
 		topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
 		inpoints := make([]*overlay.Outpoint, 0, len(tx.Inputs))
+		ancillaryBeefs := make(map[string][]byte, len(taggedBEEF.Topics))
 		for _, input := range tx.Inputs {
 			inpoints = append(inpoints, &overlay.Outpoint{
 				Txid:        *input.SourceTXID,
 				OutputIndex: input.SourceTxOutIndex,
 			})
 		}
+		dupeTopics := make(map[string]struct{}, len(taggedBEEF.Topics))
 		for _, topic := range taggedBEEF.Topics {
 			if exists, err := e.Storage.DoesAppliedTransactionExist(ctx, &overlay.AppliedTransaction{
 				Txid:  txid,
@@ -173,6 +175,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				return nil, err
 			} else if exists {
 				steak[topic] = &overlay.AdmittanceInstructions{}
+				dupeTopics[topic] = struct{}{}
 				continue
 			} else {
 				topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
@@ -192,6 +195,26 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					}
 					return nil, err
 				} else {
+					if len(admit.AncillaryTxids) > 0 {
+						ancillaryBeef := transaction.Beef{
+							Version:      transaction.BEEF_V2,
+							Transactions: make(map[string]*transaction.BeefTx, len(admit.AncillaryTxids)),
+						}
+						for _, txid := range admit.AncillaryTxids {
+							if tx := beef.FindTransaction(txid.String()); tx == nil {
+								return nil, errors.New("missing dependency transaction")
+							} else if beefBytes, err := tx.BEEF(); err != nil {
+								return nil, err
+							} else if err := ancillaryBeef.MergeBeefBytes(beefBytes); err != nil {
+								return nil, err
+							}
+						}
+						if beefBytes, err := ancillaryBeef.Bytes(); err != nil {
+							return nil, err
+						} else {
+							ancillaryBeefs[topic] = beefBytes
+						}
+					}
 					steak[topic] = &admit
 				}
 			}
@@ -237,6 +260,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 
 		for _, topic := range taggedBEEF.Topics {
+			if _, ok := dupeTopics[topic]; ok {
+				continue
+			}
 			admit := steak[topic]
 			outputsConsumed := make([]*Output, 0, len(admit.CoinsToRetain))
 			outpointsConsumed := make([]*overlay.Outpoint, 0, len(admit.CoinsToRetain))
@@ -275,7 +301,8 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					Topic:           topic,
 					OutputsConsumed: outpointsConsumed,
 					Beef:            taggedBEEF.Beef,
-					Dependencies:    admit.TxidsToInclude,
+					AncillaryTxids:  admit.AncillaryTxids,
+					AncillaryBeef:   ancillaryBeefs[topic],
 				}
 				if tx.MerklePath != nil {
 					output.BlockHeight = tx.MerklePath.BlockHeight
@@ -337,14 +364,37 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			return steak, nil
 		}
 
-		//TODO: Implement SYNC
+		releventTopics := make([]string, 0, len(taggedBEEF.Topics))
+		for topic, steak := range steak {
+			if steak.OutputsToAdmit == nil && steak.CoinsToRetain == nil {
+				continue
+			}
+			if _, ok := dupeTopics[topic]; !ok {
+				releventTopics = append(releventTopics, topic)
+			}
+		}
+		if len(releventTopics) == 0 {
+			return steak, nil
+		}
 
+		broadcasterCfg := &topic.BroadcasterConfig{}
+		if len(e.SLAPTrackers) > 0 {
+			broadcasterCfg.Resolver = lookup.NewLookupResolver(&lookup.LookupResolver{
+				SLAPTrackers: e.SLAPTrackers,
+			})
+		}
+
+		if broadcaster, err := topic.NewBroadcaster(releventTopics, broadcasterCfg); err != nil {
+			log.Println("Error during propagation to other nodes:", err)
+		} else if _, failure := broadcaster.BroadcastCtx(ctx, tx); failure != nil {
+			log.Println("Error during propagation to other nodes:", failure)
+		}
 		return steak, nil
 	}
 }
 
 func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error) {
-	if l, ok := e.LookupServices[question.Service]; ok {
+	if l, ok := e.LookupServices[question.Service]; !ok {
 		return nil, ErrUnknownTopic
 	} else if result, err := l.Lookup(ctx, question); err != nil {
 		return nil, err
@@ -529,11 +579,13 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				resolver.SLAPTrackers = e.SLAPTrackers
 			}
 
-			if lookupAnswer, err := resolver.Query(ctx, &lookup.LookupQuestion{
+			if query, err := json.Marshal(map[string]interface{}{
+				"topics": []string{topic},
+			}); err != nil {
+				return err
+			} else if lookupAnswer, err := resolver.Query(ctx, &lookup.LookupQuestion{
 				Service: "ls_ship",
-				Query: map[string]interface{}{
-					"topics": []string{topic},
-				},
+				Query:   query,
 			}, 10*time.Second); err != nil {
 				return err
 			} else if lookupAnswer.Type == lookup.AnswerTypeOutputList {
@@ -602,12 +654,9 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Ou
 	log.Println("ProvideForeignGASPNode", graphId.String(), outpoint.String())
 	var hydrator func(ctx context.Context, output *Output) (*core.GASPNode, error)
 	hydrator = func(ctx context.Context, output *Output) (*core.GASPNode, error) {
-		if output == nil {
-			return nil, errors.New("missing output")
-		}
 		if output.Beef == nil {
 			return nil, ErrMissingInput
-		} else if beef, tx, _, err := transaction.ParseBeef(output.Beef); err != nil {
+		} else if _, tx, _, err := transaction.ParseBeef(output.Beef); err != nil {
 			return nil, err
 		} else if tx == nil {
 			for _, outpoint := range output.OutputsConsumed {
@@ -618,32 +667,14 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Ou
 			return nil, errors.New("unable to find output")
 		} else {
 			node := &core.GASPNode{
-				GraphID:     graphId,
-				RawTx:       tx.Hex(),
-				OutputIndex: outpoint.OutputIndex,
+				GraphID:       graphId,
+				RawTx:         tx.Hex(),
+				OutputIndex:   outpoint.OutputIndex,
+				AncillaryBeef: output.AncillaryBeef,
 			}
 			if tx.MerklePath != nil {
 				proof := tx.MerklePath.Hex()
 				node.Proof = &proof
-			}
-			var depsBeef *transaction.Beef
-			if len(output.Dependencies) > 0 {
-				depsBeef = &transaction.Beef{
-					Version:      transaction.BEEF_V2,
-					Transactions: make(map[string]*transaction.BeefTx, len(output.Dependencies)),
-				}
-				for _, dep := range output.Dependencies {
-					if depTx := beef.FindTransaction(dep.String()); depTx == nil {
-						return nil, errors.New("missing dependency transaction")
-					} else if depBeefBytes, err := depTx.BEEF(); err != nil {
-						return nil, err
-					} else if err := depsBeef.MergeBeefBytes(depBeefBytes); err != nil {
-						return nil, err
-					}
-				}
-				if node.DependencyBeef, err = depsBeef.Bytes(); err != nil {
-					return nil, err
-				}
 			}
 			return node, nil
 
@@ -740,42 +771,48 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 	}
 	if err = e.updateInputProofs(ctx, tx, txid, proof); err != nil {
 		return err
-	}
-	newBeef, err := transaction.NewBeefFromTransaction(tx)
-	if err != nil {
+	} else if atomicBytes, err := tx.AtomicBEEF(false); err != nil {
 		return err
-	}
-	for _, dep := range output.Dependencies {
-		if depTx := beef.FindTransaction(dep.String()); depTx == nil {
-			return errors.New("missing dependency transaction")
-		} else if depBeefBytes, err := depTx.BEEF(); err != nil {
-			return err
-		} else if err := newBeef.MergeBeefBytes(depBeefBytes); err != nil {
-			return err
-		}
-	}
-	output.BlockHeight = proof.BlockHeight
-	for _, leaf := range proof.Path[0] {
-		if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
-			output.BlockIdx = leaf.Offset
-			break
-		}
-	}
-	if beefBytes, err := newBeef.AtomicBytes(&output.Outpoint.Txid); err != nil {
-		return err
-	} else if _, _, _, err := transaction.ParseBeef(beefBytes); err != nil {
-		log.Println("Failed to parse beef:", err)
-		return err
-	} else if err = e.Storage.UpdateOutputBEEF(ctx, &output.Outpoint, output.Topic, beefBytes, output.BlockHeight, output.BlockIdx); err != nil {
-		return err
-	}
-	for _, outpoint := range output.ConsumedBy {
-		if consumingOutputs, err := e.Storage.FindOutputsForTransaction(ctx, &outpoint.Txid, true); err != nil {
-			return err
-		} else {
-			for _, consuming := range consumingOutputs {
-				if err := e.updateMerkleProof(ctx, consuming, txid, proof); err != nil {
+	} else {
+		if len(output.AncillaryTxids) > 0 {
+			ancillaryBeef := transaction.Beef{
+				Version:      transaction.BEEF_V2,
+				Transactions: make(map[string]*transaction.BeefTx, len(output.AncillaryTxids)),
+			}
+			for _, dep := range output.AncillaryTxids {
+				if depTx := beef.FindTransaction(dep.String()); depTx == nil {
+					return errors.New("missing dependency transaction")
+				} else if depBeefBytes, err := depTx.BEEF(); err != nil {
 					return err
+				} else if err := ancillaryBeef.MergeBeefBytes(depBeefBytes); err != nil {
+					return err
+				}
+			}
+			if output.AncillaryBeef, err = ancillaryBeef.Bytes(); err != nil {
+				return err
+			}
+		} else {
+			output.AncillaryBeef = nil
+		}
+
+		output.BlockHeight = proof.BlockHeight
+		for _, leaf := range proof.Path[0] {
+			if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
+				output.BlockIdx = leaf.Offset
+				break
+			}
+		}
+		if err = e.Storage.UpdateTransactionBEEF(ctx, &output.Outpoint.Txid, atomicBytes); err != nil {
+			return err
+		}
+		for _, outpoint := range output.ConsumedBy {
+			if consumingOutputs, err := e.Storage.FindOutputsForTransaction(ctx, &outpoint.Txid, true); err != nil {
+				return err
+			} else {
+				for _, consuming := range consumingOutputs {
+					if err := e.updateMerkleProof(ctx, consuming, txid, proof); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -791,10 +828,14 @@ func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash,
 		for _, output := range outputs {
 			if err := e.updateMerkleProof(ctx, output, *txid, proof); err != nil {
 				return err
+			} else if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, output.BlockHeight, output.BlockIdx, output.AncillaryBeef); err != nil {
+				return err
 			}
-			// if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, output.BlockHeight, output.BlockIdx); err != nil {
-			// 	return err
-			// }
+			for _, l := range e.LookupServices {
+				if err := l.OutputBlockHeightUpdated(ctx, &output.Outpoint, output.BlockHeight, output.BlockIdx); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
@@ -832,16 +873,16 @@ func (e *Engine) GetDocumentationForLookupServiceProvider(provider string) (stri
 	}
 }
 
-func FindPreviousTx(tx *transaction.Transaction, txid chainhash.Hash) *transaction.Transaction {
-	if tx != nil {
-		for _, input := range tx.Inputs {
-			if input.SourceTXID.Equal(txid) {
-				return input.SourceTransaction
-			}
-			if found := FindPreviousTx(input.SourceTransaction, *input.SourceTXID); found != nil {
-				return found
-			}
-		}
-	}
-	return nil
-}
+// func FindPreviousTx(tx *transaction.Transaction, txid chainhash.Hash) *transaction.Transaction {
+// 	if tx != nil {
+// 		for _, input := range tx.Inputs {
+// 			if input.SourceTXID.Equal(txid) {
+// 				return input.SourceTransaction
+// 			}
+// 			if found := FindPreviousTx(input.SourceTransaction, *input.SourceTXID); found != nil {
+// 				return found
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }

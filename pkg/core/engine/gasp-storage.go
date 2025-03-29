@@ -99,8 +99,8 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 	if beef, err := transaction.NewBeefFromTransaction(tx); err != nil {
 		return nil, err
 	} else {
-		if gaspTx.DependencyBeef != nil {
-			if err := beef.MergeBeefBytes(gaspTx.DependencyBeef); err != nil {
+		if gaspTx.AncillaryBeef != nil {
+			if err := beef.MergeBeefBytes(gaspTx.AncillaryBeef); err != nil {
 				return nil, err
 			}
 		}
@@ -334,8 +334,8 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 	} else if beef, err := transaction.NewBeefFromTransaction(tx); err != nil {
 		return nil, err
 	} else {
-		if node.DependencyBeef != nil {
-			if err := beef.MergeBeefBytes(node.DependencyBeef); err != nil {
+		if node.AncillaryBeef != nil {
+			if err := beef.MergeBeefBytes(node.AncillaryBeef); err != nil {
 				return nil, err
 			}
 		}
