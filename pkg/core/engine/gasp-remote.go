@@ -58,7 +58,6 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *overlay.Ou
 	} else if req, err := http.NewRequest("POST", r.EndpointUrl+"/requestForeignGASPNode", bytes.NewReader(j)); err != nil {
 		return nil, err
 	} else {
-		log.Println("body", string(j))
 		req.Header.Set("Content-Type", "application/json")
 		if resp, err := r.HttpClient.Do(req); err != nil {
 			return nil, err
