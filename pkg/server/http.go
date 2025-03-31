@@ -34,9 +34,16 @@ func WithConfig(cfg *config.Config) HTTPOption {
 	}
 }
 
-// WithMongo sets the MongoDB client for the HTTP server.
-func WithMongo(client *mongo.Client) HTTPOption {
+// WithMongo sets the MongoDB client for the HTTP server based on the configuration.
+func WithMongo() HTTPOption {
 	return func(h *HTTP) {
+		if h.cfg == nil || h.cfg.Mongo.URI == "" {
+			return
+		}
+		client, err := mongo.Connect(h.cfg)
+		if err != nil {
+			panic(fmt.Sprintf("MongoDB connect failed: %v", err))
+		}
 		h.mongo = client
 	}
 }
@@ -51,7 +58,7 @@ type HTTP struct {
 	middlewares []fiber.Handler
 	app         *fiber.App
 	cfg         *config.Config
-	mongo       *mongo.Clien
+	mongo       *mongo.Client
 }
 
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.

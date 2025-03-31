@@ -7,7 +7,6 @@ import (
 	"github.com/4chain-ag/go-overlay-services/pkg/config"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 	"github.com/gookit/slog"
 )
 
@@ -33,22 +32,10 @@ func main() {
 		slog.Fatalf("Invalid configuration: %v", err)
 	}
 
-	var mongoClient *mongo.Client
-	if cfg.Mongo.URI != "" {
-		mongoConn, err := mongo.New(cfg)
-		if err != nil {
-			slog.Fatalf("failed to connect to MongoDB: %v", err)
-		}
-		mongoClient = mongoConn
-	}
-
 	opts := []server.HTTPOption{
 		server.WithConfig(&cfg),
 		server.WithMiddleware(loggingMiddleware),
-	}
-
-	if mongoClient != nil {
-		opts = append(opts, server.WithMongo(mongoClient.Client()))
+		server.WithMongo(),
 	}
 
 	httpAPI := server.New(opts...)
