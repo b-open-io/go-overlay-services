@@ -11,27 +11,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type EngineProvider interface {
-	StartGASPSync() error
-}
+type alwaysSucceedsSync struct{}
 
-// AlwaysSucceedsSync simulates a successful sync.
-type AlwaysSucceedsSync struct{}
-
-func (AlwaysSucceedsSync) StartGASPSync() error {
+func (alwaysSucceedsSync) StartGASPSync() error {
 	return nil
 }
 
-// AlwaysFailsSync simulates a sync failure.
-type AlwaysFailsSync struct{}
+type alwaysFailsSync struct{}
 
-func (AlwaysFailsSync) StartGASPSync() error {
+func (alwaysFailsSync) StartGASPSync() error {
 	return fmt.Errorf("simulated sync failure")
 }
 
 func TestStartGASPSyncHandler_Success(t *testing.T) {
 	// Given:
-	handler := commands.NewStartGASPSyncHandler(&AlwaysSucceedsSync{})
+	handler := commands.NewStartGASPSyncHandler(&alwaysSucceedsSync{})
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
@@ -42,13 +36,12 @@ func TestStartGASPSyncHandler_Success(t *testing.T) {
 
 	// Then:
 	require.NoError(t, err)
-	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestStartGASPSyncHandler_Failure(t *testing.T) {
 	// Given:
-	handler := commands.NewStartGASPSyncHandler(&AlwaysFailsSync{})
+	handler := commands.NewStartGASPSyncHandler(&alwaysFailsSync{})
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
