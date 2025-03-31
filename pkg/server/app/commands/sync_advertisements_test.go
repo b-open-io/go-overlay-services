@@ -34,7 +34,6 @@ func TestSyncAdvertisementsHandler_Handle(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
-// Stubbed provider that always succeeds
 type syncAdvertisementsProviderAlwaysOK struct{}
 
 func (syncAdvertisementsProviderAlwaysOK) SyncAdvertisements() error {
