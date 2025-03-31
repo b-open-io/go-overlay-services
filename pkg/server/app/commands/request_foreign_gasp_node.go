@@ -49,7 +49,7 @@ func (h *RequestForeignGASPNodeHandler) Handle(w http.ResponseWriter, r *http.Re
 // NewRequestForeignGASPNodeHandler creates a new handler instance.
 func NewRequestForeignGASPNodeHandler(provider RequestForeignGASPNodeProvider) *RequestForeignGASPNodeHandler {
 	if provider == nil {
-		return nil
+		panic("request foreign gasp node provider")
 	}
 	return &RequestForeignGASPNodeHandler{provider: provider}
 }
