@@ -1,18 +1,21 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/idempotency"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/idempotency"
 )
 
 // HTTPOption defines a functional option for configuring an HTTP server.
@@ -78,6 +81,11 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 		middleware: []fiber.Handler{
 			idempotency.New(),
 			cors.New(),
+			recover.New(
+				recover.Config{
+					EnableStackTrace: true,
+				},
+			),
 		},
 	}
 
@@ -161,4 +169,12 @@ func AdminAuth(expectedToken string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// Shutdown gracefully shuts down the Fiber app
+func (h *HTTP) Shutdown(ctx context.Context) error {
+	if err := h.app.Shutdown(); err != nil {
+		return fmt.Errorf("http server: fiber app shutdown failed: %w", err)
+	}
+	return nil
 }

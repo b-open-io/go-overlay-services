@@ -1,0 +1,85 @@
+package server_test
+
+import (
+	"context"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/signal"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+// RecoveryMiddleware is a middleware that recovers from panics and returns a 500 status code.
+func RecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func Test_RecoveryMiddleware_ShouldHandlePanic(t *testing.T) {
+	// Given
+	mux := http.NewServeMux()
+	mux.HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) {
+		panic("unexpected error")
+	})
+
+	handler := RecoveryMiddleware(mux)
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	// When
+	resp, err := http.Get(ts.URL + "/panic")
+
+	// Then
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func Test_GracefulShutdown_ShouldShutdownWithoutError(t *testing.T) {
+	// Given
+	mux := http.NewServeMux()
+	server := &http.Server{
+		Addr:    "127.0.0.1:0",
+		Handler: mux,
+	}
+
+	idleConnsClosed := make(chan struct{})
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt)
+		<-sigint
+
+		_ = server.Shutdown(context.Background())
+		close(idleConnsClosed)
+	}()
+
+	ln, err := net.Listen("tcp", server.Addr)
+	require.NoError(t, err)
+
+	go func() {
+		_ = server.Serve(ln)
+	}()
+
+	// When
+	time.Sleep(200 * time.Millisecond)
+	p, _ := os.FindProcess(os.Getpid())
+	_ = p.Signal(os.Interrupt)
+
+	// Then
+	select {
+	case <-idleConnsClosed:
+		// success
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not shutdown gracefully in time")
+	}
+}

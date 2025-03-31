@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
@@ -42,9 +47,31 @@ func main() {
 		slog.Fatalf("Failed to create HTTP server: %v", err)
 	}
 
+	// Graceful shutdown handling
+	idleConnsClosed := make(chan struct{})
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
+		<-sigint
+
+		slog.Info("Shutdown signal received. Cleaning up...")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := httpAPI.Shutdown(ctx); err != nil {
+			slog.Errorf("HTTP shutdown error: %v", err)
+		}
+
+		close(idleConnsClosed)
+	}()
+
 	if err := httpAPI.ListenAndServe(); err != nil {
 		slog.Fatalf("HTTP server failed: %v", err)
 	}
+
+	<-idleConnsClosed
+	slog.Info("Server shut down gracefully.")
 }
 
 // loggingMiddleware is a custom definition of the logging middleware format accepted by the HTTP API.
