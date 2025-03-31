@@ -8,18 +8,24 @@ import (
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
-	"github.com/4chain-ag/go-overlay-services/pkg/server"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/commands"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+type stubEngine struct{}
+
+func (s *stubEngine) ProvideForeignGASPNode(graphID, txid string, outputIndex uint32) (*gasp.GASPNode, error) {
+	return &gasp.GASPNode{}, nil
+}
+
 func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) {
 	// Given:
-	handler := commands.NewRequestForeignGASPNodeHandler(server.NewNoopEngineProvider())
+	handler := commands.NewRequestForeignGASPNodeHandler(&stubEngine{})
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
+
 	payload := commands.RequestForeignGASPNodeHandlerPayload{
 		GraphID:     "graph123",
 		TxID:        "tx789",
@@ -36,14 +42,13 @@ func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) 
 
 	var actual gasp.GASPNode
 	expected := gasp.GASPNode{}
-
 	require.NoError(t, jsonutil.DecodeResponseBody(resp, &actual))
 	assert.EqualValues(t, expected, actual)
 }
 
 func TestRequestForeignGASPNodeHandler_InvalidJSON_Returns400(t *testing.T) {
 	// Given:
-	handler := commands.NewRequestForeignGASPNodeHandler(server.NewNoopEngineProvider())
+	handler := commands.NewRequestForeignGASPNodeHandler(&stubEngine{})
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
@@ -58,7 +63,7 @@ func TestRequestForeignGASPNodeHandler_InvalidJSON_Returns400(t *testing.T) {
 
 func TestRequestForeignGASPNodeHandler_MissingFields_StillReturnsOK(t *testing.T) {
 	// Given:
-	handler := commands.NewRequestForeignGASPNodeHandler(server.NewNoopEngineProvider())
+	handler := commands.NewRequestForeignGASPNodeHandler(&stubEngine{})
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
@@ -73,12 +78,12 @@ func TestRequestForeignGASPNodeHandler_MissingFields_StillReturnsOK(t *testing.T
 
 func TestRequestForeignGASPNodeHandler_InvalidHTTPMethod_Returns405(t *testing.T) {
 	// Given:
-	handler := commands.NewRequestForeignGASPNodeHandler(server.NewNoopEngineProvider())
+	handler := commands.NewRequestForeignGASPNodeHandler(&stubEngine{})
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
 	// When:
-	req, _ := http.NewRequest("GET", ts.URL, nil)
+	req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
 	resp, err := http.DefaultClient.Do(req)
 
 	// Then:
@@ -87,7 +92,7 @@ func TestRequestForeignGASPNodeHandler_InvalidHTTPMethod_Returns405(t *testing.T
 	require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 }
 
-// NewRequestPayload creates a new request payload.
+// NewRequestPayload creates a new request payload from the given value.
 func NewRequestPayload(t *testing.T, v any) *bytes.Buffer {
 	t.Helper()
 	bb, err := json.Marshal(v)
