@@ -2,22 +2,24 @@ package commands_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/commands"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
+	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type stubEngine struct{}
 
-func (s *stubEngine) ProvideForeignGASPNode(graphID, txid string, outputIndex uint32) (*gasp.GASPNode, error) {
-	return &gasp.GASPNode{}, nil
+func (s *stubEngine) ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *overlay.Outpoint) (*core.GASPNode, error) {
+	return &core.GASPNode{}, nil
 }
 
 func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) {
@@ -27,8 +29,8 @@ func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) 
 	defer ts.Close()
 
 	payload := commands.RequestForeignGASPNodeHandlerPayload{
-		GraphID:     "graph123",
-		TxID:        "tx789",
+		GraphID:     "0000000000000000000000000000000000000000000000000000000000000000.1",
+		TxID:        "0000000000000000000000000000000000000000000000000000000000000000",
 		OutputIndex: 1,
 	}
 
@@ -40,8 +42,8 @@ func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) 
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var actual gasp.GASPNode
-	expected := gasp.GASPNode{}
+	var actual core.GASPNode
+	expected := core.GASPNode{}
 	require.NoError(t, jsonutil.DecodeResponseBody(resp, &actual))
 	assert.EqualValues(t, expected, actual)
 }
@@ -73,7 +75,7 @@ func TestRequestForeignGASPNodeHandler_MissingFields_StillReturnsOK(t *testing.T
 	// Then:
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
 func TestRequestForeignGASPNodeHandler_InvalidHTTPMethod_Returns405(t *testing.T) {

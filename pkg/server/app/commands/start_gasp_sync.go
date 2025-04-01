@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
@@ -8,7 +9,7 @@ import (
 
 // StartGASPSyncProvider defines the contract for triggering GASP sync.
 type StartGASPSyncProvider interface {
-	StartGASPSync() error
+	StartGASPSync(ctx context.Context) error
 }
 
 // StartGASPSyncHandler handles the /admin/start-gasp-sync endpoint.
@@ -28,7 +29,7 @@ func (h *StartGASPSyncHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.provider.StartGASPSync(); err != nil {
+	if err := h.provider.StartGASPSync(r.Context()); err != nil {
 		jsonutil.SendHTTPResponse(w, http.StatusInternalServerError, ResponseStartGASPNodeHandler{Message: "FAILED"})
 		return
 	}

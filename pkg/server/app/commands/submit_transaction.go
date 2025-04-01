@@ -36,7 +36,7 @@ type SubmitTransactionHandler struct {
 // with the appropriate status code based on the engine's response.
 func (s *SubmitTransactionHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	// TODO: Add custom validation logic.
-	steak, err := s.provider.Submit(r.Context(), overlay.TaggedBEEF{}, engine.SubmitModeCurrent, func(steak overlay.Steak) {})
+	steak, err := s.provider.Submit(r.Context(), overlay.TaggedBEEF{}, engine.SubmitModeCurrent, func(steak *overlay.Steak) {})
 	if err != nil {
 		jsonutil.SendHTTPInternalServerErrorTextResponse(w)
 		return

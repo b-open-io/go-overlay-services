@@ -1,6 +1,7 @@
 package commands_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,6 +37,6 @@ func TestSyncAdvertisementsHandler_Handle(t *testing.T) {
 
 type syncAdvertisementsProviderAlwaysOK struct{}
 
-func (syncAdvertisementsProviderAlwaysOK) SyncAdvertisements() error {
+func (syncAdvertisementsProviderAlwaysOK) SyncAdvertisements(ctx context.Context) error {
 	return nil
 }
