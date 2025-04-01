@@ -1,6 +1,7 @@
 package commands_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,13 +14,13 @@ import (
 
 type alwaysSucceedsSync struct{}
 
-func (alwaysSucceedsSync) StartGASPSync() error {
+func (alwaysSucceedsSync) StartGASPSync(ctx context.Context) error {
 	return nil
 }
 
 type alwaysFailsSync struct{}
 
-func (alwaysFailsSync) StartGASPSync() error {
+func (alwaysFailsSync) StartGASPSync(ctx context.Context) error {
 	return fmt.Errorf("simulated sync failure")
 }
 
