@@ -1,15 +1,14 @@
 package server_test
 
 import (
-	"context"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/signal"
 	"testing"
 	"time"
 
+	"github.com/4chain-ag/go-overlay-services/pkg/server"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,37 +46,22 @@ func Test_RecoveryMiddleware_ShouldHandlePanic(t *testing.T) {
 
 func Test_GracefulShutdown_ShouldShutdownWithoutError(t *testing.T) {
 	// Given
-	mux := http.NewServeMux()
-	server := &http.Server{
-		Addr:    "127.0.0.1:0",
-		Handler: mux,
+	cfg := config.DefaultConfig()
+	opts := []server.HTTPOption{
+		server.WithConfig(cfg),
 	}
-
-	idleConnsClosed := make(chan struct{})
-	go func() {
-		sigint := make(chan os.Signal, 1)
-		signal.Notify(sigint, os.Interrupt)
-		<-sigint
-
-		_ = server.Shutdown(context.Background())
-		close(idleConnsClosed)
-	}()
-
-	ln, err := net.Listen("tcp", server.Addr)
-	require.NoError(t, err)
-
-	go func() {
-		_ = server.Serve(ln)
-	}()
+	httpAPI := server.New(opts...)
 
 	// When
+	done := httpAPI.StartWithGracefulShutdown()
 	time.Sleep(200 * time.Millisecond)
+
 	p, _ := os.FindProcess(os.Getpid())
 	_ = p.Signal(os.Interrupt)
 
 	// Then
 	select {
-	case <-idleConnsClosed:
+	case <-done:
 		// success
 	case <-time.After(2 * time.Second):
 		t.Fatal("server did not shutdown gracefully in time")

@@ -2,15 +2,21 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/idempotency"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gookit/slog"
 
 	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
@@ -177,4 +183,34 @@ func (h *HTTP) Shutdown(ctx context.Context) error {
 		return fmt.Errorf("http server: fiber app shutdown failed: %w", err)
 	}
 	return nil
+}
+
+// StartWithGracefulShutdown starts the HTTP server and listens for termination signals.
+// It returns a channel that will be closed once the shutdown is complete.
+func (h *HTTP) StartWithGracefulShutdown() <-chan struct{} {
+	idleConnsClosed := make(chan struct{})
+
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
+		<-sigint
+
+		slog.Info("Shutdown signal received. Cleaning up...")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := h.Shutdown(ctx); err != nil {
+			slog.Errorf("HTTP shutdown error: %v", err)
+		}
+		close(idleConnsClosed)
+	}()
+
+	go func() {
+		if err := h.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Errorf("HTTP server error: %v", err)
+		}
+	}()
+
+	return idleConnsClosed
 }
