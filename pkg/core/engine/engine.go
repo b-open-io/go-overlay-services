@@ -45,7 +45,7 @@ type SyncConfiguration struct {
 	Peers []string
 }
 
-type OnSteakReady func(steak overlay.Steak)
+type OnSteakReady func(steak *overlay.Steak)
 type Engine struct {
 	Managers                map[string]TopicManager
 	LookupServices          map[string]LookupService
@@ -148,83 +148,91 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			log.Panicln(ErrInvalidTransaction)
 		}
 		return nil, ErrInvalidTransaction
-	} else {
-		if e.Verbose {
-			fmt.Println("Validated in", time.Since(start))
-			start = time.Now()
-		}
-		steak := make(overlay.Steak, len(taggedBEEF.Topics))
-		topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
-		inpoints := make([]*overlay.Outpoint, 0, len(tx.Inputs))
-		ancillaryBeefs := make(map[string][]byte, len(taggedBEEF.Topics))
-		for _, input := range tx.Inputs {
-			inpoints = append(inpoints, &overlay.Outpoint{
-				Txid:        *input.SourceTXID,
-				OutputIndex: input.SourceTxOutIndex,
-			})
-		}
-		dupeTopics := make(map[string]struct{}, len(taggedBEEF.Topics))
-		for _, topic := range taggedBEEF.Topics {
-			if exists, err := e.Storage.DoesAppliedTransactionExist(ctx, &overlay.AppliedTransaction{
-				Txid:  txid,
-				Topic: topic,
-			}); err != nil {
+	}
+	if e.Verbose {
+		fmt.Println("Validated in", time.Since(start))
+		start = time.Now()
+	}
+	steak := make(overlay.Steak, len(taggedBEEF.Topics))
+	topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
+	inpoints := make([]*overlay.Outpoint, 0, len(tx.Inputs))
+	ancillaryBeefs := make(map[string][]byte, len(taggedBEEF.Topics))
+	for _, input := range tx.Inputs {
+		inpoints = append(inpoints, &overlay.Outpoint{
+			Txid:        *input.SourceTXID,
+			OutputIndex: input.SourceTxOutIndex,
+		})
+	}
+	dupeTopics := make(map[string]struct{}, len(taggedBEEF.Topics))
+	for _, topic := range taggedBEEF.Topics {
+		if exists, err := e.Storage.DoesAppliedTransactionExist(ctx, &overlay.AppliedTransaction{
+			Txid:  txid,
+			Topic: topic,
+		}); err != nil {
+			if e.PanicOnError {
+				log.Panicln(err)
+			}
+			return nil, err
+		} else if exists {
+			steak[topic] = &overlay.AdmittanceInstructions{}
+			dupeTopics[topic] = struct{}{}
+			continue
+		} else {
+			topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
+			previousCoins := make([]uint32, 0, len(tx.Inputs))
+			for vin, outpoint := range inpoints {
+				if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, false); err != nil {
+					return nil, err
+				} else if output != nil {
+					previousCoins = append(previousCoins, uint32(vin))
+					topicInputs[topic][uint32(vin)] = output
+				}
+			}
+
+			if admit, err := e.Managers[topic].IdentifyAdmissableOutputs(ctx, taggedBEEF.Beef, previousCoins); err != nil {
 				if e.PanicOnError {
 					log.Panicln(err)
 				}
 				return nil, err
-			} else if exists {
-				steak[topic] = &overlay.AdmittanceInstructions{}
-				dupeTopics[topic] = struct{}{}
-				continue
 			} else {
-				topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
-				previousCoins := make([]uint32, 0, len(tx.Inputs))
-				for vin, outpoint := range inpoints {
-					if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, false); err != nil {
-						return nil, err
-					} else if output != nil {
-						previousCoins = append(previousCoins, uint32(vin))
-						topicInputs[topic][uint32(vin)] = output
-					}
+				if e.Verbose {
+					fmt.Println("Identified in", time.Since(start))
+					start = time.Now()
 				}
-
-				if admit, err := e.Managers[topic].IdentifyAdmissableOutputs(ctx, taggedBEEF.Beef, previousCoins); err != nil {
-					if e.PanicOnError {
-						log.Panicln(err)
+				if len(admit.AncillaryTxids) > 0 {
+					ancillaryBeef := transaction.Beef{
+						Version:      transaction.BEEF_V2,
+						Transactions: make(map[string]*transaction.BeefTx, len(admit.AncillaryTxids)),
 					}
-					return nil, err
-				} else {
-					if len(admit.AncillaryTxids) > 0 {
-						ancillaryBeef := transaction.Beef{
-							Version:      transaction.BEEF_V2,
-							Transactions: make(map[string]*transaction.BeefTx, len(admit.AncillaryTxids)),
-						}
-						for _, txid := range admit.AncillaryTxids {
-							if tx := beef.FindTransaction(txid.String()); tx == nil {
-								return nil, errors.New("missing dependency transaction")
-							} else if beefBytes, err := tx.BEEF(); err != nil {
-								return nil, err
-							} else if err := ancillaryBeef.MergeBeefBytes(beefBytes); err != nil {
-								return nil, err
-							}
-						}
-						if beefBytes, err := ancillaryBeef.Bytes(); err != nil {
+					for _, txid := range admit.AncillaryTxids {
+						if tx := beef.FindTransaction(txid.String()); tx == nil {
+							return nil, errors.New("missing dependency transaction")
+						} else if beefBytes, err := tx.BEEF(); err != nil {
 							return nil, err
-						} else {
-							ancillaryBeefs[topic] = beefBytes
+						} else if err := ancillaryBeef.MergeBeefBytes(beefBytes); err != nil {
+							return nil, err
 						}
 					}
-					steak[topic] = &admit
+					if beefBytes, err := ancillaryBeef.Bytes(); err != nil {
+						return nil, err
+					} else {
+						ancillaryBeefs[topic] = beefBytes
+					}
 				}
+				steak[topic] = &admit
 			}
 		}
-		if e.Verbose {
-			fmt.Println("Identified in", time.Since(start))
-			start = time.Now()
+	}
+	// if e.Verbose {
+	// 	fmt.Println("Identified in", time.Since(start))
+	// 	start = time.Now()
+	// }
+	for _, topic := range taggedBEEF.Topics {
+		if _, ok := dupeTopics[topic]; ok {
+			continue
 		}
-		for _, topic := range taggedBEEF.Topics {
-			if err := e.Storage.MarkUTXOsAsSpent(ctx, inpoints, topic); err != nil {
+		for _, outpoint := range inpoints {
+			if err := e.Storage.MarkUTXOAsSpent(ctx, outpoint, topic); err != nil {
 				if e.PanicOnError {
 					log.Panicln(err)
 				}
@@ -242,155 +250,154 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				}
 			}
 		}
-		if e.Verbose {
-			fmt.Println("Marked spent in", time.Since(start))
-			start = time.Now()
+	}
+	if e.Verbose {
+		fmt.Println("Marked spent in", time.Since(start))
+		start = time.Now()
+	}
+	if mode != SubmitModeHistorical && e.Broadcaster != nil {
+		if _, failure := e.Broadcaster.Broadcast(tx); failure != nil {
+			if e.PanicOnError {
+				log.Panicln(err)
+			}
+			return nil, failure
 		}
-		if mode != SubmitModeHistorical && e.Broadcaster != nil {
-			if _, failure := e.Broadcaster.Broadcast(tx); failure != nil {
-				if e.PanicOnError {
-					log.Panicln(err)
+	}
+
+	if onSteakReady != nil {
+		onSteakReady(&steak)
+	}
+
+	for _, topic := range taggedBEEF.Topics {
+		if _, ok := dupeTopics[topic]; ok {
+			continue
+		}
+		admit := steak[topic]
+		outputsConsumed := make([]*Output, 0, len(admit.CoinsToRetain))
+		outpointsConsumed := make([]*overlay.Outpoint, 0, len(admit.CoinsToRetain))
+		for vin, output := range topicInputs[topic] {
+			for _, coin := range admit.CoinsToRetain {
+				if vin == coin {
+					outputsConsumed = append(outputsConsumed, output)
+					outpointsConsumed = append(outpointsConsumed, &output.Outpoint)
+					delete(topicInputs[topic], vin)
+					break
 				}
-				return nil, failure
 			}
 		}
 
-		if onSteakReady != nil {
-			onSteakReady(steak)
-		}
-
-		for _, topic := range taggedBEEF.Topics {
-			if _, ok := dupeTopics[topic]; ok {
-				continue
-			}
-			admit := steak[topic]
-			outputsConsumed := make([]*Output, 0, len(admit.CoinsToRetain))
-			outpointsConsumed := make([]*overlay.Outpoint, 0, len(admit.CoinsToRetain))
-			for _, vin := range admit.CoinsToRetain {
-				output := topicInputs[topic][vin]
-				if output == nil {
-					if e.PanicOnError {
-						log.Panicln("missing input", txid.String(), vin)
-					}
-					return nil, ErrMissingInput
-				}
-				outputsConsumed = append(outputsConsumed, output)
-				outpointsConsumed = append(outpointsConsumed, &output.Outpoint)
-				delete(topicInputs[topic], vin)
-			}
-			for vin, output := range topicInputs[topic] {
-				if err := e.deleteUTXODeep(ctx, output); err != nil {
-					if e.PanicOnError {
-						log.Panicln(err)
-					}
-					return nil, err
-				}
-				admit.CoinsRemoved = append(admit.CoinsRemoved, uint32(vin))
-			}
-
-			newOutpoints := make([]*overlay.Outpoint, 0, len(admit.OutputsToAdmit))
-			for _, vout := range admit.OutputsToAdmit {
-				out := tx.Outputs[vout]
-				output := &Output{
-					Outpoint: overlay.Outpoint{
-						Txid:        *txid,
-						OutputIndex: uint32(vout),
-					},
-					Script:          out.LockingScript,
-					Satoshis:        out.Satoshis,
-					Topic:           topic,
-					OutputsConsumed: outpointsConsumed,
-					Beef:            taggedBEEF.Beef,
-					AncillaryTxids:  admit.AncillaryTxids,
-					AncillaryBeef:   ancillaryBeefs[topic],
-				}
-				if tx.MerklePath != nil {
-					output.BlockHeight = tx.MerklePath.BlockHeight
-					for _, leaf := range tx.MerklePath.Path[0] {
-						if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
-							output.BlockIdx = leaf.Offset
-							break
-						}
-					}
-				}
-				if err := e.Storage.InsertOutput(ctx, output); err != nil {
-					if e.PanicOnError {
-						log.Panicln(err)
-					}
-					return nil, err
-				}
-				newOutpoints = append(newOutpoints, &output.Outpoint)
-				for _, l := range e.LookupServices {
-					if err := l.OutputAdded(ctx, output); err != nil {
-						if e.PanicOnError {
-							log.Panicln(err)
-						}
-						return nil, err
-					}
-				}
-			}
-			if e.Verbose {
-				fmt.Println("Outputs added in", time.Since(start))
-				start = time.Now()
-			}
-			for _, output := range outputsConsumed {
-				output.ConsumedBy = append(output.ConsumedBy, newOutpoints...)
-
-				if err := e.Storage.UpdateConsumedBy(ctx, &output.Outpoint, output.Topic, output.ConsumedBy); err != nil {
-					if e.PanicOnError {
-						log.Panicln(err)
-					}
-					return nil, err
-				}
-			}
-			if e.Verbose {
-				fmt.Println("Consumes updated in ", time.Since(start))
-				start = time.Now()
-			}
-			if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
-				Txid:  txid,
-				Topic: topic,
-			}); err != nil {
+		for vin, output := range topicInputs[topic] {
+			if err := e.deleteUTXODeep(ctx, output); err != nil {
 				if e.PanicOnError {
 					log.Panicln(err)
 				}
 				return nil, err
 			}
-			if e.Verbose {
-				fmt.Println("Applied in", time.Since(start))
-			}
-		}
-		if e.Advertiser == nil || mode == SubmitModeHistorical {
-			return steak, nil
+			admit.CoinsRemoved = append(admit.CoinsRemoved, uint32(vin))
 		}
 
-		releventTopics := make([]string, 0, len(taggedBEEF.Topics))
-		for topic, steak := range steak {
-			if steak.OutputsToAdmit == nil && steak.CoinsToRetain == nil {
-				continue
+		newOutpoints := make([]*overlay.Outpoint, 0, len(admit.OutputsToAdmit))
+		for _, vout := range admit.OutputsToAdmit {
+			out := tx.Outputs[vout]
+			output := &Output{
+				Outpoint: overlay.Outpoint{
+					Txid:        *txid,
+					OutputIndex: uint32(vout),
+				},
+				Script:          out.LockingScript,
+				Satoshis:        out.Satoshis,
+				Topic:           topic,
+				OutputsConsumed: outpointsConsumed,
+				Beef:            taggedBEEF.Beef,
+				AncillaryTxids:  admit.AncillaryTxids,
+				AncillaryBeef:   ancillaryBeefs[topic],
 			}
-			if _, ok := dupeTopics[topic]; !ok {
-				releventTopics = append(releventTopics, topic)
+			if tx.MerklePath != nil {
+				output.BlockHeight = tx.MerklePath.BlockHeight
+				for _, leaf := range tx.MerklePath.Path[0] {
+					if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
+						output.BlockIdx = leaf.Offset
+						break
+					}
+				}
+			}
+			if err := e.Storage.InsertOutput(ctx, output); err != nil {
+				if e.PanicOnError {
+					log.Panicln(err)
+				}
+				return nil, err
+			}
+			newOutpoints = append(newOutpoints, &output.Outpoint)
+			for _, l := range e.LookupServices {
+				if err := l.OutputAdded(ctx, &output.Outpoint, output.Script, topic, output.BlockHeight, output.BlockIdx); err != nil {
+					if e.PanicOnError {
+						log.Panicln(err)
+					}
+					return nil, err
+				}
 			}
 		}
-		if len(releventTopics) == 0 {
-			return steak, nil
+		if e.Verbose {
+			fmt.Println("Outputs added in", time.Since(start))
+			start = time.Now()
 		}
+		for _, output := range outputsConsumed {
+			output.ConsumedBy = append(output.ConsumedBy, newOutpoints...)
 
-		broadcasterCfg := &topic.BroadcasterConfig{}
-		if len(e.SLAPTrackers) > 0 {
-			broadcasterCfg.Resolver = lookup.NewLookupResolver(&lookup.LookupResolver{
-				SLAPTrackers: e.SLAPTrackers,
-			})
+			if err := e.Storage.UpdateConsumedBy(ctx, &output.Outpoint, output.Topic, output.ConsumedBy); err != nil {
+				if e.PanicOnError {
+					log.Panicln(err)
+				}
+				return nil, err
+			}
 		}
-
-		if broadcaster, err := topic.NewBroadcaster(releventTopics, broadcasterCfg); err != nil {
-			log.Println("Error during propagation to other nodes:", err)
-		} else if _, failure := broadcaster.BroadcastCtx(ctx, tx); failure != nil {
-			log.Println("Error during propagation to other nodes:", failure)
+		if e.Verbose {
+			fmt.Println("Consumes updated in ", time.Since(start))
+			start = time.Now()
 		}
+		if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
+			Txid:  txid,
+			Topic: topic,
+		}); err != nil {
+			if e.PanicOnError {
+				log.Panicln(err)
+			}
+			return nil, err
+		}
+		if e.Verbose {
+			fmt.Println("Applied in", time.Since(start))
+		}
+	}
+	if e.Advertiser == nil || mode == SubmitModeHistorical {
 		return steak, nil
 	}
+
+	releventTopics := make([]string, 0, len(taggedBEEF.Topics))
+	for topic, steak := range steak {
+		if steak.OutputsToAdmit == nil && steak.CoinsToRetain == nil {
+			continue
+		}
+		if _, ok := dupeTopics[topic]; !ok {
+			releventTopics = append(releventTopics, topic)
+		}
+	}
+	if len(releventTopics) == 0 {
+		return steak, nil
+	}
+
+	broadcasterCfg := &topic.BroadcasterConfig{}
+	if len(e.SLAPTrackers) > 0 {
+		broadcasterCfg.Resolver = lookup.NewLookupResolver(&lookup.LookupResolver{
+			SLAPTrackers: e.SLAPTrackers,
+		})
+	}
+
+	if broadcaster, err := topic.NewBroadcaster(releventTopics, broadcasterCfg); err != nil {
+		log.Println("Error during propagation to other nodes:", err)
+	} else if _, failure := broadcaster.BroadcastCtx(ctx, tx); failure != nil {
+		log.Println("Error during propagation to other nodes:", failure)
+	}
+	return steak, nil
 }
 
 func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error) {
@@ -497,7 +504,7 @@ func (e *Engine) SyncAdvertisements(ctx context.Context) error {
 	for topic := range requiredSHIPAdvertisements {
 		if slices.IndexFunc(currentSHIPAdvertisements, func(ad *advertiser.Advertisement) bool {
 			return ad.TopicOrService == topic && ad.Domain == e.HostingURL
-		}) != -1 {
+		}) == -1 {
 			shipsToCreate = append(shipsToCreate, topic)
 		}
 	}
@@ -516,7 +523,7 @@ func (e *Engine) SyncAdvertisements(ctx context.Context) error {
 	for service := range requiredSLAPAdvertisements {
 		if slices.IndexFunc(currentSLAPAdvertisements, func(ad *advertiser.Advertisement) bool {
 			return ad.TopicOrService == service && ad.Domain == e.HostingURL
-		}) != -1 {
+		}) == -1 {
 			slapsToCreate = append(slapsToCreate, service)
 		}
 	}
@@ -579,7 +586,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				resolver.SLAPTrackers = e.SLAPTrackers
 			}
 
-			if query, err := json.Marshal(map[string]interface{}{
+			if query, err := json.Marshal(map[string]any{
 				"topics": []string{topic},
 			}); err != nil {
 				return err
@@ -872,17 +879,3 @@ func (e *Engine) GetDocumentationForLookupServiceProvider(provider string) (stri
 		return l.GetDocumentation(), nil
 	}
 }
-
-// func FindPreviousTx(tx *transaction.Transaction, txid chainhash.Hash) *transaction.Transaction {
-// 	if tx != nil {
-// 		for _, input := range tx.Inputs {
-// 			if input.SourceTXID.Equal(txid) {
-// 				return input.SourceTransaction
-// 			}
-// 			if found := FindPreviousTx(input.SourceTransaction, *input.SourceTXID); found != nil {
-// 				return found
-// 			}
-// 		}
-// 	}
-// 	return nil
-// }
