@@ -177,8 +177,8 @@ func AdminAuth(expectedToken string) func(http.Handler) http.Handler {
 	}
 }
 
-// Shutdown gracefully shuts down the Fiber app
-func (h *HTTP) Shutdown(ctx context.Context) error {
+// shutdown gracefully shuts down the Fiber app
+func (h *HTTP) shutdown(ctx context.Context) error {
 	if err := h.app.Shutdown(); err != nil {
 		return fmt.Errorf("http server: fiber app shutdown failed: %w", err)
 	}
@@ -200,7 +200,7 @@ func (h *HTTP) StartWithGracefulShutdown() <-chan struct{} {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := h.Shutdown(ctx); err != nil {
+		if err := h.shutdown(ctx); err != nil {
 			slog.Errorf("HTTP shutdown error: %v", err)
 		}
 		close(idleConnsClosed)
