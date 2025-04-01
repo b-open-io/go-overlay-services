@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
@@ -15,7 +16,7 @@ type SyncAdvertisementsHandlerResponse struct {
 // SyncAdvertisementsProvider defines the contract that must be fulfilled
 // to send synchronize advertisements request to the overlay engine for further processing.
 type SyncAdvertisementsProvider interface {
-	SyncAdvertisements() error
+	SyncAdvertisements(ctx context.Context) error
 }
 
 // SyncAdvertisementsHandler orchestrates the processing flow of a synchronize advertisements
@@ -28,7 +29,7 @@ type SyncAdvertisementsHandler struct {
 // It prepares and sends a JSON response after invoking the engine and returns an HTTP response
 // with the appropriate status code based on the engine's response.
 func (s *SyncAdvertisementsHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	err := s.provider.SyncAdvertisements()
+	err := s.provider.SyncAdvertisements(r.Context())
 	if err != nil {
 		jsonutil.SendHTTPInternalServerErrorTextResponse(w)
 		return
