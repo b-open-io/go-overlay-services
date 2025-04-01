@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/commands"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 	"github.com/stretchr/testify/assert"
@@ -16,8 +16,8 @@ import (
 
 type stubEngine struct{}
 
-func (s *stubEngine) ProvideForeignGASPNode(graphID, txid string, outputIndex uint32) (*gasp.GASPNode, error) {
-	return &gasp.GASPNode{}, nil
+func (s *stubEngine) ProvideForeignGASPNode(graphID, txid string, outputIndex uint32) (*core.GASPNode, error) {
+	return &core.GASPNode{}, nil
 }
 
 func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) {
@@ -40,8 +40,8 @@ func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) 
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var actual gasp.GASPNode
-	expected := gasp.GASPNode{}
+	var actual core.GASPNode
+	expected := core.GASPNode{}
 	require.NoError(t, jsonutil.DecodeResponseBody(resp, &actual))
 	assert.EqualValues(t, expected, actual)
 }

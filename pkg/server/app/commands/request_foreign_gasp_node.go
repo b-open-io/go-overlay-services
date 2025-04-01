@@ -3,13 +3,13 @@ package commands
 import (
 	"net/http"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 )
 
 // RequestForeignGASPNodeProvider defines the contract that must be fulfilled to send a requestForeignGASPNode to the overlay engine.
 type RequestForeignGASPNodeProvider interface {
-	ProvideForeignGASPNode(graphID string, txID string, outputIndex uint32) (*gasp.GASPNode, error)
+	ProvideForeignGASPNode(graphID string, txID string, outputIndex uint32) (*core.GASPNode, error)
 }
 
 // RequestForeignGASPNodeHandler orchestrates the requestForeignGASPNode flow.

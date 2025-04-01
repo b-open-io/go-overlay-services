@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 
-	// "github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
