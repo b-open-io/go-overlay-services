@@ -1,0 +1,5 @@
+addr: localhost
+admin_bearer_token: 4b6e1ae3-5ec2-439b-9703-47d462d28dfd
+app_name: Overlay API v0.0.0
+port: 3000
+server_header: Overlay API

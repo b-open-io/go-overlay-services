@@ -4,9 +4,10 @@ import (
 	"flag"
 	"net/http"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/server"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/gookit/slog"
+
+	"github.com/4chain-ag/go-overlay-services/pkg/config"
+	"github.com/4chain-ag/go-overlay-services/pkg/server"
 )
 
 func main() {
@@ -18,7 +19,7 @@ func main() {
 		slog.Fatalf("Invalid config file path: %v", err)
 	}
 
-	if err := loader.PrettyPrint(); err != nil {
+	if err := loader.PrettyPrintAs("json"); err != nil {
 		slog.Fatalf("failed to pretty print config: %v", err)
 	}
 
@@ -27,12 +28,12 @@ func main() {
 		slog.Fatalf("failed to load config: %v", err)
 	}
 
-	if cfg.AdminBearerToken != "" {
-		slog.Infof("Admin token loaded (length: %d)", len(cfg.AdminBearerToken))
+	if err := cfg.Validate(); err != nil {
+		slog.Fatalf("Invalid configuration: %v", err)
 	}
 
 	opts := []server.HTTPOption{
-		server.WithConfig(cfg),
+		server.WithConfig(&cfg),
 		server.WithMiddleware(loggingMiddleware),
 	}
 
