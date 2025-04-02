@@ -27,7 +27,7 @@ func ToJSONFile(cfg *Config, path string) error {
 	if err := config.ToJSONFile(cfg, path); err != nil {
 		return fmt.Errorf("failed to write JSON file: %w", err)
 	}
-	return nil 
+	return nil
 }
 
 // ToEnvFile writes the configuration to an environment file at the given path.

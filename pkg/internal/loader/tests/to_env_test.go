@@ -5,9 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/4chain-ag/go-overlay-services/pkg/internal/loader"
+	"github.com/stretchr/testify/require"
 )
 
 func TestToEnvFile(t *testing.T) {

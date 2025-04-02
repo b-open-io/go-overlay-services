@@ -6,9 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/4chain-ag/go-overlay-services/pkg/internal/loader"
+	"github.com/stretchr/testify/require"
 )
 
 func TestToJSONFile(t *testing.T) {
@@ -32,13 +31,12 @@ func TestToJSONFile(t *testing.T) {
 	require.NoError(t, err)
 
 	expected := map[string]any{
-		"a":              "default_hello",
+		"a":                "default_hello",
 		"b_with_long_name": float64(1),
 		"c_sub_config": map[string]any{
 			"d_nested_field": "default_world",
 		},
-	}	
+	}
 
 	require.Equal(t, expected, result)
 }
-

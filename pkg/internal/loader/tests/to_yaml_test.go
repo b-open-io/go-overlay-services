@@ -6,9 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/4chain-ag/go-overlay-services/pkg/internal/loader"
+	"github.com/stretchr/testify/require"
 )
 
 func TestToYAMLFile(t *testing.T) {
