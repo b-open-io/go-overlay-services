@@ -24,6 +24,14 @@ func Connect(cfg *config.Config) (*Client, error) {
 	defer cancel()
 
 	clientOpts := options.Client().ApplyURI(cfg.Mongo.URI)
+	if cfg.Mongo.ValidateCreds() {
+		cred := options.Credential{
+			Username:   cfg.Mongo.Username,
+			Password:   cfg.Mongo.Password,
+			AuthSource: cfg.Mongo.AuthDB,
+		}
+		clientOpts.SetAuth(cred)
+	}
 	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)

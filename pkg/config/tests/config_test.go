@@ -40,12 +40,12 @@ func TestLoad_ShouldOverrideDefaults_WhenConfigFileProvidesValues(t *testing.T) 
 		Addr:             "127.0.0.1",
 		ServerHeader:     "CustomHeader",
 		AdminBearerToken: "secret-token",
-		Mongo: struct {
-			URI      string `mapstructure:"uri"`
-			Database string `mapstructure:"database"`
-		}{
-			URI:      "mongodb://192.168.0.1:27017",
-			Database: "mydb",
+		Mongo: config.MongoDB{
+			URI:        "mongodb://192.168.0.1:27017",
+			Database:   "mydb",
+			Username:   "admin",
+			Password:   "admin",
+			AuthDB: "admin",
 		},
 	}
 
