@@ -8,11 +8,11 @@ import (
 
 // Config represents the application configuration.
 type Config struct {
-	AppName          string `mapstructure:"app_name"`
-	Port             int    `mapstructure:"port"`
-	Addr             string `mapstructure:"addr"`
-	ServerHeader     string `mapstructure:"server_header"`
-	AdminBearerToken string `mapstructure:"admin_bearer_token"`
+	AppName          string  `mapstructure:"app_name"`
+	Port             int     `mapstructure:"port"`
+	Addr             string  `mapstructure:"addr"`
+	ServerHeader     string  `mapstructure:"server_header"`
+	AdminBearerToken string  `mapstructure:"admin_bearer_token"`
 	Mongo            MongoDB `mapstructure:"mongo"`
 }
 
@@ -24,7 +24,7 @@ func Defaults() Config {
 		Addr:             "localhost",
 		ServerHeader:     "Overlay API",
 		AdminBearerToken: uuid.NewString(),
-		Mongo: 		  DefaultMongoConfig(),
+		Mongo:            DefaultMongoConfig(),
 	}
 }
 
