@@ -6,6 +6,7 @@ import (
 
 	"github.com/4chain-ag/go-overlay-services/pkg/config"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/gookit/slog"
 )
 
@@ -34,6 +35,7 @@ func main() {
 	opts := []server.HTTPOption{
 		server.WithConfig(&cfg),
 		server.WithMiddleware(loggingMiddleware),
+		server.WithMongo(),
 	}
 
 	httpAPI := server.New(opts...)

@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/config"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/idempotency"
+
+	"github.com/4chain-ag/go-overlay-services/pkg/config"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 )
 
 // HTTPOption defines a functional option for configuring an HTTP server.
@@ -32,6 +34,20 @@ func WithConfig(cfg *config.Config) HTTPOption {
 	}
 }
 
+// WithMongo sets the MongoDB client for the HTTP server based on the configuration.
+func WithMongo() HTTPOption {
+	return func(h *HTTP) {
+		if h.cfg == nil || h.cfg.Mongo.URI == "" {
+			return
+		}
+		client, err := mongo.Connect(h.cfg)
+		if err != nil {
+			panic(fmt.Sprintf("MongoDB connect failed: %v", err))
+		}
+		h.mongo = client
+	}
+}
+
 // SocketAddr returns the socket address string based on the configured address and port combination.
 func (h *HTTP) SocketAddr() string { return fmt.Sprintf("%s:%d", h.cfg.Addr, h.cfg.Port) }
 
@@ -42,6 +58,7 @@ type HTTP struct {
 	middlewares []fiber.Handler
 	app         *fiber.App
 	cfg         *config.Config
+	mongo       *mongo.Client
 }
 
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.
