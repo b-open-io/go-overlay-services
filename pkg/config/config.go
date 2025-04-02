@@ -24,7 +24,7 @@ func Defaults() Config {
 		Addr:             "localhost",
 		ServerHeader:     "Overlay API",
 		AdminBearerToken: uuid.NewString(),
-		Mongo:            DefaultMongoConfig(),
+		Mongo:            DefaultMongo(),
 	}
 }
 

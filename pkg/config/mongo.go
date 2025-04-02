@@ -11,8 +11,8 @@ type MongoDB struct {
 	AuthDB   string `mapstructure:"auth_db"` // Optional: for auth source
 }
 
-// DefaultMongoConfig provides the default MongoDB configuration.
-func DefaultMongoConfig() MongoDB {
+// DefaultMongo provides the default MongoDB configuration.
+func DefaultMongo() MongoDB {
 	return MongoDB{
 		URI:      "mongodb://localhost:27017",
 		Database: "overlay",
