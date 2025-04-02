@@ -30,7 +30,7 @@ func Defaults() Config {
 
 // Validate checks if the configuration is valid.
 func (c *Config) Validate() error {
-	if err := c.validateAdminBearerToken(); err != nil {
+	if err := c.validate(); err != nil {
 		return fmt.Errorf("admin bearer token: %w", err)
 	}
 	if err := c.Mongo.validate(); err != nil {
@@ -39,10 +39,15 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// validateAdminBearerToken checks if the admin bearer token is set.
-func (c *Config) validateAdminBearerToken() error {
+// validate checks if the admin bearer token is set.
+func (c *Config) validate() error {
 	if c.AdminBearerToken == "" {
 		return fmt.Errorf("admin bearer token is required")
 	}
+	_, err := uuid.Parse(c.AdminBearerToken)
+	if err != nil {
+		return fmt.Errorf("admin bearer token is not a valid")
+	}
+
 	return nil
 }

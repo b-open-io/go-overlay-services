@@ -23,7 +23,7 @@ func Connect(cfg *config.Config) (*Client, error) {
 	defer cancel()
 
 	clientOpts := options.Client().ApplyURI(cfg.Mongo.URI)
-	if cfg.Mongo.ValidateCreds() {
+	if cfg.Mongo.HasCredentials() {
 		cred := options.Credential{
 			Username:   cfg.Mongo.Username,
 			Password:   cfg.Mongo.Password,

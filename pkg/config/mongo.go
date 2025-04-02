@@ -1,6 +1,11 @@
 package config
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"strings"
+)
 
 // MongoDB is the configuration struct for MongoDB connections.
 type MongoDB struct {
@@ -22,18 +27,21 @@ func DefaultMongo() MongoDB {
 	}
 }
 
-// validate validates the MongoDB configuration.
+// validate performs validation on the MongoDB configuration.
 func (cfg *MongoDB) validate() error {
-	if cfg.URI == "" {
-		return fmt.Errorf("mongodb URI must not be empty")
+	if strings.TrimSpace(cfg.URI) == "" {
+		return errors.New("MongoDB URI must not be empty")
 	}
-	if cfg.Database == "" {
-		return fmt.Errorf("mongodb database must not be empty")
+	if _, err := url.ParseRequestURI(cfg.URI); err != nil {
+		return fmt.Errorf("invalid MongoDB URI: %w", err)
+	}
+	if strings.TrimSpace(cfg.Database) == "" {
+		return errors.New("MongoDB database name must not be empty")
 	}
 	return nil
 }
 
-// ValidateCreds checks if the MongoDB credentials are set.
-func (cfg *MongoDB) ValidateCreds() bool {
-	return cfg.Username != "" && cfg.Password != ""
+// HasCredentials returns true if both username and password are set.
+func (cfg *MongoDB) HasCredentials() bool {
+	return strings.TrimSpace(cfg.Username) != "" && strings.TrimSpace(cfg.Password) != ""
 }
