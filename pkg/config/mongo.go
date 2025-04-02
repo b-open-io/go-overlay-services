@@ -8,7 +8,7 @@ type MongoDB struct {
 	Database string `mapstructure:"database"`
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
-	AuthDB   string `mapstructure:"auth_db"` // Optional: for auth source
+	AuthDB   string `mapstructure:"auth_db"`
 }
 
 // DefaultMongo provides the default MongoDB configuration.
