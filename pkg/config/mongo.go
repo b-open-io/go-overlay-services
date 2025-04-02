@@ -33,6 +33,7 @@ func (cfg *MongoDB) validate() error {
 	return nil
 }
 
+// ValidateCreds checks if the MongoDB credentials are set.
 func (cfg *MongoDB) ValidateCreds() bool {
 	return cfg.Username != "" && cfg.Password != ""
 }
