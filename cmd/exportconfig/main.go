@@ -8,8 +8,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/config"
 	"github.com/google/uuid"
+
+	"github.com/4chain-ag/go-overlay-services/pkg/config"
 )
 
 func main() {
@@ -41,10 +42,6 @@ func main() {
 		err = config.ToEnvFile(&cfg, *outputFile)
 	default: // yaml, yml
 		err = config.ToYAMLFile(&cfg, *outputFile)
-	}
-
-	if err != nil {
-		log.Fatalf("Error writing configuration: %v\n", err)
 	}
 
 	if err != nil {
