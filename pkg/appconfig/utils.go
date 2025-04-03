@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// PrettyPrint prints the configuration in a human-readable format.
 func PrettyPrint(cfg any) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -18,6 +19,7 @@ func PrettyPrint(cfg any) error {
 	return nil
 }
 
+// PrettyPrintJSON prints the configuration in JSON format.
 func PrettyPrintJSON(cfg any) error {
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -28,6 +30,7 @@ func PrettyPrintJSON(cfg any) error {
 	return nil
 }
 
+// PrettyPrintAs prints the configuration in the specified format (JSON or YAML).
 func PrettyPrintAs(cfg any, format string) error {
 	switch strings.ToLower(format) {
 	case "json":
