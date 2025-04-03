@@ -37,7 +37,10 @@ func main() {
 		server.WithMongo(),
 	}
 
-	httpAPI := server.New(opts...)
+	httpAPI, err := server.New(opts...)
+	if err != nil {
+		slog.Fatalf("Failed to create HTTP server: %v", err)
+	}
 
 	if err := httpAPI.ListenAndServe(); err != nil {
 		slog.Fatalf("HTTP server failed: %v", err)

@@ -17,7 +17,8 @@ import (
 // should be structured and tested based on the HTTP standard package.
 func TestSubmitTransactionHandler_Handle(t *testing.T) {
 	// given:
-	app := commands.NewSubmitTransactionCommandHandler(submitTransactionProviderAlwaysOK{})
+	app, err := commands.NewSubmitTransactionCommandHandler(submitTransactionProviderAlwaysOK{})
+	assert.NoError(t, err)
 	ts := httptest.NewServer(http.HandlerFunc(app.Handle))
 	defer ts.Close()
 
