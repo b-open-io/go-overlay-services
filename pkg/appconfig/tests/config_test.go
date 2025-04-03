@@ -3,10 +3,9 @@ package config_test
 import (
 	"testing"
 
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-
-	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 )
 
 func TestLoad_ShouldApplyAllDefaults_WhenNoConfigFileExists(t *testing.T) {

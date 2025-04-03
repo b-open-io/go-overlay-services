@@ -8,9 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/google/uuid"
-
 	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
+	"github.com/google/uuid"
 )
 
 func main() {

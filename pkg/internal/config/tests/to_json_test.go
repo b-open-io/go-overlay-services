@@ -6,9 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/4chain-ag/go-overlay-services/pkg/internal/config"
+	"github.com/stretchr/testify/require"
 )
 
 func TestToJSONFile(t *testing.T) {
