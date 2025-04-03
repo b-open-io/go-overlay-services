@@ -70,7 +70,8 @@ func Test_HTTPServer_ShouldShutdownAfterSendingInterruptSig(t *testing.T) {
 	opts := []server.HTTPOption{
 		server.WithConfig(&cfg),
 	}
-	httpAPI := server.New(opts...)
+	httpAPI, err := server.New(opts...)
+	require.NoError(t, err, "Failed to create HTTP API server")
 
 	// when:
 	done := httpAPI.StartWithGracefulShutdown()
