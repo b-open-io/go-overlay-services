@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net/http"
 
@@ -43,7 +44,8 @@ func main() {
 	}
 
 	// Graceful shutdown handling
-	idleConnsClosed := httpAPI.StartWithGracefulShutdown()
+	ctx := context.Background()
+	idleConnsClosed := httpAPI.StartWithGracefulShutdown(ctx)
 	<-idleConnsClosed
 	slog.Info("Server shutdown completed.")
 }

@@ -178,22 +178,27 @@ func AdminAuth(expectedToken string) func(http.Handler) http.Handler {
 
 // StartWithGracefulShutdown starts the HTTP server and listens for termination signals.
 // It returns a channel that will be closed once the shutdown is complete.
-func (h *HTTP) StartWithGracefulShutdown() <-chan struct{} {
+func (h *HTTP) StartWithGracefulShutdown(ctx context.Context) <-chan struct{} {
 	idleConnsClosed := make(chan struct{})
 
 	go func() {
 		sigint := make(chan os.Signal, 1)
 		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
-		<-sigint
 
-		slog.Info("Shutdown signal received. Cleaning up...")
+		select {
+		case <-sigint:
+			slog.Info("Shutdown signal received. Cleaning up...")
+		case <-ctx.Done():
+			slog.Info("Shutdown context canceled. Cleaning up...")
+		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := h.app.ShutdownWithContext(ctx); err != nil {
+		if err := h.app.ShutdownWithContext(shutdownCtx); err != nil {
 			slog.Errorf("HTTP shutdown error: %v", err)
 		}
+
 		close(idleConnsClosed)
 	}()
 
