@@ -11,6 +11,7 @@ import (
 	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/idempotency"
 )
 
@@ -22,7 +23,7 @@ type HTTPOption func(*HTTP) error
 // The execution order depends on the sequence in which the middlewares are passed
 func WithMiddleware(f func(http.Handler) http.Handler) HTTPOption {
 	return func(h *HTTP) error {
-		h.middlewares = append(h.middlewares, adaptor.HTTPMiddleware(f))
+		h.middleware = append(h.middleware, adaptor.HTTPMiddleware(f))
 		return nil
 	}
 }
@@ -50,17 +51,14 @@ func WithMongo() HTTPOption {
 	}
 }
 
-// SocketAddr returns the socket address string based on the configured address and port combination.
-func (h *HTTP) SocketAddr() string { return fmt.Sprintf("%s:%d", h.cfg.Addr, h.cfg.Port) }
-
 // HTTP manages connections to the overlay server instance. It accepts and responds to client sockets,
 // using idempotency to improve fault tolerance and mitigate duplicated requests.
-// It applies all configured options along with the list of middlewares."
+// It applies all configured options along with the list of middlewares.
 type HTTP struct {
-	middlewares []fiber.Handler
-	app         *fiber.App
-	cfg         *config.Config
-	mongo       *mongo.Client
+	middleware []fiber.Handler
+	app        *fiber.App
+	cfg        *config.Config
+	mongo      *mongo.Client
 }
 
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.
@@ -77,7 +75,10 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 			ServerHeader:  "Overlay API",
 			AppName:       "Overlay API v0.0.0",
 		}),
-		middlewares: []fiber.Handler{idempotency.New()},
+		middleware: []fiber.Handler{
+			idempotency.New(),
+			cors.New(),
+		},
 	}
 
 	for _, o := range opts {
@@ -86,7 +87,7 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 		}
 	}
 
-	for _, m := range http.middlewares {
+	for _, m := range http.middleware {
 		http.app.Use(m)
 	}
 
@@ -107,7 +108,12 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	return http, nil
 }
 
-// ListenAndServe handles HTTP requests from the configured socket address."
+// SocketAddr builds the address string for binding.
+func (h *HTTP) SocketAddr() string {
+	return fmt.Sprintf("%s:%d", h.cfg.Addr, h.cfg.Port)
+}
+
+// ListenAndServe handles HTTP requests from the configured socket address.
 func (h *HTTP) ListenAndServe() error {
 	if err := h.app.Listen(h.SocketAddr()); err != nil {
 		return fmt.Errorf("http server: fiber app listen failed: %w", err)
