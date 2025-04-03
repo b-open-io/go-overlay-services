@@ -4,7 +4,7 @@ import (
 	"flag"
 	"net/http"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/config"
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
 	"github.com/gookit/slog"
 )
