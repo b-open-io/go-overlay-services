@@ -103,7 +103,7 @@ func Test_HTTPServer_ShouldShutdownAfterSendingInterruptSig(t *testing.T) {
 }
 
 func Test_HTTPServer_ShouldShutdownAfterContextCancel(t *testing.T) {
-	// Given:
+	// given:
 	cfg := config.Defaults()
 	opts := []server.HTTPOption{
 		server.WithConfig(&cfg),
@@ -112,23 +112,28 @@ func Test_HTTPServer_ShouldShutdownAfterContextCancel(t *testing.T) {
 	httpAPI, err := server.New(opts...)
 	require.NoError(t, err)
 
+	// when:
 	ctx, cancel := context.WithCancel(context.Background())
 	done := httpAPI.StartWithGracefulShutdown(ctx)
 
-	// When:
-	time.AfterFunc(100*time.Millisecond, cancel)
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	// Then:
-	select {
-	case <-done:
-		// Success
-	case <-time.After(2 * time.Second):
-		t.Fatal("server did not shut down after context cancellation")
-	}
+	go func() {
+		defer wg.Done()
+		time.Sleep(100 * time.Millisecond)
+		slog.Info("Triggering context cancel")
+		cancel()
+	}()
+
+	wg.Wait()
+	// then:
+	_, ok := <-done
+	require.False(t, ok, "Server did not shut down after context cancellation")
 }
 
 func Test_HTTPServer_ShouldShutdownBeforeContextTimeout(t *testing.T) {
-	// Given:
+	// given:
 	cfg := config.Defaults()
 	opts := []server.HTTPOption{
 		server.WithConfig(&cfg),
@@ -137,19 +142,25 @@ func Test_HTTPServer_ShouldShutdownBeforeContextTimeout(t *testing.T) {
 	httpAPI, err := server.New(opts...)
 	require.NoError(t, err)
 
+	// when:
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	done := httpAPI.StartWithGracefulShutdown(ctx)
 
-	// When:
-	time.AfterFunc(200*time.Millisecond, cancel)
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	// Then:
-	select {
-	case <-done:
-		// Success
-	case <-time.After(3 * time.Second):
-		t.Fatal("server did not shut down before context timeout")
-	}
+	go func() {
+		defer wg.Done()
+		time.Sleep(200 * time.Millisecond)
+		slog.Info("Triggering manual cancel before context timeout")
+		cancel()
+	}()
+
+	wg.Wait()
+
+	// then:
+	_, ok := <-done
+	require.False(t, ok, "Server did not shut down before context timeout")
 }
