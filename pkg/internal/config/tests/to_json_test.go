@@ -1,4 +1,4 @@
-package loader_test
+package config_test
 
 import (
 	"encoding/json"
@@ -6,8 +6,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/internal/loader"
 	"github.com/stretchr/testify/require"
+
+	"github.com/4chain-ag/go-overlay-services/pkg/internal/config"
 )
 
 func TestToJSONFile(t *testing.T) {
@@ -18,7 +19,7 @@ func TestToJSONFile(t *testing.T) {
 	cfg := Defaults()
 
 	// when:
-	err := loader.ToJSONFile(cfg, configFilePath)
+	err := config.ToJSONFile(cfg, configFilePath)
 
 	// then:
 	require.NoError(t, err)

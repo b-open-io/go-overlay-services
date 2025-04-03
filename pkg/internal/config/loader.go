@@ -1,7 +1,6 @@
-package loader
+package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -142,35 +140,4 @@ func (l *Loader[T]) viperToCfg() error {
 		return fmt.Errorf("error while unmarshalling config from viper: %w", err)
 	}
 	return nil
-}
-
-func (l *Loader[T]) PrettyPrint() error {
-	data, err := yaml.Marshal(l.cfg)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config for printing: %w", err)
-	}
-
-	fmt.Println("Loaded Configuration:\n" + string(data))
-	return nil
-}
-
-func (l *Loader[T]) PrettyPrintJSON() error {
-	data, err := json.MarshalIndent(l.cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config to JSON: %w", err)
-	}
-
-	fmt.Println("Loaded Configuration (JSON):\n" + string(data))
-	return nil
-}
-
-func (l *Loader[T]) PrettyPrintAs(format string) error {
-	switch strings.ToLower(format) {
-	case "json":
-		return l.PrettyPrintJSON()
-	case "yaml", "yml":
-		return l.PrettyPrint()
-	default:
-		return fmt.Errorf("unsupported print format: %s", format)
-	}
 }

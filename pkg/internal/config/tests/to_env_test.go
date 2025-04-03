@@ -1,12 +1,13 @@
-package loader_test
+package config_test
 
 import (
 	"fmt"
 	"os"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/internal/loader"
 	"github.com/stretchr/testify/require"
+
+	"github.com/4chain-ag/go-overlay-services/pkg/internal/config"
 )
 
 func TestToEnvFile(t *testing.T) {
@@ -16,7 +17,7 @@ func TestToEnvFile(t *testing.T) {
 	cfg := Defaults()
 
 	// When
-	err := loader.ToEnvFile(cfg, configFilePath)
+	err := config.ToEnvFile(cfg, configFilePath, "TEST")
 
 	// Then
 	require.NoError(t, err)
@@ -26,7 +27,7 @@ func TestToEnvFile(t *testing.T) {
 
 	content := string(data)
 
-	require.Contains(t, content, `A="default_hello"`)
-	require.Contains(t, content, `B_WITH_LONG_NAME="1"`)
-	require.Contains(t, content, `C_SUB_CONFIG_D_NESTED_FIELD="default_world"`)
+	require.Contains(t, content, `TEST_A="default_hello"`)
+	require.Contains(t, content, `TEST_B_WITH_LONG_NAME="1"`)
+	require.Contains(t, content, `TEST_C_SUB_CONFIG_D_NESTED_FIELD="default_world"`)
 }

@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/config"
 	"github.com/gookit/slog"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 )
 
 // Client represents the MongoDB client and database connection

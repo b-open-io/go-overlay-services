@@ -1,17 +1,18 @@
-package loader_test
+package config_test
 
 import (
 	"fmt"
 	"os"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/internal/loader"
 	"github.com/stretchr/testify/require"
+
+	"github.com/4chain-ag/go-overlay-services/pkg/internal/config"
 )
 
 func TestDefaults(t *testing.T) {
 	// given:
-	l := loader.NewLoader(Defaults, "TEST")
+	l := config.NewLoader(Defaults, "TEST")
 
 	// when:
 	cfg, err := l.Load()
@@ -25,7 +26,7 @@ func TestDefaults(t *testing.T) {
 
 func TestEnvVariables(t *testing.T) {
 	// given:
-	l := loader.NewLoader(Defaults, "TEST")
+	l := config.NewLoader(Defaults, "TEST")
 
 	// and:
 	t.Setenv("TEST_B_WITH_LONG_NAME", "2")
@@ -43,7 +44,7 @@ func TestEnvVariables(t *testing.T) {
 
 func TestFileConfig(t *testing.T) {
 	// given:
-	l := loader.NewLoader(Defaults, "TEST")
+	l := config.NewLoader(Defaults, "TEST")
 
 	// and:
 	configFilePath := tempConfig(t, yamlConfig, "yaml")
@@ -66,7 +67,7 @@ func TestFileConfig(t *testing.T) {
 
 func TestDotEnvConfig(t *testing.T) {
 	// given:
-	l := loader.NewLoader(Defaults, "TEST")
+	l := config.NewLoader(Defaults, "TEST")
 
 	// and:
 	t.Setenv("TEST_A", "env_hello")
@@ -92,7 +93,7 @@ func TestDotEnvConfig(t *testing.T) {
 
 func TestJSONConfig(t *testing.T) {
 	// given:
-	l := loader.NewLoader(Defaults, "TEST")
+	l := config.NewLoader(Defaults, "TEST")
 
 	// and:
 	t.Setenv("TEST_A", "env_hello")
@@ -118,7 +119,7 @@ func TestJSONConfig(t *testing.T) {
 
 func TestMixedConfig(t *testing.T) {
 	// given:
-	l := loader.NewLoader(Defaults, "TEST")
+	l := config.NewLoader(Defaults, "TEST")
 
 	// and:
 	t.Setenv("TEST_B_WITH_LONG_NAME", "2")
@@ -144,7 +145,7 @@ func TestMixedConfig(t *testing.T) {
 
 func TestWithEmptyPrefix(t *testing.T) {
 	// given:
-	l := loader.NewLoader(Defaults, "")
+	l := config.NewLoader(Defaults, "")
 
 	// and:
 	t.Setenv("A", "env_hello")
@@ -170,7 +171,7 @@ func TestWithEmptyPrefix(t *testing.T) {
 
 func TestEnvOverridesDotEnv(t *testing.T) {
 	// given:
-	l := loader.NewLoader(Defaults, "TEST")
+	l := config.NewLoader(Defaults, "TEST")
 
 	// and:
 	t.Setenv("TEST_B_WITH_LONG_NAME", "2")

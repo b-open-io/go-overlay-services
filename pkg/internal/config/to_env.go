@@ -1,4 +1,4 @@
-package loader
+package config
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 )
 
-func ToEnvFile(cfg any, filename string) error {
+func ToEnvFile(cfg any, filename string, envPrefix string) error {
 	var decoded map[string]any
 	if err := mapstructure.Decode(cfg, &decoded); err != nil {
 		return fmt.Errorf("failed to decode config to map: %w", err)
@@ -20,7 +20,7 @@ func ToEnvFile(cfg any, filename string) error {
 	}
 
 	flat := make(map[string]string)
-	flattenMap("", decoded, flat)
+	flattenMap(strings.ToUpper(envPrefix), decoded, flat)
 
 	lines := make([]string, 0, len(flat))
 	for k, v := range flat {

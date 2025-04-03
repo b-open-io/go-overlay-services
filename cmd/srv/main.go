@@ -4,9 +4,10 @@ import (
 	"flag"
 	"net/http"
 
+	"github.com/gookit/slog"
+
 	"github.com/4chain-ag/go-overlay-services/pkg/config"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
-	"github.com/gookit/slog"
 )
 
 func main() {
@@ -18,13 +19,13 @@ func main() {
 		slog.Fatalf("Invalid config file path: %v", err)
 	}
 
-	if err := loader.PrettyPrintAs("json"); err != nil {
-		slog.Fatalf("failed to pretty print config: %v", err)
-	}
-
 	cfg, err := loader.Load()
 	if err != nil {
 		slog.Fatalf("failed to load config: %v", err)
+	}
+
+	if err := config.PrettyPrintAs(cfg, "json"); err != nil {
+		slog.Fatalf("failed to pretty print config: %v", err)
 	}
 
 	if err := cfg.Validate(); err != nil {

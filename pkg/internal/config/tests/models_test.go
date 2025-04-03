@@ -1,4 +1,4 @@
-package loader_test
+package config_test
 
 type MockConfig struct {
 	A string    `mapstructure:"a"`

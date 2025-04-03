@@ -1,9 +1,9 @@
-package config
+package appconfig
 
 import (
 	"fmt"
 
-	config "github.com/4chain-ag/go-overlay-services/pkg/internal/loader"
+	"github.com/4chain-ag/go-overlay-services/pkg/internal/config"
 )
 
 // DefaultConfigFilePath is the default path to the configuration file.
@@ -32,7 +32,7 @@ func ToJSONFile(cfg *Config, path string) error {
 
 // ToEnvFile writes the configuration to an environment file at the given path.
 func ToEnvFile(cfg *Config, path string) error {
-	if err := config.ToEnvFile(cfg, path); err != nil {
+	if err := config.ToEnvFile(cfg, path, cfg.AppName); err != nil {
 		return fmt.Errorf("failed to write env file: %w", err)
 	}
 	return nil

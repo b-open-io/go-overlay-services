@@ -1,4 +1,4 @@
-package loader_test
+package config_test
 
 import (
 	"fmt"
@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/internal/loader"
 	"github.com/stretchr/testify/require"
+
+	"github.com/4chain-ag/go-overlay-services/pkg/internal/config"
 )
 
 func TestToYAMLFile(t *testing.T) {
@@ -19,7 +20,7 @@ func TestToYAMLFile(t *testing.T) {
 	cfg := Defaults()
 
 	// when:
-	err := loader.ToYAMLFile(cfg, configFilePath)
+	err := config.ToYAMLFile(cfg, configFilePath)
 
 	// then:
 	require.NoError(t, err)
@@ -34,13 +35,13 @@ func TestToYAMLFile(t *testing.T) {
 
 func TestExportToYAML_ShouldWriteFile_WhenConfigIsValid(t *testing.T) {
 	// Given
-	l := loader.NewLoader(Defaults, "OVERLAY")
+	l := config.NewLoader(Defaults, "OVERLAY")
 	_, err := l.Load()
 	require.NoError(t, err)
 
 	// When
 	tmpFile := filepath.Join(t.TempDir(), "config.yaml")
-	err = loader.ToYAMLFile(Defaults(), tmpFile)
+	err = config.ToYAMLFile(Defaults(), tmpFile)
 
 	// Then
 	require.NoError(t, err)
