@@ -123,7 +123,7 @@ func Test_HTTPServer_ShouldShutdownAfterContextCancel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		<-trigger
-		slog.Info("Triggering context cancel")
+		t.Log("Triggering context cancel")
 		cancel()
 	}()
 
