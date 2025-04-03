@@ -27,18 +27,7 @@ func WithMiddleware(f func(http.Handler) http.Handler) HTTPOption {
 	}
 }
 
-<<<<<<< HEAD
 // WithConfig sets the configuration for the HTTP server.
-=======
-// WithFiberMiddleware adds a Fiber-style middleware to the HTTP server.
-func WithFiberMiddleware(m fiber.Handler) HTTPOption {
-	return func(h *HTTP) {
-		h.middlewares = append(h.middlewares, m)
-	}
-}
-
-// WithConfig sets the HTTP server configuration.
->>>>>>> 38cbff3 (adding CROS support)
 func WithConfig(cfg *config.Config) HTTPOption {
 	return func(h *HTTP) error {
 		h.cfg = cfg
