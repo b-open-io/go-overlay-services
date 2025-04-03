@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -14,8 +14,8 @@ import (
 const disableTimout = -1
 
 func createTestServerWithCORS() *fiber.App {
-	cfg := config.DefaultConfig()
-	return server.New(server.WithConfig(cfg)).App()
+	cfg := config.Defaults()
+	return server.New(server.WithConfig(&cfg)).App()
 }
 
 func assertCORS(t *testing.T, resp *http.Response, expectMethods bool, expectedMethods, expectedHeaders []string) {
