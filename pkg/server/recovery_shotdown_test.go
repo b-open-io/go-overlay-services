@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,9 +46,9 @@ func Test_RecoveryMiddleware_ShouldHandlePanic(t *testing.T) {
 
 func Test_GracefulShutdown_ShouldShutdownWithoutError(t *testing.T) {
 	// Given
-	cfg := config.DefaultConfig()
+	cfg := config.Defaults()
 	opts := []server.HTTPOption{
-		server.WithConfig(cfg),
+		server.WithConfig(&cfg),
 	}
 	httpAPI := server.New(opts...)
 
