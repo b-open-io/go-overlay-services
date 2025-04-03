@@ -159,8 +159,3 @@ func AdminAuth(expectedToken string) func(http.Handler) http.Handler {
 		})
 	}
 }
-
-// App exposes the underlying Fiber app.
-func (h *HTTP) App() *fiber.App {
-	return h.app
-}
