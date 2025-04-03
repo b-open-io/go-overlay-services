@@ -9,7 +9,6 @@ import (
 
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/queries"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +46,7 @@ func TestLookupDocumentationHandler_Handle_SuccessfulRetrieval(t *testing.T) {
 	expected := "# Test Documentation\nThis is a test markdown document."
 
 	require.NoError(t, jsonutil.DecodeResponseBody(res, &actual))
-	assert.Equal(t, expected, actual.Documentation)
+	require.Equal(t, expected, actual.Documentation)
 }
 
 func TestLookupDocumentationHandler_Handle_ProviderError(t *testing.T) {
@@ -84,7 +83,7 @@ func TestLookupDocumentationHandler_Handle_EmptyLookupServiceParameter(t *testin
 
 	body, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
-	assert.Equal(t, "lookupService query parameter is required\n", string(body))
+	require.Equal(t, "lookupService query parameter is required\n", string(body))
 }
 
 func TestNewLookupDocumentationHandler_WithNilProvider(t *testing.T) {

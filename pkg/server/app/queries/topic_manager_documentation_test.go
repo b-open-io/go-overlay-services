@@ -9,7 +9,6 @@ import (
 
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/app/queries"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +46,7 @@ func TestTopicManagerDocumentationHandler_Handle_SuccessfulRetrieval(t *testing.
 	expected := "# Test Documentation\nThis is a test markdown document."
 
 	require.NoError(t, jsonutil.DecodeResponseBody(res, &actual))
-	assert.Equal(t, expected, actual.Documentation)
+	require.Equal(t, expected, actual.Documentation)
 }
 
 func TestTopicManagerDocumentationHandler_Handle_ProviderError(t *testing.T) {
@@ -85,7 +84,7 @@ func TestTopicManagerDocumentationHandler_Handle_EmptyTopicManagerParameter(t *t
 
 	body, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
-	assert.Equal(t, "topicManager query parameter is required\n", string(body))
+	require.Equal(t, "topicManager query parameter is required\n", string(body))
 }
 
 func TestNewTopicManagerDocumentationHandler_WithNilProvider(t *testing.T) {
@@ -94,7 +93,7 @@ func TestNewTopicManagerDocumentationHandler_WithNilProvider(t *testing.T) {
 
 	// When:
 	handler, err := queries.NewTopicManagerDocumentationHandler(provider)
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	// Then:
 	require.Nil(t, handler)
