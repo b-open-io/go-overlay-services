@@ -5,9 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_RecoveryMiddleware_ShouldHandlePanic(t *testing.T) {

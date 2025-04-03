@@ -8,10 +8,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_AuthorizationBearerTokenMiddleware(t *testing.T) {
