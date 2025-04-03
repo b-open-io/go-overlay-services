@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/server"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_AuthorizationBearerTokenMiddleware(t *testing.T) {
@@ -113,6 +114,7 @@ func Test_HTTPServer_ShouldShutdownAfterContextCancel(t *testing.T) {
 	require.NoError(t, err)
 
 	// when:
+	trigger := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := httpAPI.StartWithGracefulShutdown(ctx)
 
@@ -121,19 +123,20 @@ func Test_HTTPServer_ShouldShutdownAfterContextCancel(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		time.Sleep(100 * time.Millisecond)
+		<-trigger
 		slog.Info("Triggering context cancel")
 		cancel()
 	}()
 
+	close(trigger)
 	wg.Wait()
 	// then:
 	_, ok := <-done
 	require.False(t, ok, "Server did not shut down after context cancellation")
 }
 
-func Test_HTTPServer_ShouldShutdownBeforeContextTimeout(t *testing.T) {
-	// given:
+func Test_HTTPServer_ShouldShutdownAfterContextTimeout(t *testing.T) {
+	// Given:
 	cfg := config.Defaults()
 	opts := []server.HTTPOption{
 		server.WithConfig(&cfg),
@@ -142,8 +145,8 @@ func Test_HTTPServer_ShouldShutdownBeforeContextTimeout(t *testing.T) {
 	httpAPI, err := server.New(opts...)
 	require.NoError(t, err)
 
-	// when:
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// When:
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	done := httpAPI.StartWithGracefulShutdown(ctx)
@@ -153,14 +156,11 @@ func Test_HTTPServer_ShouldShutdownBeforeContextTimeout(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		time.Sleep(200 * time.Millisecond)
-		slog.Info("Triggering manual cancel before context timeout")
-		cancel()
+
+		// Then:
+		_, ok := <-done
+		require.False(t, ok, "Server did not shut down after context timeout")
 	}()
 
 	wg.Wait()
-
-	// then:
-	_, ok := <-done
-	require.False(t, ok, "Server did not shut down before context timeout")
 }
