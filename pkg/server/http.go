@@ -19,10 +19,11 @@ import (
 // These options allow for flexible setup of middlewares and configurations.
 type HTTPOption func(*HTTP) error
 
-// WithMiddleware adds net/http-style middleware to the HTTP server.
+// WithMiddleware adds custom middleware to the HTTP server.
+// The execution order depends on the sequence in which the middlewares are passed
 func WithMiddleware(f func(http.Handler) http.Handler) HTTPOption {
 	return func(h *HTTP) error {
-		h.middlewares = append(h.middlewares, adaptor.HTTPMiddleware(f))
+		h.middleware = append(h.middleware, adaptor.HTTPMiddleware(f))
 		return nil
 	}
 }
@@ -50,12 +51,14 @@ func WithMongo() HTTPOption {
 	}
 }
 
-// HTTP manages the Fiber server and its configuration.
+// HTTP manages connections to the overlay server instance. It accepts and responds to client sockets,
+// using idempotency to improve fault tolerance and mitigate duplicated requests.
+// It applies all configured options along with the list of middlewares."
 type HTTP struct {
-	middlewares []fiber.Handler
-	app         *fiber.App
-	cfg         *config.Config
-	mongo       *mongo.Client
+	middleware []fiber.Handler
+	app        *fiber.App
+	cfg        *config.Config
+	mongo      *mongo.Client
 }
 
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.
@@ -72,7 +75,7 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 			ServerHeader:  "Overlay API",
 			AppName:       "Overlay API v0.0.0",
 		}),
-		middlewares: []fiber.Handler{
+		middleware: []fiber.Handler{
 			idempotency.New(),
 			cors.New(),
 		},
@@ -84,7 +87,7 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 		}
 	}
 
-	for _, m := range http.middlewares {
+	for _, m := range http.middleware {
 		http.app.Use(m)
 	}
 
