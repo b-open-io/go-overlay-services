@@ -5,14 +5,15 @@ import (
 	"net/http"
 	"strings"
 
-	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/idempotency"
+
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 )
 
 // HTTPOption defines a functional option for configuring an HTTP server.
@@ -53,7 +54,7 @@ func WithMongo() HTTPOption {
 
 // HTTP manages connections to the overlay server instance. It accepts and responds to client sockets,
 // using idempotency to improve fault tolerance and mitigate duplicated requests.
-// It applies all configured options along with the list of middlewares."
+// It applies all configured options along with the list of middlewares.
 type HTTP struct {
 	middleware []fiber.Handler
 	app        *fiber.App
@@ -113,7 +114,7 @@ func (h *HTTP) SocketAddr() string {
 	return fmt.Sprintf("%s:%d", h.cfg.Addr, h.cfg.Port)
 }
 
-// ListenAndServe starts the Fiber app using the configured socket address.
+// ListenAndServe handles HTTP requests from the configured socket address.
 func (h *HTTP) ListenAndServe() error {
 	if err := h.app.Listen(h.SocketAddr()); err != nil {
 		return fmt.Errorf("http server: fiber app listen failed: %w", err)
