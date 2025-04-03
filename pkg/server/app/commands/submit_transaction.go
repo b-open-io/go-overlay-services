@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
@@ -47,11 +48,11 @@ func (s *SubmitTransactionHandler) Handle(w http.ResponseWriter, r *http.Request
 
 // NewSubmitTransactionCommandHandler returns an instance of a SubmitTransactionHandler, utilizing
 // an implementation of SubmitTransactionProvider. If the provided argument is nil, it triggers a panic.
-func NewSubmitTransactionCommandHandler(provider SubmitTransactionProvider) *SubmitTransactionHandler {
+func NewSubmitTransactionCommandHandler(provider SubmitTransactionProvider) (*SubmitTransactionHandler, error) {
 	if provider == nil {
-		panic("submit transaction provider is nil")
+		return nil, fmt.Errorf("submit transaction provider is nil")
 	}
 	return &SubmitTransactionHandler{
 		provider: provider,
-	}
+	}, nil
 }

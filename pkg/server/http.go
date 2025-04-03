@@ -16,34 +16,37 @@ import (
 
 // HTTPOption defines a functional option for configuring an HTTP server.
 // These options allow for flexible setup of middlewares and configurations.
-type HTTPOption func(*HTTP)
+type HTTPOption func(*HTTP) error
 
 // WithMiddleware adds custom middleware to the HTTP server.
 // The execution order depends on the sequence in which the middlewares are passed
 func WithMiddleware(f func(http.Handler) http.Handler) HTTPOption {
-	return func(h *HTTP) {
+	return func(h *HTTP) error {
 		h.middlewares = append(h.middlewares, adaptor.HTTPMiddleware(f))
+		return nil
 	}
 }
 
-// WithConfig sets the HTTP server configuration based on the given definition.
+// WithConfig sets the configuration for the HTTP server.
 func WithConfig(cfg *config.Config) HTTPOption {
-	return func(h *HTTP) {
+	return func(h *HTTP) error {
 		h.cfg = cfg
+		return nil
 	}
 }
 
 // WithMongo sets the MongoDB client for the HTTP server based on the configuration.
 func WithMongo() HTTPOption {
-	return func(h *HTTP) {
+	return func(h *HTTP) error {
 		if h.cfg == nil || h.cfg.Mongo.URI == "" {
-			return
+			return nil
 		}
 		client, err := mongo.Connect(h.cfg)
 		if err != nil {
-			panic(fmt.Sprintf("MongoDB connect failed: %v", err))
+			return fmt.Errorf("MongoDB connect failed: %w", err)
 		}
 		h.mongo = client
+		return nil
 	}
 }
 
@@ -61,9 +64,13 @@ type HTTP struct {
 }
 
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.
-func New(opts ...HTTPOption) *HTTP {
-	overlayAPI := app.New(NewNoopEngineProvider())
-	http := HTTP{
+func New(opts ...HTTPOption) (*HTTP, error) {
+	overlayAPI, err := app.New(NewNoopEngineProvider())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create overlay API: %w", err)
+	}
+
+	http := &HTTP{
 		app: fiber.New(fiber.Config{
 			CaseSensitive: true,
 			StrictRouting: true,
@@ -72,14 +79,18 @@ func New(opts ...HTTPOption) *HTTP {
 		}),
 		middlewares: []fiber.Handler{idempotency.New()},
 	}
+
 	for _, o := range opts {
-		o(&http)
+		if err := o(http); err != nil {
+			return nil, err
+		}
 	}
+
 	for _, m := range http.middlewares {
 		http.app.Use(m)
 	}
 
-	// Routes:
+	// Routes...
 	api := http.app.Group("/api")
 	v1 := api.Group("/v1")
 
@@ -93,7 +104,7 @@ func New(opts ...HTTPOption) *HTTP {
 	admin.Post("/advertisements-sync", adaptor.HTTPHandlerFunc(overlayAPI.Commands.SyncAdvertismentsHandler.Handle))
 	admin.Post("/start-gasp-sync", adaptor.HTTPHandlerFunc(overlayAPI.Commands.StartGASPSyncHandler.Handle))
 
-	return &http
+	return http, nil
 }
 
 // ListenAndServe handles HTTP requests from the configured socket address."

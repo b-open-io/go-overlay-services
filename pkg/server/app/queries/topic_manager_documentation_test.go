@@ -29,7 +29,8 @@ func (*TopicManagerDocumentationProviderAlwaysSuccess) GetDocumentationForTopicM
 
 func TestTopicManagerDocumentationHandler_Handle_SuccessfulRetrieval(t *testing.T) {
 	// Given:
-	handler := queries.NewTopicManagerDocumentationHandler(&TopicManagerDocumentationProviderAlwaysSuccess{})
+	handler, err := queries.NewTopicManagerDocumentationHandler(&TopicManagerDocumentationProviderAlwaysSuccess{})
+	require.NoError(t, err)
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
@@ -51,7 +52,8 @@ func TestTopicManagerDocumentationHandler_Handle_SuccessfulRetrieval(t *testing.
 
 func TestTopicManagerDocumentationHandler_Handle_ProviderError(t *testing.T) {
 	// Given:
-	handler := queries.NewTopicManagerDocumentationHandler(&TopicManagerDocumentationProviderAlwaysFailure{})
+	handler, err := queries.NewTopicManagerDocumentationHandler(&TopicManagerDocumentationProviderAlwaysFailure{})
+	require.NoError(t, err)
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
@@ -67,7 +69,8 @@ func TestTopicManagerDocumentationHandler_Handle_ProviderError(t *testing.T) {
 func TestTopicManagerDocumentationHandler_Handle_EmptyTopicManagerParameter(t *testing.T) {
 	// Given:
 	// Create a handler with a custom provider that implements only the required interface
-	handler := queries.NewTopicManagerDocumentationHandler(&TopicManagerDocumentationProviderAlwaysSuccess{})
+	handler, err := queries.NewTopicManagerDocumentationHandler(&TopicManagerDocumentationProviderAlwaysSuccess{})
+	require.NoError(t, err)
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
@@ -89,8 +92,10 @@ func TestNewTopicManagerDocumentationHandler_WithNilProvider(t *testing.T) {
 	// Given:
 	var provider queries.TopicManagerDocumentationProvider = nil
 
-	// When & Then:
-	assert.Panics(t, func() {
-		queries.NewTopicManagerDocumentationHandler(provider)
-	}, "Expected panic when provider is nil")
+	// When:
+	handler, err := queries.NewTopicManagerDocumentationHandler(provider)
+	require.NoError(t, err)
+
+	// Then:
+	require.Nil(t, handler)
 }
