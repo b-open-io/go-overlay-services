@@ -1,12 +1,17 @@
 package server_test
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"sync"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/server"
 	"github.com/stretchr/testify/require"
+
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
+	"github.com/4chain-ag/go-overlay-services/pkg/server"
 )
 
 func Test_AuthorizationBearerTokenMiddleware(t *testing.T) {
@@ -58,4 +63,39 @@ func Test_AuthorizationBearerTokenMiddleware(t *testing.T) {
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
 		})
 	}
+}
+
+func Test_HTTPServer_ShouldShutdownAfterSendingInterruptSig(t *testing.T) {
+	// given:
+	cfg := config.Defaults()
+	opts := []server.HTTPOption{
+		server.WithConfig(&cfg),
+	}
+	httpAPI := server.New(opts...)
+
+	// when:
+	done := httpAPI.StartWithGracefulShutdown()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		slog.Info("Sending os.Interrupt signal to the HTTP API", slog.Attr{
+			Key:   "process_id",
+			Value: slog.IntValue(os.Getpid()),
+		})
+
+		process, err := os.FindProcess(os.Getpid())
+		require.NoError(t, err, "Failed to find HTTP API process")
+
+		require.NoError(t, process.Signal(os.Interrupt), "Failed to send os.Interrupt signal to the HTTP API")
+	}()
+
+	wg.Wait()
+
+	// then:
+	_, ok := <-done
+	require.False(t, ok, "Server did not shut down as expected")
 }
