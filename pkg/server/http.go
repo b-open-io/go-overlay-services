@@ -51,6 +51,18 @@ func WithMongo() HTTPOption {
 	}
 }
 
+// WithBodyClose is a middleware that ensures the request body is closed after processing.
+// This is important for memory management and preventing resource leaks.
+// It is particularly useful when using http.HandlerFunc to handle requests.
+func WithBodyClose(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			_ = r.Body.Close()
+		}()
+		h(w, r)
+	}
+}
+
 // HTTP manages connections to the overlay server instance. It accepts and responds to client sockets,
 // using idempotency to improve fault tolerance and mitigate duplicated requests.
 // It applies all configured options along with the list of middlewares.
@@ -96,14 +108,14 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	v1 := api.Group("/v1")
 
 	// Non-Admin:
-	v1.Post("/submit", adaptor.HTTPHandlerFunc(overlayAPI.Commands.SubmitTransactionHandler.Handle))
-	v1.Get("/topic-managers", adaptor.HTTPHandlerFunc(overlayAPI.Queries.TopicManagerDocumentationHandler.Handle))
-	v1.Post("/request-foreign-gasp-node", adaptor.HTTPHandlerFunc(overlayAPI.Commands.RequestForeignGASPNodeHandler.Handle))
+	v1.Post("/submit", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Commands.SubmitTransactionHandler.Handle)))
+	v1.Get("/topic-managers", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Queries.TopicManagerDocumentationHandler.Handle)))
+	v1.Post("/request-foreign-gasp-node", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Commands.RequestForeignGASPNodeHandler.Handle)))
 
 	// Admin:
 	admin := v1.Group("/admin", adaptor.HTTPMiddleware(AdminAuth(http.cfg.AdminBearerToken)))
-	admin.Post("/advertisements-sync", adaptor.HTTPHandlerFunc(overlayAPI.Commands.SyncAdvertismentsHandler.Handle))
-	admin.Post("/start-gasp-sync", adaptor.HTTPHandlerFunc(overlayAPI.Commands.StartGASPSyncHandler.Handle))
+	admin.Post("/advertisements-sync", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Commands.SyncAdvertismentsHandler.Handle)))
+	admin.Post("/start-gasp-sync", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Commands.StartGASPSyncHandler.Handle)))
 
 	return http, nil
 }
