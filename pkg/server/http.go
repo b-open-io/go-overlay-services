@@ -5,14 +5,15 @@ import (
 	"net/http"
 	"strings"
 
-	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/idempotency"
+
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 )
 
 // HTTPOption defines a functional option for configuring an HTTP server.
@@ -63,6 +64,14 @@ func WithBodyClose(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// SafeHandler is a wrapper for http.HandlerFunc that ensures the request body is closed after processing.
+// This is important for memory management and preventing resource leaks.
+// It is particularly useful when using http.HandlerFunc to handle requests.
+// It is a convenience function that combines WithBodyClose with adaptor.HTTPHandlerFunc.
+func SafeHandler(h http.HandlerFunc) fiber.Handler {
+	return adaptor.HTTPHandlerFunc(WithBodyClose(h))
+}
+
 // HTTP manages connections to the overlay server instance. It accepts and responds to client sockets,
 // using idempotency to improve fault tolerance and mitigate duplicated requests.
 // It applies all configured options along with the list of middlewares.
@@ -108,14 +117,14 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	v1 := api.Group("/v1")
 
 	// Non-Admin:
-	v1.Post("/submit", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Commands.SubmitTransactionHandler.Handle)))
-	v1.Get("/topic-managers", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Queries.TopicManagerDocumentationHandler.Handle)))
-	v1.Post("/request-foreign-gasp-node", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Commands.RequestForeignGASPNodeHandler.Handle)))
+	v1.Post("/submit", SafeHandler(overlayAPI.Commands.SubmitTransactionHandler.Handle))
+	v1.Get("/topic-managers", SafeHandler(overlayAPI.Queries.TopicManagerDocumentationHandler.Handle))
+	v1.Post("/request-foreign-gasp-node", SafeHandler(overlayAPI.Commands.RequestForeignGASPNodeHandler.Handle))
 
 	// Admin:
 	admin := v1.Group("/admin", adaptor.HTTPMiddleware(AdminAuth(http.cfg.AdminBearerToken)))
-	admin.Post("/advertisements-sync", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Commands.SyncAdvertismentsHandler.Handle)))
-	admin.Post("/start-gasp-sync", adaptor.HTTPHandlerFunc(WithBodyClose(overlayAPI.Commands.StartGASPSyncHandler.Handle)))
+	admin.Post("/advertisements-sync", SafeHandler(overlayAPI.Commands.SyncAdvertismentsHandler.Handle))
+	admin.Post("/start-gasp-sync", SafeHandler(overlayAPI.Commands.StartGASPSyncHandler.Handle))
 
 	return http, nil
 }
