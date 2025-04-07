@@ -11,16 +11,17 @@ import (
 	"syscall"
 	"time"
 
-	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/idempotency"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gookit/slog"
+
+	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
 )
 
 // HTTPOption defines a functional option for configuring an HTTP server.
@@ -134,6 +135,7 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	v1.Post("/submit", SafeHandler(overlayAPI.Commands.SubmitTransactionHandler.Handle))
 	v1.Get("/topic-managers", SafeHandler(overlayAPI.Queries.TopicManagerDocumentationHandler.Handle))
 	v1.Post("/request-foreign-gasp-node", SafeHandler(overlayAPI.Commands.RequestForeignGASPNodeHandler.Handle))
+	v1.Post("/request-sync-response", SafeHandler(overlayAPI.Commands.RequestSyncResponseHandler.Handle))
 
 	// Admin:
 	admin := v1.Group("/admin", adaptor.HTTPMiddleware(AdminAuth(http.cfg.AdminBearerToken)))
