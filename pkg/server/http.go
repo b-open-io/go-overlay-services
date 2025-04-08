@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -57,7 +58,9 @@ func WithMongo() HTTPOption {
 func WithBodyClose(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
-			_ = r.Body.Close()
+			if err := r.Body.Close(); err != nil {
+				slog.Error("failed to close request body", "error", err)
+			}
 		}()
 		h(w, r)
 	}
