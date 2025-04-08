@@ -10,7 +10,6 @@ import (
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -124,9 +123,9 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 
 	// then:
 	require.NoError(t, err)
-	assert.NotNil(t, node)
-	assert.Equal(t, graphID, node.GraphID)
-	assert.Equal(t, outpoint.OutputIndex, node.OutputIndex)
+	require.NotNil(t, node)
+	require.Equal(t, graphID, node.GraphID)
+	require.Equal(t, outpoint.OutputIndex, node.OutputIndex)
 }
 
 func TestEngine_ProvideForeignGASPNode_MissingBeef_ShouldReturnError(t *testing.T) {
@@ -147,7 +146,7 @@ func TestEngine_ProvideForeignGASPNode_MissingBeef_ShouldReturnError(t *testing.
 
 	// then:
 	require.Error(t, err)
-	assert.Nil(t, node)
+	require.Nil(t, node)
 }
 
 func TestEngine_ProvideForeignGASPNode_CannotFindOutput_ShouldReturnError(t *testing.T) {
@@ -168,7 +167,7 @@ func TestEngine_ProvideForeignGASPNode_CannotFindOutput_ShouldReturnError(t *tes
 
 	// then:
 	require.Error(t, err)
-	assert.Nil(t, node)
+	require.Nil(t, node)
 }
 
 func TestEngine_ProvideForeignGASPNode_TransactionNotFound_ShouldReturnError(t *testing.T) {
@@ -191,5 +190,5 @@ func TestEngine_ProvideForeignGASPNode_TransactionNotFound_ShouldReturnError(t *
 
 	// then:
 	require.Error(t, err)
-	assert.Nil(t, node)
+	require.Nil(t, node)
 }
