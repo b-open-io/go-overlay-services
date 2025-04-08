@@ -5,14 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
 )
 
 // fakeStorage provides minimal stub for Storage interface
@@ -29,7 +28,6 @@ func (f fakeStorage) InsertOutput(ctx context.Context, utxo *engine.Output) erro
 func (f fakeStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 	return f.findOutputFunc(ctx, outpoint, topic, spent, includeBEEF)
 }
-
 
 func (f fakeStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
 	return nil, errFakeStorage
@@ -82,7 +80,7 @@ func (f fakeStorage) DoesAppliedTransactionExist(ctx context.Context, tx *overla
 func createDummyBeef(t *testing.T) []byte {
 	t.Helper()
 
-	dummyLockingScript := script.Script{script.OpRETURN} 
+	dummyLockingScript := script.Script{script.OpRETURN}
 
 	dummyTx := transaction.Transaction{
 		Inputs: []*transaction.TransactionInput{},
