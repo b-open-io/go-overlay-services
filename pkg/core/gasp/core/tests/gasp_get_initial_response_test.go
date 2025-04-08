@@ -5,11 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/stretchr/testify/require"
-
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 )
 
 type fakeGASPStorage struct {
@@ -56,8 +55,8 @@ func TestGASP_GetInitialResponse_Success(t *testing.T) {
 		{OutputIndex: 2},
 	}
 	gasp := core.NewGASP(core.GASPParams{
-		Version:  ptr(1),
-		Storage:  fakeGASPStorage{
+		Version: ptr(1),
+		Storage: fakeGASPStorage{
 			findKnownUTXOsFunc: func(ctx context.Context, since uint32) ([]*overlay.Outpoint, error) {
 				return expectedUTXOs, nil
 			},
