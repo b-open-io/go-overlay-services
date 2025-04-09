@@ -156,7 +156,11 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	}
 
 	if http.api == nil {
-		http.api, _ = app.New(NewNoopEngineProvider())
+		overlayAPI, err := app.New(NewNoopEngineProvider())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create overlay API: %w", err)
+		}
+		http.api = overlayAPI
 	}
 
 	// Routes...
