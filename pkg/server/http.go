@@ -37,6 +37,7 @@ func WithMiddleware(f func(http.Handler) http.Handler) HTTPOption {
 	}
 }
 
+// WithFiberMiddleware adds Fiber middleware to the HTTP server.
 func WithFiberMiddleware(f fiber.Handler) HTTPOption {
 	return func(h *HTTP) error {
 		h.middleware = append(h.middleware, f)
@@ -44,6 +45,7 @@ func WithFiberMiddleware(f fiber.Handler) HTTPOption {
 	}
 }
 
+// WithRouter adds a custom routes to the HTTP server.
 func WithRouter(f func(r fiber.Router)) HTTPOption {
 	return func(h *HTTP) error {
 		h.routers = append(h.routers, f)
@@ -59,6 +61,7 @@ func WithConfig(cfg *config.Config) HTTPOption {
 	}
 }
 
+// WithEngine sets the overlay engine provider for the HTTP server.
 func WithEngine(engineProvider engine.OverlayEngineProvider) HTTPOption {
 	return func(h *HTTP) error {
 		if engineProvider == nil {
