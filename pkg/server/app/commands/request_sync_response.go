@@ -29,7 +29,6 @@ func NewRequestSyncResponseHandler(provider ForeignSyncResponseProvider) (*Reque
 
 // Handle processes the HTTP POST /request-sync-response request.
 func (h *RequestSyncResponseHandler) Handle(w http.ResponseWriter, r *http.Request) {
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

@@ -44,7 +44,9 @@ func TestRequestSyncResponseHandler_Success(t *testing.T) {
 		Version: 1,
 		Since:   1000,
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	require.NotEmpty(t, body)
+	require.NoError(t, err)
 
 	// When:
 	resp, err := ts.Client().Post(ts.URL+"?topic=example-topic", "application/json", bytes.NewReader(body))
@@ -66,7 +68,9 @@ func TestRequestSyncResponseHandler_MissingTopic(t *testing.T) {
 		Version: 1,
 		Since:   1000,
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	require.NotEmpty(t, body)
+	require.NoError(t, err)
 
 	// When:
 	resp, err := ts.Client().Post(ts.URL, "application/json", bytes.NewReader(body))
@@ -108,7 +112,9 @@ func TestRequestSyncResponseHandler_InternalServerError(t *testing.T) {
 		Version: 1,
 		Since:   1000,
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	require.NotEmpty(t, body)
+	require.NoError(t, err)
 
 	// When:
 	resp, err := ts.Client().Post(ts.URL+"?topic=example-topic", "application/json", bytes.NewReader(body))
