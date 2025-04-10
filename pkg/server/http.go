@@ -170,8 +170,8 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	// Non-Admin:
 	v1.Post("/submit", SafeHandler(http.api.Commands.SubmitTransactionHandler.Handle))
 	v1.Get("/listTopicManagers", SafeHandler(http.api.Queries.TopicManagerDocumentationHandler.Handle))
-	v1.Post("/requestSyncResponse", SafeHandler(http.api.Commands.RequestForeignGASPNodeHandler.Handle))
-	v1.Post("/requestForeignGASPNode", SafeHandler(http.api.Commands.RequestSyncResponseHandler.Handle))
+	v1.Post("/requestSyncResponse", SafeHandler(http.api.Commands.RequestSyncResponseHandler.Handle))
+	v1.Post("/requestForeignGASPNode", SafeHandler(http.api.Commands.RequestForeignGASPNodeHandler.Handle))
 
 	for _, r := range http.routers {
 		r(v1)
