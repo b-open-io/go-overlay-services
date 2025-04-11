@@ -179,12 +179,13 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			continue
 		} else {
 			topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
-			previousCoins := make([]uint32, 0, len(tx.Inputs))
+			previousCoins := make(map[uint32][]byte, len(tx.Inputs))
 			for vin, outpoint := range inpoints {
-				if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, false); err != nil {
+				if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true); err != nil {
 					return nil, err
 				} else if output != nil {
-					previousCoins = append(previousCoins, uint32(vin))
+					previousCoins[uint32(vin)] = output.Beef
+					// previousCoins = append(previousCoins, uint32(vin))
 					topicInputs[topic][uint32(vin)] = output
 				}
 			}

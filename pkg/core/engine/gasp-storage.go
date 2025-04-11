@@ -104,16 +104,16 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 				return nil, err
 			}
 		}
-		previousCoins := make([]uint32, 0, len(tx.Inputs))
+		previousCoins := make(map[uint32][]byte, len(tx.Inputs))
 		for vin, input := range tx.Inputs {
 			outpoint := &overlay.Outpoint{
 				Txid:        *input.SourceTXID,
 				OutputIndex: input.SourceTxOutIndex,
 			}
-			if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, &s.Topic, nil, false); err != nil {
+			if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, &s.Topic, nil, true); err != nil {
 				return nil, err
 			} else if output != nil {
-				previousCoins = append(previousCoins, uint32(vin))
+				previousCoins[uint32(vin)] = output.Beef
 			}
 		}
 
@@ -212,16 +212,16 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *o
 			if tx, err := transaction.NewTransactionFromBEEF(beefBytes); err != nil {
 				return err
 			} else {
-				previousCoins := make([]uint32, 0, len(tx.Inputs))
+				previousCoins := make(map[uint32][]byte, len(tx.Inputs))
 				for vin, input := range tx.Inputs {
 					outpoint := &overlay.Outpoint{
 						Txid:        *input.SourceTXID,
 						OutputIndex: input.SourceTxOutIndex,
 					}
-					if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, &s.Topic, nil, false); err != nil {
+					if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, &s.Topic, nil, true); err != nil {
 						return err
 					} else if output != nil {
-						previousCoins = append(previousCoins, uint32(vin))
+						previousCoins[uint32(vin)] = output.Beef
 					}
 				}
 				if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissableOutputs(ctx, beef, previousCoins); err != nil {
