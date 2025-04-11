@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/script"
@@ -18,10 +19,8 @@ type fakeStorage struct {
 	findOutputFunc func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error)
 }
 
-var errFakeStorage = errors.New("fakeStorage: method not implemented")
-
 func (f fakeStorage) InsertOutput(ctx context.Context, utxo *engine.Output) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
@@ -29,75 +28,80 @@ func (f fakeStorage) FindOutput(ctx context.Context, outpoint *overlay.Outpoint,
 }
 
 func (f fakeStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
-	return nil, errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error) {
-	return nil, errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) FindUTXOsForTopic(ctx context.Context, topic string, since uint32, includeBEEF bool) ([]*engine.Output, error) {
-	return nil, errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) DeleteOutput(ctx context.Context, outpoint *overlay.Outpoint, topic string) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) DeleteOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) MarkUTXOAsSpent(ctx context.Context, outpoint *overlay.Outpoint, topic string) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) MarkUTXOsAsSpent(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) UpdateConsumedBy(ctx context.Context, outpoint *overlay.Outpoint, topic string, consumedBy []*overlay.Outpoint) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) UpdateTransactionBEEF(ctx context.Context, txid *chainhash.Hash, beef []byte) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *overlay.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) InsertAppliedTransaction(ctx context.Context, tx *overlay.AppliedTransaction) error {
-	return errFakeStorage
+	panic("method not implemented")
 }
 
 func (f fakeStorage) DoesAppliedTransactionExist(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
-	return false, errFakeStorage
+	panic("method not implemented")
 }
 
-func createDummyBeef(t *testing.T) []byte {
+func createDummyBEEF(t *testing.T) []byte {
 	t.Helper()
-
-	dummyLockingScript := script.Script{script.OpRETURN}
 
 	dummyTx := transaction.Transaction{
 		Inputs: []*transaction.TransactionInput{},
 		Outputs: []*transaction.TransactionOutput{
 			{
 				Satoshis:      1000,
-				LockingScript: &dummyLockingScript,
+				LockingScript: &script.Script{script.OpRETURN},
 			},
 		},
 	}
 
-	beef, err := transaction.NewBeefFromTransaction(&dummyTx)
+	BEEF, err := transaction.NewBeefFromTransaction(&dummyTx)
 	require.NoError(t, err)
 
-	serializedBytes, err := beef.AtomicBytes(dummyTx.TxID())
+	bytes, err := BEEF.AtomicBytes(dummyTx.TxID())
 	require.NoError(t, err)
+	return bytes
+}
 
-	return serializedBytes
+func parseBEEFToTx(t *testing.T, bytes []byte) *transaction.Transaction {
+	t.Helper()
+
+	_, tx, _, err := transaction.ParseBeef(bytes)
+	require.NoError(t, err)
+	return tx
 }
 
 func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
@@ -105,27 +109,28 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 	ctx := context.Background()
 	graphID := &overlay.Outpoint{}
 	outpoint := &overlay.Outpoint{OutputIndex: 1}
+	BEEF := createDummyBEEF(t)
 
-	beefBytes := createDummyBeef(t)
+	expectedNode := &core.GASPNode{
+		GraphID:     graphID,
+		RawTx:       parseBEEFToTx(t, BEEF).Hex(),
+		OutputIndex: outpoint.OutputIndex,
+	}
 
-	engine := &engine.Engine{
+	sut := &engine.Engine{
 		Storage: fakeStorage{
 			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
-				return &engine.Output{
-					Beef: beefBytes,
-				}, nil
+				return &engine.Output{Beef: BEEF}, nil
 			},
 		},
 	}
 
 	// when:
-	node, err := engine.ProvideForeignGASPNode(ctx, graphID, outpoint)
+	node, err := sut.ProvideForeignGASPNode(ctx, graphID, outpoint)
 
 	// then:
 	require.NoError(t, err)
-	require.NotNil(t, node)
-	require.Equal(t, graphID, node.GraphID)
-	require.Equal(t, outpoint.OutputIndex, node.OutputIndex)
+	require.Equal(t, expectedNode, node)
 }
 
 func TestEngine_ProvideForeignGASPNode_MissingBeef_ShouldReturnError(t *testing.T) {
@@ -133,7 +138,8 @@ func TestEngine_ProvideForeignGASPNode_MissingBeef_ShouldReturnError(t *testing.
 	ctx := context.Background()
 	graphID := &overlay.Outpoint{}
 	outpoint := &overlay.Outpoint{}
-	engine := &engine.Engine{
+
+	sut := &engine.Engine{
 		Storage: fakeStorage{
 			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 				return &engine.Output{}, nil // Missing Beef
@@ -142,10 +148,10 @@ func TestEngine_ProvideForeignGASPNode_MissingBeef_ShouldReturnError(t *testing.
 	}
 
 	// when:
-	node, err := engine.ProvideForeignGASPNode(ctx, graphID, outpoint)
+	node, err := sut.ProvideForeignGASPNode(ctx, graphID, outpoint)
 
 	// then:
-	require.Error(t, err)
+	require.ErrorIs(t, err, engine.ErrMissingInput)
 	require.Nil(t, node)
 }
 
@@ -154,19 +160,21 @@ func TestEngine_ProvideForeignGASPNode_CannotFindOutput_ShouldReturnError(t *tes
 	ctx := context.Background()
 	graphID := &overlay.Outpoint{}
 	outpoint := &overlay.Outpoint{}
-	engine := &engine.Engine{
+	expectedErr := errors.New("forced error")
+
+	sut := &engine.Engine{
 		Storage: fakeStorage{
 			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
-				return nil, errors.New("forced error")
+				return nil, expectedErr
 			},
 		},
 	}
 
 	// when:
-	node, err := engine.ProvideForeignGASPNode(ctx, graphID, outpoint)
+	node, err := sut.ProvideForeignGASPNode(ctx, graphID, outpoint)
 
 	// then:
-	require.Error(t, err)
+	require.ErrorIs(t, err, expectedErr)
 	require.Nil(t, node)
 }
 
@@ -175,20 +183,19 @@ func TestEngine_ProvideForeignGASPNode_TransactionNotFound_ShouldReturnError(t *
 	ctx := context.Background()
 	graphID := &overlay.Outpoint{}
 	outpoint := &overlay.Outpoint{}
-	engine := &engine.Engine{
+
+	sut := &engine.Engine{
 		Storage: fakeStorage{
 			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
-				return &engine.Output{
-					Beef: []byte{0x00},
-				}, nil
+				return &engine.Output{Beef: []byte{0x00}}, nil
 			},
 		},
 	}
 
 	// when:
-	node, err := engine.ProvideForeignGASPNode(ctx, graphID, outpoint)
+	node, err := sut.ProvideForeignGASPNode(ctx, graphID, outpoint)
 
 	// then:
-	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid-atomic-beef") // temp solution
 	require.Nil(t, node)
 }
