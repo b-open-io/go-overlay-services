@@ -633,6 +633,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					},
 					LogPrefix:      &logPrefix,
 					Unidirectional: true,
+					Concurrency:    8,
 				})
 				if err := gasp.Sync(ctx); err != nil {
 					log.Println("Failed to sync with peer", peer, ":", err)
