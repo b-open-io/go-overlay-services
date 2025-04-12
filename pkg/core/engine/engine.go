@@ -41,8 +41,9 @@ const (
 )
 
 type SyncConfiguration struct {
-	Type  SyncConfigurationType
-	Peers []string
+	Type        SyncConfigurationType
+	Peers       []string
+	Concurrency int
 }
 
 type OnSteakReady func(steak *overlay.Steak)
@@ -630,7 +631,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					},
 					LogPrefix:      &logPrefix,
 					Unidirectional: true,
-					Concurrency:    8,
+					Concurrency:    syncEndpoints.Concurrency,
 				})
 				if err := gasp.Sync(ctx); err != nil {
 					log.Println("Failed to sync with peer", peer, ":", err)
