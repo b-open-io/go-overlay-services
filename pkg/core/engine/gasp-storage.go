@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
@@ -24,18 +25,18 @@ type GraphNode struct {
 }
 
 type OverlayGASPStorage struct {
-	Topic             string
-	Engine            *Engine
-	MaxNodesInGraph   *int
-	tempGraphNodeRefs map[string]*GraphNode
+	Topic              string
+	Engine             *Engine
+	MaxNodesInGraph    *int
+	tempGraphNodeRefs  sync.Map
+	tempGraphNodeCount int
 }
 
 func NewOverlayGASPStorage(topic string, engine *Engine, maxNodesInGraph *int) *OverlayGASPStorage {
 	return &OverlayGASPStorage{
-		Topic:             topic,
-		Engine:            engine,
-		MaxNodesInGraph:   maxNodesInGraph,
-		tempGraphNodeRefs: make(map[string]*GraphNode),
+		Topic:           topic,
+		Engine:          engine,
+		MaxNodesInGraph: maxNodesInGraph,
 	}
 }
 
@@ -158,7 +159,7 @@ func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, respons
 }
 
 func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GASPNode, spentBy *chainhash.Hash) error {
-	if s.MaxNodesInGraph != nil && len(s.tempGraphNodeRefs) >= *s.MaxNodesInGraph {
+	if s.MaxNodesInGraph != nil && s.tempGraphNodeCount >= *s.MaxNodesInGraph {
 		return ErrGraphFull
 	}
 
@@ -177,15 +178,20 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 			Children: []*GraphNode{},
 		}
 		if spentBy == nil {
-			s.tempGraphNodeRefs[gaspTx.GraphID.String()] = newGraphNode
-		} else if parentNode, ok := s.tempGraphNodeRefs[gaspTx.GraphID.String()]; ok {
+			if _, ok := s.tempGraphNodeRefs.LoadOrStore(gaspTx.GraphID.String(), newGraphNode); !ok {
+				s.tempGraphNodeCount++
+			}
+		} else if node, ok := s.tempGraphNodeRefs.Load(gaspTx.GraphID.String()); ok {
+			parentNode := node.(*GraphNode)
 			parentNode.Children = append(parentNode.Children, newGraphNode)
 			newGraphNode.Parent = parentNode
 			newGraphOutpoint := &overlay.Outpoint{
 				Txid:        *txid,
 				OutputIndex: gaspTx.OutputIndex,
 			}
-			s.tempGraphNodeRefs[newGraphOutpoint.String()] = newGraphNode
+			if _, ok := s.tempGraphNodeRefs.LoadOrStore(newGraphOutpoint.String(), newGraphNode); !ok {
+				s.tempGraphNodeCount++
+			}
 		} else {
 			return ErrMissingInput
 		}
@@ -194,9 +200,9 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 }
 
 func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *overlay.Outpoint) error {
-	if rootNode, ok := s.tempGraphNodeRefs[graphID.String()]; !ok {
+	if rootNode, ok := s.tempGraphNodeRefs.Load(graphID.String()); !ok {
 		return ErrMissingInput
-	} else if beef, err := s.getBEEFForNode(rootNode); err != nil {
+	} else if beef, err := s.getBEEFForNode(rootNode.(*GraphNode)); err != nil {
 		return err
 	} else if tx, err := transaction.NewTransactionFromBEEF(beef); err != nil {
 		return err
@@ -245,11 +251,14 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *o
 }
 
 func (s *OverlayGASPStorage) DiscardGraph(ctx context.Context, graphID *overlay.Outpoint) error {
-	for nodeId, graphRef := range s.tempGraphNodeRefs {
-		if graphRef.GraphID.String() == graphID.String() {
-			delete(s.tempGraphNodeRefs, nodeId)
+	s.tempGraphNodeRefs.Range(func(nodeId, graphRef any) bool {
+		if graphRef.(*GraphNode).GraphID.Equal(graphID) {
+			s.tempGraphNodeRefs.Delete(nodeId)
+			s.tempGraphNodeCount--
+			return false
 		}
-	}
+		return true
+	})
 	return nil
 }
 
@@ -295,9 +304,9 @@ func (s *OverlayGASPStorage) computeOrderedBEEFsForGraph(ctx context.Context, gr
 		return nil
 	}
 
-	if foundRoot, ok := s.tempGraphNodeRefs[graphID.String()]; !ok {
+	if foundRoot, ok := s.tempGraphNodeRefs.Load(graphID.String()); !ok {
 		return nil, errors.New("unable to find root node in graph for finalization")
-	} else if err := hydrator(foundRoot); err != nil {
+	} else if err := hydrator(foundRoot.(*GraphNode)); err != nil {
 		return nil, err
 	} else {
 		return beefs, nil
@@ -320,9 +329,9 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 					Txid:        *input.SourceTXID,
 					OutputIndex: input.SourceTxOutIndex,
 				}
-				if foundNode, ok := s.tempGraphNodeRefs[outpoint.String()]; !ok {
+				if foundNode, ok := s.tempGraphNodeRefs.Load(outpoint.String()); !ok {
 					return nil, errors.New("required input node for unproven parent not found in temporary graph store")
-				} else if tx.Inputs[vin].SourceTransaction, err = hydrator(foundNode); err != nil {
+				} else if tx.Inputs[vin].SourceTransaction, err = hydrator(foundNode.(*GraphNode)); err != nil {
 					return nil, err
 				}
 			}
