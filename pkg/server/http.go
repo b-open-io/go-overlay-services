@@ -11,18 +11,44 @@ import (
 	"syscall"
 	"time"
 
-	config "github.com/4chain-ag/go-overlay-services/pkg/appconfig"
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/app/jsonutil"
-	"github.com/4chain-ag/go-overlay-services/pkg/server/mongo"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/internal/app"
+	"github.com/4chain-ag/go-overlay-services/pkg/server/internal/app/jsonutil"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/idempotency"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/google/uuid"
 	"github.com/gookit/slog"
 )
+
+// Config holds the configuration settings for the HTTP server
+type Config struct {
+	// AppName is the name of the application.
+	AppName string `mapstructure:"app_name"`
+
+	// Port is the TCP port on which the server will listen.
+	Port int `mapstructure:"port"`
+
+	// Addr is the address the server will bind to.
+	Addr string `mapstructure:"addr"`
+
+	// ServerHeader is the value of the Server header returned in HTTP responses.
+	ServerHeader string `mapstructure:"server_header"`
+
+	// AdminBearerToken is the token required to access admin-only endpoints.
+	AdminBearerToken string `mapstructure:"admin_bearer_token"`
+}
+
+// DefaultConfig provides a default configuration with reasonable values for local development.
+var DefaultConfig = Config{
+	AppName:          "Overlay API v0.0.0",
+	Port:             3000,
+	Addr:             "localhost",
+	ServerHeader:     "Overlay API",
+	AdminBearerToken: uuid.NewString(),
+}
 
 // HTTPOption defines a functional option for configuring an HTTP server.
 // These options allow for flexible setup of middlewares and configurations.
@@ -54,9 +80,15 @@ func WithRouter(f func(r fiber.Router)) HTTPOption {
 }
 
 // WithConfig sets the configuration for the HTTP server.
-func WithConfig(cfg *config.Config) HTTPOption {
+func WithConfig(cfg *Config) HTTPOption {
 	return func(h *HTTP) error {
 		h.cfg = cfg
+		h.app = fiber.New(fiber.Config{
+			CaseSensitive: true,
+			StrictRouting: true,
+			ServerHeader:  cfg.ServerHeader,
+			AppName:       cfg.AppName,
+		})
 		return nil
 	}
 }
@@ -72,21 +104,6 @@ func WithEngine(engineProvider engine.OverlayEngineProvider) HTTPOption {
 			return fmt.Errorf("failed to create overlay API: %w", err)
 		}
 		h.api = overlayAPI
-		return nil
-	}
-}
-
-// WithMongo sets the MongoDB client for the HTTP server based on the configuration.
-func WithMongo() HTTPOption {
-	return func(h *HTTP) error {
-		if h.cfg == nil || h.cfg.Mongo.URI == "" {
-			return nil
-		}
-		client, err := mongo.Connect(h.cfg)
-		if err != nil {
-			return fmt.Errorf("MongoDB connect failed: %w", err)
-		}
-		h.mongo = client
 		return nil
 	}
 }
@@ -119,8 +136,7 @@ func SafeHandler(h http.HandlerFunc) fiber.Handler {
 type HTTP struct {
 	middleware []fiber.Handler
 	app        *fiber.App
-	cfg        *config.Config
-	mongo      *mongo.Client
+	cfg        *Config
 	api        *app.Application
 	routers    []func(fiber.Router)
 }
@@ -128,6 +144,7 @@ type HTTP struct {
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.
 func New(opts ...HTTPOption) (*HTTP, error) {
 	http := &HTTP{
+		cfg: &DefaultConfig,
 		app: fiber.New(fiber.Config{
 			CaseSensitive: true,
 			StrictRouting: true,
@@ -168,14 +185,18 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	v1 := api.Group("/v1")
 
 	// Non-Admin:
-	v1.Post("/submit", SafeHandler(http.api.Commands.SubmitTransactionHandler.Handle))
-	v1.Get("/listTopicManagers", SafeHandler(http.api.Queries.TopicManagerDocumentationHandler.Handle))
-	v1.Post("/requestSyncResponse", SafeHandler(http.api.Commands.RequestSyncResponseHandler.Handle))
-	v1.Post("/requestForeignGASPNode", SafeHandler(http.api.Commands.RequestForeignGASPNodeHandler.Handle))
-
 	for _, r := range http.routers {
 		r(v1)
 	}
+
+	v1.Get("/getDocumentationForTopicManager", SafeHandler(http.api.Queries.TopicManagerDocumentationHandler.Handle))
+	v1.Get("/getDocumentationForLookupServiceProvider", SafeHandler(http.api.Queries.LookupServiceDocumentationHandler.Handle))
+	v1.Get("/listLookupServiceProviders", SafeHandler(http.api.Queries.LookupServicesListHandler.Handle))
+	v1.Post("/submit", SafeHandler(http.api.Commands.SubmitTransactionHandler.Handle))
+	v1.Post("/lookup", SafeHandler(http.api.Commands.LookupQuestionHandler.Handle))
+	v1.Get("/listTopicManagers", SafeHandler(http.api.Queries.TopicManagerDocumentationHandler.Handle))
+	v1.Post("/requestSyncResponse", SafeHandler(http.api.Commands.RequestSyncResponseHandler.Handle))
+	v1.Post("/requestForeignGASPNode", SafeHandler(http.api.Commands.RequestForeignGASPNodeHandler.Handle))
 
 	// Admin:
 	admin := v1.Group("/admin", adaptor.HTTPMiddleware(AdminAuth(http.cfg.AdminBearerToken)))

@@ -223,10 +223,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 		}
 	}
-	// if e.Verbose {
-	// 	fmt.Println("Identified in", time.Since(start))
-	// 	start = time.Now()
-	// }
+
 	for _, topic := range taggedBEEF.Topics {
 		if _, ok := dupeTopics[topic]; ok {
 			continue
