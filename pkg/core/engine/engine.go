@@ -656,8 +656,7 @@ func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest 
 	}
 }
 
-func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Outpoint, outpoint *overlay.Outpoint) (*core.GASPNode, error) {
-	log.Println("ProvideForeignGASPNode", graphId.String(), outpoint.String())
+func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Outpoint, outpoint *overlay.Outpoint, topic string) (*core.GASPNode, error) {
 	var hydrator func(ctx context.Context, output *Output) (*core.GASPNode, error)
 	hydrator = func(ctx context.Context, output *Output) (*core.GASPNode, error) {
 		if output.Beef == nil {
@@ -666,7 +665,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Ou
 			return nil, err
 		} else if tx == nil {
 			for _, outpoint := range output.OutputsConsumed {
-				if output, err := e.Storage.FindOutput(ctx, outpoint, nil, nil, false); err == nil {
+				if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, false); err == nil {
 					return hydrator(ctx, output)
 				}
 			}
@@ -687,7 +686,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Ou
 		}
 
 	}
-	if output, err := e.Storage.FindOutput(ctx, graphId, nil, nil, true); err != nil {
+	if output, err := e.Storage.FindOutput(ctx, graphId, &topic, nil, true); err != nil {
 		return nil, err
 	} else {
 		return hydrator(ctx, output)
