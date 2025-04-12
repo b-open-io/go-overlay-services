@@ -185,7 +185,6 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					return nil, err
 				} else if output != nil {
 					previousCoins[uint32(vin)] = output.Beef
-					// previousCoins = append(previousCoins, uint32(vin))
 					topicInputs[topic][uint32(vin)] = output
 				}
 			}
@@ -241,7 +240,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			} else {
 				for _, l := range e.LookupServices {
 					for _, inpoint := range inpoints {
-						if err := l.OutputSpent(ctx, inpoint, topic); err != nil {
+						if err := l.OutputSpent(ctx, inpoint, topic, taggedBEEF.Beef); err != nil {
 							if e.PanicOnError {
 								log.Panicln(err)
 							}
@@ -330,7 +329,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 			newOutpoints = append(newOutpoints, &output.Outpoint)
 			for _, l := range e.LookupServices {
-				if err := l.OutputAdded(ctx, &output.Outpoint, output.Script, topic, output.BlockHeight, output.BlockIdx); err != nil {
+				if err := l.OutputAdded(ctx, &output.Outpoint, topic, output.Beef); err != nil {
 					if e.PanicOnError {
 						log.Panicln(err)
 					}
