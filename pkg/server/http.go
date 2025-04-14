@@ -71,14 +71,6 @@ func WithFiberMiddleware(f fiber.Handler) HTTPOption {
 	}
 }
 
-// WithRouter adds a custom routes to the HTTP server.
-func WithRouter(f func(r fiber.Router)) HTTPOption {
-	return func(h *HTTP) error {
-		h.routers = append(h.routers, f)
-		return nil
-	}
-}
-
 // WithConfig sets the configuration for the HTTP server.
 func WithConfig(cfg *Config) HTTPOption {
 	return func(h *HTTP) error {
@@ -134,11 +126,12 @@ func SafeHandler(h http.HandlerFunc) fiber.Handler {
 // using idempotency to improve fault tolerance and mitigate duplicated requests.
 // It applies all configured options along with the list of middlewares.
 type HTTP struct {
-	middleware []fiber.Handler
-	app        *fiber.App
-	cfg        *Config
-	api        *app.Application
-	routers    []func(fiber.Router)
+	middleware  []fiber.Handler
+	app         *fiber.App
+	cfg         *Config
+	api         *app.Application
+	Router      fiber.Router
+	AdminRouter fiber.Router
 }
 
 // New returns an instance of the HTTP server and applies all specified functional options before starting it.
@@ -183,12 +176,9 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 	// Routes...
 	api := http.app.Group("/api")
 	v1 := api.Group("/v1")
+	http.Router = v1
 
 	// Non-Admin:
-	for _, r := range http.routers {
-		r(v1)
-	}
-
 	v1.Get("/getDocumentationForTopicManager", SafeHandler(http.api.Queries.TopicManagerDocumentationHandler.Handle))
 	v1.Get("/getDocumentationForLookupServiceProvider", SafeHandler(http.api.Queries.LookupServiceDocumentationHandler.Handle))
 	v1.Get("/listLookupServiceProviders", SafeHandler(http.api.Queries.LookupServicesListHandler.Handle))
@@ -200,6 +190,7 @@ func New(opts ...HTTPOption) (*HTTP, error) {
 
 	// Admin:
 	admin := v1.Group("/admin", adaptor.HTTPMiddleware(AdminAuth(http.cfg.AdminBearerToken)))
+	http.AdminRouter = admin
 	admin.Post("/advertisements-sync", SafeHandler(http.api.Commands.SyncAdvertismentsHandler.Handle))
 	admin.Post("/start-gasp-sync", SafeHandler(http.api.Commands.StartGASPSyncHandler.Handle))
 
