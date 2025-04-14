@@ -18,10 +18,10 @@ import (
 const exampleTopic = "example-topic"
 
 // setSyncResponseRequestHeaders sets the headers required for GASP sync response requests in tests
-func setSyncResponseRequestHeaders(req *http.Request, includeBSVTopic bool) {
+func setSyncResponseRequestHeaders(req *http.Request, includeBSVTopic string) {
 	req.Header.Set(commands.ContentTypeHeader, commands.ContentTypeJSON)
-	if includeBSVTopic {
-		req.Header.Set(commands.XBSVTopicHeader, exampleTopic)
+	if includeBSVTopic != "" {
+		req.Header.Set(commands.XBSVTopicHeader, includeBSVTopic)
 	}
 }
 
@@ -55,11 +55,11 @@ func TestRequestSyncResponseHandler_Success(t *testing.T) {
 	}
 
 	// When:
-	req, err := http.NewRequest("POST", ts.URL, testutil.RequestBody(t, payload))
+	req, err := http.NewRequest(http.MethodPost, ts.URL, testutil.RequestBody(t, payload))
 	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-BSV-Topic", "test-topic")
-	resp, err := http.DefaultClient.Do(req)
+	setSyncResponseRequestHeaders(req, exampleTopic)
+
+	resp, err := ts.Client().Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -82,7 +82,7 @@ func TestRequestSyncResponseHandler_MissingTopic(t *testing.T) {
 	// When:
 	req, err := http.NewRequest(http.MethodPost, ts.URL, testutil.RequestBody(t, payload))
 	require.NoError(t, err)
-	setSyncResponseRequestHeaders(req, false)
+	setSyncResponseRequestHeaders(req, exampleTopic)
 
 	resp, err := ts.Client().Do(req)
 	require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestRequestSyncResponseHandler_InvalidJSON(t *testing.T) {
 	// When:
 	req, err := http.NewRequest(http.MethodPost, ts.URL, testutil.RequestBody(t, `{invalid-json}`))
 	require.NoError(t, err)
-	setSyncResponseRequestHeaders(req, true)
+	setSyncResponseRequestHeaders(req, exampleTopic)
 
 	resp, err := ts.Client().Do(req)
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestRequestSyncResponseHandler_MethodNotAllowed(t *testing.T) {
 	// When:
 	req, err := http.NewRequest(http.MethodGet, ts.URL, nil)
 	require.NoError(t, err)
-	setSyncResponseRequestHeaders(req, true)
+	setSyncResponseRequestHeaders(req, exampleTopic)
 
 	resp, err := ts.Client().Do(req)
 	require.NoError(t, err)
@@ -155,11 +155,11 @@ func TestRequestSyncResponseHandler_InternalServerError(t *testing.T) {
 	}
 
 	// When:
-	req, err := http.NewRequest("POST", ts.URL, testutil.RequestBody(t, payload))
+	req, err := http.NewRequest(http.MethodPost, ts.URL, testutil.RequestBody(t, payload))
 	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-BSV-Topic", "test-topic")
-	resp, err := http.DefaultClient.Do(req)
+	setSyncResponseRequestHeaders(req, exampleTopic)
+
+	resp, err := ts.Client().Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
