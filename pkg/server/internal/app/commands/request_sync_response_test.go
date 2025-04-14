@@ -1,7 +1,6 @@
 package commands_test
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -156,7 +155,7 @@ func TestRequestSyncResponseHandler_InternalServerError(t *testing.T) {
 	}
 
 	// When:
-	req, err := http.NewRequest("POST", ts.URL, bytes.NewReader(body))
+	req, err := http.NewRequest("POST", ts.URL, testutil.RequestBody(t, payload))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-BSV-Topic", "test-topic")
