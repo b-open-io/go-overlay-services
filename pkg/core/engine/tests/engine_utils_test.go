@@ -163,11 +163,11 @@ func (f fakeLookupService) Lookup(ctx context.Context, question *lookup.LookupQu
 	return nil, errors.New("lookup not implemented")
 }
 
-func (f fakeLookupService) OutputAdded(ctx context.Context, outpoint *overlay.Outpoint, outputScript *script.Script, topic string, blockHeight uint32, blockIndex uint64) error {
+func (f fakeLookupService) OutputAdded(context.Context, *overlay.Outpoint, string, []byte) error {
 	return nil
 }
 
-func (f fakeLookupService) OutputSpent(ctx context.Context, outpoint *overlay.Outpoint, topic string) error {
+func (f fakeLookupService) OutputSpent(context.Context, *overlay.Outpoint, string, []byte) error {
 	return nil
 }
 
