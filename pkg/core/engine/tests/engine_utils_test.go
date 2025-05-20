@@ -21,7 +21,7 @@ type fakeStorage struct {
 	findOutputsFunc                 func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error)
 	doesAppliedTransactionExistFunc func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error)
 	insertOutputFunc                func(ctx context.Context, utxo *engine.Output) error
-	markUTXOsAsSpentFunc            func(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error
+	markUTXOsAsSpentFunc            func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spendTxid *chainhash.Hash) error
 	insertAppliedTransactionFunc    func(ctx context.Context, tx *overlay.AppliedTransaction) error
 	updateConsumedByFunc            func(ctx context.Context, outpoint *overlay.Outpoint, topic string, consumedBy []*overlay.Outpoint) error
 	deleteOutputFunc                func(ctx context.Context, outpoint *overlay.Outpoint, topic string) error
@@ -96,9 +96,9 @@ func (f fakeStorage) DeleteOutputs(ctx context.Context, outpoints []*overlay.Out
 	panic("func not defined")
 }
 
-func (f fakeStorage) MarkUTXOsAsSpent(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
+func (f fakeStorage) MarkUTXOsAsSpent(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spendTxid *chainhash.Hash) error {
 	if f.markUTXOsAsSpentFunc != nil {
-		return f.markUTXOsAsSpentFunc(ctx, outpoints, topic)
+		return f.markUTXOsAsSpentFunc(ctx, outpoints, topic, spendTxid)
 	}
 	panic("func not defined")
 }

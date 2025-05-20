@@ -29,7 +29,7 @@ type Storage interface {
 	DeleteOutput(ctx context.Context, outpoint *overlay.Outpoint, topic string) error
 
 	// Updates UTXOs as spent
-	MarkUTXOsAsSpent(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error
+	MarkUTXOsAsSpent(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spendTxid *chainhash.Hash) error
 
 	// Updates which outputs are consumed by this output
 	UpdateConsumedBy(ctx context.Context, outpoint *overlay.Outpoint, topic string, consumedBy []*overlay.Outpoint) error

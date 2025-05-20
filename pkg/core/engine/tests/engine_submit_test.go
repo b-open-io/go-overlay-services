@@ -40,7 +40,7 @@ func TestEngine_Submit_Success(t *testing.T) {
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 				return false, nil
 			},
-			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
+			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spendTxid *chainhash.Hash) error {
 				return nil
 			},
 			insertOutputFunc: func(ctx context.Context, output *engine.Output) error {
@@ -237,7 +237,7 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 				return false, nil
 			},
-			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
+			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spendTxid *chainhash.Hash) error {
 				return nil
 			},
 		},
@@ -317,7 +317,7 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 				return false, nil
 			},
-			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
+			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spendTxid *chainhash.Hash) error {
 				return nil
 			},
 			insertOutputFunc: func(ctx context.Context, output *engine.Output) error {

@@ -254,7 +254,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		if _, ok := dupeTopics[topic]; ok {
 			continue
 		}
-		if err := e.Storage.MarkUTXOsAsSpent(ctx, inpoints, topic); err != nil {
+		if err := e.Storage.MarkUTXOsAsSpent(ctx, inpoints, topic, txid); err != nil {
 			if e.PanicOnError {
 				log.Panicln(err)
 			}
