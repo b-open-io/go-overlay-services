@@ -34,7 +34,7 @@ func TestEngine_Submit_Success(t *testing.T) {
 			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 				return &engine.Output{}, nil
 			},
-			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
 				return []*engine.Output{{}}, nil
 			},
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
@@ -104,7 +104,7 @@ func TestEngine_Submit_InvalidBeef_ShouldReturnError(t *testing.T) {
 
 	// then:
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid-atomic-beef") // temp fix for SPV failure Submit need to be fixed by wrapping the error to use ErrorIs
+	require.Contains(t, err.Error(), "invalid-version") // temp fix for SPV failure Submit need to be fixed by wrapping the error to use ErrorIs
 	require.Nil(t, steak)
 }
 
@@ -129,7 +129,7 @@ func TestEngine_Submit_SPVFail_ShouldReturnError(t *testing.T) {
 					Script:   &script.Script{script.OpTRUE},
 				}, nil
 			},
-			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
 				return []*engine.Output{
 					{
 						Outpoint: *outpoints[0],
@@ -152,7 +152,7 @@ func TestEngine_Submit_SPVFail_ShouldReturnError(t *testing.T) {
 
 	// then:
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unknown txid") // temp fix for SPV failure Submit need to be fixed by wrapping the error to use ErrorIs
+	require.Equal(t, err.Error(), "input 0 has no source transaction") // temp fix for SPV failure Submit need to be fixed by wrapping the error to use ErrorIs
 	require.Nil(t, steak)
 }
 
@@ -231,7 +231,7 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 				return &engine.Output{}, nil
 			},
-			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
 				return []*engine.Output{{}}, nil
 			},
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
@@ -301,7 +301,7 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 					Topic:    "test-topic",
 				}, nil
 			},
-			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
 				return []*engine.Output{
 					{
 						Outpoint: overlay.Outpoint{

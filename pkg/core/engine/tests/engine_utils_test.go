@@ -18,7 +18,7 @@ import (
 
 type fakeStorage struct {
 	findOutputFunc                  func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error)
-	findOutputsFunc                 func(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error)
+	findOutputsFunc                 func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error)
 	doesAppliedTransactionExistFunc func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error)
 	insertOutputFunc                func(ctx context.Context, utxo *engine.Output) error
 	markUTXOsAsSpentFunc            func(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error
@@ -68,7 +68,7 @@ func (f fakeStorage) DeleteOutput(ctx context.Context, outpoint *overlay.Outpoin
 	}
 	panic("func not defined")
 }
-func (f fakeStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+func (f fakeStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
 	if f.findOutputsFunc != nil {
 		return f.findOutputsFunc(ctx, outpoints, topic, spent, includeBEEF)
 	}

@@ -113,7 +113,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 			}
 		}
 		previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
-		if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, &s.Topic, nil, false); err != nil {
+		if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, false); err != nil {
 			return nil, err
 		} else {
 			for vin, output := range outputs {
@@ -234,7 +234,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *o
 					}
 				}
 				previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
-				if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, &s.Topic, nil, false); err != nil {
+				if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, false); err != nil {
 					return err
 				} else {
 					for vin, output := range outputs {

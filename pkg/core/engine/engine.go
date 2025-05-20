@@ -51,7 +51,7 @@ type OnSteakReady func(steak *overlay.Steak)
 type LookupResolverProvider interface {
 	SLAPTrackers() []string
 	SetSLAPTrackers(trackers []string)
-	Query(ctx context.Context, question *lookup.LookupQuestion, timeout time.Duration) (*lookup.LookupAnswer, error)
+	Query(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error)
 }
 
 type GASPProvider interface {
@@ -198,7 +198,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		} else {
 			topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
 			previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
-			outputs, err := e.Storage.FindOutputs(ctx, inpoints, &topic, nil, false)
+			outputs, err := e.Storage.FindOutputs(ctx, inpoints, topic, nil, false)
 			if err != nil {
 				if e.PanicOnError {
 					log.Panicln(err)
@@ -615,7 +615,9 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				return err
 			}
 
-			lookupAnswer, err := e.LookupResolver.Query(ctx, &lookup.LookupQuestion{Service: "ls_ship", Query: query}, 10*time.Second)
+			timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			lookupAnswer, err := e.LookupResolver.Query(timeoutCtx, &lookup.LookupQuestion{Service: "ls_ship", Query: query})
 			if err != nil {
 				return err
 			}
