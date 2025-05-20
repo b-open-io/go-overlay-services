@@ -20,7 +20,7 @@ func TestEngine_Submit_Success(t *testing.T) {
 	sut := &engine.Engine{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
-				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32][]byte) (overlay.AdmittanceInstructions, error) {
+				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
 					return overlay.AdmittanceInstructions{
 						OutputsToAdmit: []uint32{0},
 					}, nil
@@ -34,10 +34,13 @@ func TestEngine_Submit_Success(t *testing.T) {
 			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 				return &engine.Output{}, nil
 			},
+			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+				return []*engine.Output{{}}, nil
+			},
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 				return false, nil
 			},
-			markUTXOAsSpentFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic string) error {
+			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
 				return nil
 			},
 			insertOutputFunc: func(ctx context.Context, output *engine.Output) error {
@@ -80,7 +83,7 @@ func TestEngine_Submit_InvalidBeef_ShouldReturnError(t *testing.T) {
 	sut := &engine.Engine{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
-				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32][]byte) (overlay.AdmittanceInstructions, error) {
+				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
 					return overlay.AdmittanceInstructions{
 						OutputsToAdmit: []uint32{0},
 					}, nil
@@ -111,7 +114,7 @@ func TestEngine_Submit_SPVFail_ShouldReturnError(t *testing.T) {
 	sut := &engine.Engine{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
-				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32][]byte) (overlay.AdmittanceInstructions, error) {
+				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
 					return overlay.AdmittanceInstructions{
 						OutputsToAdmit: []uint32{0},
 					}, nil
@@ -217,7 +220,7 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 	sut := &engine.Engine{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
-				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32][]byte) (overlay.AdmittanceInstructions, error) {
+				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
 					return overlay.AdmittanceInstructions{
 						OutputsToAdmit: []uint32{0},
 					}, nil
@@ -228,10 +231,13 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 				return &engine.Output{}, nil
 			},
+			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+				return []*engine.Output{{}}, nil
+			},
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 				return false, nil
 			},
-			markUTXOAsSpentFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic string) error {
+			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
 				return nil
 			},
 		},
@@ -276,7 +282,7 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 	sut := &engine.Engine{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
-				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32][]byte) (overlay.AdmittanceInstructions, error) {
+				identifyAdmissableOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
 					return overlay.AdmittanceInstructions{
 						OutputsToAdmit: []uint32{0},
 					}, nil
@@ -295,10 +301,23 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 					Topic:    "test-topic",
 				}, nil
 			},
+			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+				return []*engine.Output{
+					{
+						Outpoint: overlay.Outpoint{
+							Txid:        *prevTxID,
+							OutputIndex: 0,
+						},
+						Satoshis: 1000,
+						Script:   &script.Script{script.OpTRUE},
+						Topic:    "test-topic",
+					},
+				}, nil
+			},
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 				return false, nil
 			},
-			markUTXOAsSpentFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic string) error {
+			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string) error {
 				return nil
 			},
 			insertOutputFunc: func(ctx context.Context, output *engine.Output) error {
