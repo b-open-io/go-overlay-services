@@ -32,6 +32,13 @@ type SubmitTransactionProvider interface {
 	ProviderStateAsserter
 }
 
+// StartGASPSyncProvider extends app.StartGASPSyncProvider with the ability
+// to assert whether it was called during a test.
+type StartGASPSyncProvider interface {
+	app.StartGASPSyncProvider
+	ProviderStateAsserter
+}
+
 // TopicManagerDocumentationProvider extends app.TopicManagerDocumentationProvider with the ability
 // to assert whether it was called during a test.
 type TopicManagerDocumentationProvider interface {
@@ -59,6 +66,14 @@ func WithSyncAdvertisementsProvider(provider SyncAdvertisementsProvider) TestOve
 	}
 }
 
+// WithStartGASPSyncProvider allows setting a custom StartGASPSyncProvider in a TestOverlayEngineStub.
+// This can be used to mock GASP synchronization behavior during tests.
+func WithStartGASPSyncProvider(provider StartGASPSyncProvider) TestOverlayEngineStubOption {
+	return func(stub *TestOverlayEngineStub) {
+		stub.startGASPSyncProvider = provider
+	}
+}
+
 // WithTopicManagerDocumentationProvider allows setting a custom TopicManagerDocumentationProvider in a TestOverlayEngineStub.
 // This can be used to mock topic manager documentation retrieval behavior during tests.
 func WithTopicManagerDocumentationProvider(provider TopicManagerDocumentationProvider) TestOverlayEngineStubOption {
@@ -73,6 +88,7 @@ func WithTopicManagerDocumentationProvider(provider TopicManagerDocumentationPro
 type TestOverlayEngineStub struct {
 	t                                 *testing.T
 	topicManagerDocumentationProvider TopicManagerDocumentationProvider
+	startGASPSyncProvider             StartGASPSyncProvider
 	submitTransactionProvider         SubmitTransactionProvider
 	syncAdvertisementsProvider        SyncAdvertisementsProvider
 }
@@ -133,10 +149,12 @@ func (s *TestOverlayEngineStub) ProvideForeignSyncResponse(ctx context.Context, 
 	panic("unimplemented")
 }
 
-// StartGASPSync starts the GASP synchronization process (unimplemented).
-// This is a placeholder function meant to be overridden in actual implementations.
+// StartGASPSync starts the GASP synchronization process.
+// It calls the StartGASPSync method of the configured StartGASPSyncProvider.
 func (s *TestOverlayEngineStub) StartGASPSync(ctx context.Context) error {
-	panic("unimplemented")
+	s.t.Helper()
+
+	return s.startGASPSyncProvider.StartGASPSync(ctx)
 }
 
 // Submit processes a transaction submission and returns a steak or error based on the provided inputs.
@@ -163,6 +181,7 @@ func (s *TestOverlayEngineStub) AssertProvidersState() {
 		s.topicManagerDocumentationProvider,
 		s.submitTransactionProvider,
 		s.syncAdvertisementsProvider,
+		s.startGASPSyncProvider,
 	}
 	for _, p := range providers {
 		p.AssertCalled()
@@ -175,6 +194,7 @@ func NewTestOverlayEngineStub(t *testing.T, opts ...TestOverlayEngineStubOption)
 	stub := TestOverlayEngineStub{
 		t:                                 t,
 		topicManagerDocumentationProvider: NewTopicManagerDocumentationProviderMock(t, TopicManagerDocumentationProviderMockExpectations{DocumentationCall: false}),
+		startGASPSyncProvider:             NewStartGASPSyncProviderMock(t, StartGASPSyncProviderMockExpectations{StartGASPSyncCall: false}),
 		submitTransactionProvider:         NewSubmitTransactionProviderMock(t, SubmitTransactionProviderMockExpectations{SubmitCall: false}),
 		syncAdvertisementsProvider:        NewSyncAdvertisementsProviderMock(t, SyncAdvertisementsProviderMockExpectations{SyncAdvertisementsCall: false}),
 	}
