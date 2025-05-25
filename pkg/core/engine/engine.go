@@ -201,10 +201,10 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 
 			if admit, err := e.Managers[topic].IdentifyAdmissableOutputs(ctx, taggedBEEF.Beef, previousCoins); err != nil {
-				slog.Error("failed to identify admissable outputs", "topic", topic, "error", err)
+				slog.Error("failed to identify admissible outputs", "topic", topic, "error", err)
 				return nil, err
 			} else {
-				slog.Debug("admissable outputs identified", "duration", time.Since(start))
+				slog.Debug("admissible outputs identified", "duration", time.Since(start))
 				start = time.Now()
 				if len(admit.AncillaryTxids) > 0 {
 					ancillaryBeef := transaction.Beef{
