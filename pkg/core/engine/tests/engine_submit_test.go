@@ -271,4 +271,3 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 	require.Nil(t, steak)
 	require.EqualError(t, err, "forced failure for testing")
 }
-

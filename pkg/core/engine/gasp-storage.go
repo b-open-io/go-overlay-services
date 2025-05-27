@@ -64,12 +64,12 @@ func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *overl
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// Check if we got a valid transaction
 		if tx == nil {
 			return nil, errors.New("parsed BEEF returned nil transaction")
 		}
-		
+
 		node := &core.GASPNode{
 			GraphID:     graphID,
 			OutputIndex: outpoint.OutputIndex,
@@ -211,11 +211,11 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 				}
 				return true
 			})
-			
+
 			if !found {
 				return ErrMissingInput
 			}
-			
+
 			parentNode.Children = append(parentNode.Children, newGraphNode)
 			newGraphNode.Parent = parentNode
 			newGraphOutpoint := &overlay.Outpoint{
@@ -311,13 +311,13 @@ func (s *OverlayGASPStorage) DiscardGraph(ctx context.Context, graphID *overlay.
 		}
 		return true
 	})
-	
+
 	// Delete all collected nodes
 	for _, nodeId := range nodesToDelete {
 		s.tempGraphNodeRefs.Delete(nodeId)
 		s.tempGraphNodeCount--
 	}
-	
+
 	return nil
 }
 

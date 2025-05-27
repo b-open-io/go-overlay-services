@@ -54,7 +54,7 @@ func TestLookupResolver_SetSLAPTrackers(t *testing.T) {
 		resolver := engine.NewLookupResolver()
 		oldTrackers := []string{"https://old1.com", "https://old2.com"}
 		newTrackers := []string{"https://new1.com", "https://new2.com", "https://new3.com"}
-		
+
 		resolver.SetSLAPTrackers(oldTrackers)
 		require.Equal(t, oldTrackers, resolver.SLAPTrackers())
 
@@ -70,10 +70,10 @@ func TestLookupResolver_Query(t *testing.T) {
 	t.Run("should query with valid question", func(t *testing.T) {
 		// given
 		resolver := engine.NewLookupResolver()
-		
+
 		// Note: In real implementation, you might need to expose a method to set facilitator
 		// or use dependency injection for better testability
-		
+
 		question := &lookup.LookupQuestion{
 			Service: "test-service",
 			Query:   json.RawMessage(`"testkey"`),
@@ -84,7 +84,7 @@ func TestLookupResolver_Query(t *testing.T) {
 		// either mocking the HTTP client or using a test server
 		_ = resolver
 		_ = question
-		
+
 		// then
 		// The actual Query method would make HTTP requests, so comprehensive testing
 		// would require integration tests or HTTP mocking
@@ -93,7 +93,7 @@ func TestLookupResolver_Query(t *testing.T) {
 	t.Run("should handle query errors", func(t *testing.T) {
 		// given
 		resolver := engine.NewLookupResolver()
-		
+
 		question := &lookup.LookupQuestion{
 			Service: "test-service",
 			Query:   json.RawMessage(`"testkey"`),
@@ -104,7 +104,7 @@ func TestLookupResolver_Query(t *testing.T) {
 		// or using a test server that returns errors
 		_ = resolver
 		_ = question
-		
+
 		// then
 		// Error handling tests would verify that network errors, timeouts, and
 		// invalid responses are properly propagated
@@ -120,7 +120,7 @@ func TestLookupResolver_QueryWithSLAPTrackers(t *testing.T) {
 
 		// then
 		require.Equal(t, trackers, resolver.SLAPTrackers())
-		
+
 		// Note: Actual query behavior with trackers would require integration testing
 		// or mocking the HTTP layer to verify that queries are sent to the configured trackers
 	})
@@ -141,7 +141,7 @@ func TestLookupResolver_ErrorScenarios(t *testing.T) {
 		// given
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
-		
+
 		resolver := engine.NewLookupResolver()
 		question := &lookup.LookupQuestion{
 			Service: "test-service",

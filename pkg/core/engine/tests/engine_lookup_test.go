@@ -152,4 +152,3 @@ func TestEngine_Lookup_ShouldHydrateOutputs_WhenFormulasProvided(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedAnswer, actualAnswer)
 }
-

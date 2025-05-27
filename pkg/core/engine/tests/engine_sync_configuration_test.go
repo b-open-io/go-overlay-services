@@ -26,8 +26,8 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 		// then
 		require.NotNil(t, result.SyncConfiguration)
-		
-		// NOTE: Unlike the TypeScript implementation, the Go version does NOT 
+
+		// NOTE: Unlike the TypeScript implementation, the Go version does NOT
 		// automatically set undefined managers to SHIP by default.
 		// This is a behavioral difference that should be considered.
 		_, hasHelloworld := result.SyncConfiguration["tm_helloworld"]
@@ -58,7 +58,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 		// Explicitly configured managers should keep their settings
 		require.Equal(t, engine.SyncConfigurationPeers, result.SyncConfiguration["tm_helloworld"].Type)
 		require.ElementsMatch(t, []string{"peer1", "peer2"}, result.SyncConfiguration["tm_helloworld"].Peers)
-		
+
 		require.Equal(t, engine.SyncConfigurationSHIP, result.SyncConfiguration["tm_custom"].Type)
 		require.Equal(t, engine.SyncConfigurationNone, result.SyncConfiguration["tm_nosync"].Type)
 	})
@@ -81,7 +81,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 		// then
 		require.Equal(t, engine.SyncConfigurationNone, result.SyncConfiguration["tm_defined"].Type)
-		
+
 		// NOTE: Unlike TypeScript, Go doesn't default undefined managers to SHIP
 		_, hasUndefined := result.SyncConfiguration["tm_undefined"]
 		require.False(t, hasUndefined)
@@ -212,7 +212,7 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 		// This test reflects the TypeScript behavior where undefined topic managers
 		// are set to sync method of "SHIP" by default
 		// NOTE: The Go implementation might differ in behavior
-		
+
 		// given
 		input := engine.Engine{
 			Managers: map[string]engine.TopicManager{
@@ -224,22 +224,22 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 				// tm_undefined is not configured
 			},
 		}
-		
+
 		// when
 		result := engine.NewEngine(input)
-		
+
 		// then
 		require.Equal(t, engine.SyncConfigurationSHIP, result.SyncConfiguration["tm_helloworld"].Type)
-		
+
 		// In TypeScript, tm_undefined would be set to SHIP by default
 		// In Go, this behavior needs to be explicitly implemented if desired
 		_, hasUndefined := result.SyncConfiguration["tm_undefined"]
 		require.False(t, hasUndefined, "Go implementation doesn't auto-default to SHIP")
 	})
-	
+
 	t.Run("should not set sync method to SHIP for managers explicitly set to false", func(t *testing.T) {
 		// Test that disabled sync is respected
-		
+
 		// given
 		input := engine.Engine{
 			Managers: map[string]engine.TopicManager{
@@ -249,51 +249,51 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 				"tm_helloworld": {Type: engine.SyncConfigurationNone},
 			},
 		}
-		
+
 		// when
 		result := engine.NewEngine(input)
-		
+
 		// then
 		require.Equal(t, engine.SyncConfigurationNone, result.SyncConfiguration["tm_helloworld"].Type)
 	})
-	
+
 	t.Run("should combine trackers without duplicates", func(t *testing.T) {
 		// Test deduplication when combining trackers
-		
+
 		// given
 		input := engine.Engine{
 			SHIPTrackers: []string{"tracker1", "tracker2", "tracker1"}, // tracker1 appears twice
-			SLAPTrackers: []string{"slap1", "slap2", "slap1"}, // slap1 appears twice
+			SLAPTrackers: []string{"slap1", "slap2", "slap1"},          // slap1 appears twice
 			Managers: map[string]engine.TopicManager{
 				"tm_ship": &mockTopicManager{},
 				"tm_slap": &mockTopicManager{},
 			},
 			SyncConfiguration: map[string]engine.SyncConfiguration{
 				"tm_ship": {Type: engine.SyncConfigurationPeers, Peers: []string{"existingPeer", "tracker2"}}, // tracker2 is duplicate
-				"tm_slap": {Type: engine.SyncConfigurationPeers, Peers: []string{"existingPeer", "slap2"}}, // slap2 is duplicate
+				"tm_slap": {Type: engine.SyncConfigurationPeers, Peers: []string{"existingPeer", "slap2"}},    // slap2 is duplicate
 			},
 		}
-		
+
 		// when
 		result := engine.NewEngine(input)
-		
+
 		// then
 		// Verify deduplication for tm_ship
 		require.Equal(t, engine.SyncConfigurationPeers, result.SyncConfiguration["tm_ship"].Type)
 		shipPeers := result.SyncConfiguration["tm_ship"].Peers
 		require.Len(t, shipPeers, 3) // Should have tracker1, tracker2, existingPeer (no duplicates)
 		require.ElementsMatch(t, []string{"tracker1", "tracker2", "existingPeer"}, shipPeers)
-		
+
 		// Verify deduplication for tm_slap
 		require.Equal(t, engine.SyncConfigurationPeers, result.SyncConfiguration["tm_slap"].Type)
 		slapPeers := result.SyncConfiguration["tm_slap"].Peers
 		require.Len(t, slapPeers, 3) // Should have slap1, slap2, existingPeer (no duplicates)
 		require.ElementsMatch(t, []string{"slap1", "slap2", "existingPeer"}, slapPeers)
 	})
-	
+
 	t.Run("should disable sync for specific topics when set to None", func(t *testing.T) {
 		// Test that sync can be disabled for specific topics
-		
+
 		// given
 		input := engine.Engine{
 			Managers: map[string]engine.TopicManager{
@@ -305,10 +305,10 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 				"tm_nosync": {Type: engine.SyncConfigurationNone}, // Explicitly disabled
 			},
 		}
-		
+
 		// when
 		result := engine.NewEngine(input)
-		
+
 		// then
 		require.Equal(t, engine.SyncConfigurationSHIP, result.SyncConfiguration["tm_sync"].Type)
 		require.Equal(t, engine.SyncConfigurationNone, result.SyncConfiguration["tm_nosync"].Type)
@@ -338,6 +338,3 @@ func (m *mockTopicManager) GetDocumentation() string {
 func (m *mockTopicManager) GetMetaData() *overlay.MetaData {
 	return nil
 }
-
-
-
