@@ -148,13 +148,13 @@ func TestEngine_GetUTXOHistory_ShouldRespectDepthInHistorySelector(t *testing.T)
 		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 3},
 		Beef:     createDummyBEEF(t),
 	}
-	
+
 	output2 := &engine.Output{
 		Outpoint:        overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 2},
 		Beef:            createDummyBEEF(t),
 		OutputsConsumed: []*overlay.Outpoint{&output3.Outpoint},
 	}
-	
+
 	output1 := &engine.Output{
 		Outpoint:        overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 1},
 		Beef:            createDummyBEEF(t),
@@ -199,12 +199,12 @@ func TestEngine_GetUTXOHistory_ShouldHandleMultipleOutputsConsumed(t *testing.T)
 		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 10},
 		Beef:     createDummyBEEF(t),
 	}
-	
+
 	consumed2 := &engine.Output{
 		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 11},
 		Beef:     createDummyBEEF(t),
 	}
-	
+
 	parentOutput := &engine.Output{
 		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 1},
 		Beef:     createDummyBEEF(t),
@@ -258,7 +258,7 @@ func TestEngine_GetUTXOHistory_ShouldHandleCircularReferences(t *testing.T) {
 		Beef:            createDummyBEEF(t),
 		OutputsConsumed: []*overlay.Outpoint{output2},
 	}
-	
+
 	output2Data := &engine.Output{
 		Outpoint:        *output2,
 		Beef:            createDummyBEEF(t),
@@ -275,7 +275,7 @@ func TestEngine_GetUTXOHistory_ShouldHandleCircularReferences(t *testing.T) {
 					// Prevent infinite loop in test
 					return nil, errors.New("max calls exceeded")
 				}
-				
+
 				switch outpoint.OutputIndex {
 				case 1:
 					return output1Data, nil
@@ -325,11 +325,11 @@ func TestEngine_GetUTXOHistory_ShouldHandleEmptyOutputsConsumed(t *testing.T) {
 func TestEngine_GetUTXOHistory_ShouldInvokeHistorySelectorWithCorrectParameters(t *testing.T) {
 	// given
 	ctx := context.Background()
-	
+
 	expectedBeef := []byte("expected beef")
 	expectedOutputIndex := uint32(42)
 	initialDepth := uint32(3)
-	
+
 	output := &engine.Output{
 		Beef: expectedBeef,
 		Outpoint: overlay.Outpoint{

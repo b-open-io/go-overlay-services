@@ -25,7 +25,7 @@ func isValidHostingURL(hostingURL string) bool {
 	if parsedURL.Scheme == "http" {
 		return false
 	}
-	
+
 	// Require a valid scheme
 	if parsedURL.Scheme == "" {
 		return false
@@ -47,7 +47,7 @@ func isValidHostingURL(hostingURL string) bool {
 	if hostname == "::1" || hostname == "[::1]" {
 		return false
 	}
-	
+
 	// Also check Host field for IPv6 without brackets
 	if parsedURL.Host == "::1" {
 		return false

@@ -29,12 +29,12 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			Satoshis:      1000,
 			LockingScript: &script.Script{},
 		})
-		
+
 		graphID := &overlay.Outpoint{
 			Txid:        *tx.TxID(),
 			OutputIndex: 0,
 		}
-		
+
 		gaspNode := &core.GASPNode{
 			RawTx:       tx.Hex(),
 			OutputIndex: 0,
@@ -52,13 +52,13 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			Satoshis:      500,
 			LockingScript: &script.Script{},
 		})
-		
+
 		childNode := &core.GASPNode{
 			RawTx:       childTx.Hex(),
 			OutputIndex: 0,
 			GraphID:     graphID,
 		}
-		
+
 		err = storage.AppendToGraph(ctx, childNode, tx.TxID())
 		require.NoError(t, err)
 	})
@@ -79,18 +79,18 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 				Satoshis:      1000,
 				LockingScript: &script.Script{},
 			})
-			
+
 			graphID := &overlay.Outpoint{
 				Txid:        *tx.TxID(),
 				OutputIndex: uint32(i),
 			}
-			
+
 			gaspNode := &core.GASPNode{
 				RawTx:       tx.Hex(),
 				OutputIndex: uint32(i),
 				GraphID:     graphID,
 			}
-			
+
 			err := storage.AppendToGraph(ctx, gaspNode, nil)
 			require.NoError(t, err)
 		}
@@ -101,12 +101,12 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			Satoshis:      1000,
 			LockingScript: &script.Script{},
 		})
-		
+
 		graphID := &overlay.Outpoint{
 			Txid:        *tx.TxID(),
 			OutputIndex: 99,
 		}
-		
+
 		gaspNode := &core.GASPNode{
 			RawTx:       tx.Hex(),
 			OutputIndex: 99,
@@ -228,12 +228,12 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 			Satoshis:      1000,
 			LockingScript: &script.Script{},
 		})
-		
+
 		graphID := &overlay.Outpoint{
 			Txid:        *rootTx.TxID(),
 			OutputIndex: 0,
 		}
-		
+
 		rootNode := &core.GASPNode{
 			RawTx:       rootTx.Hex(),
 			OutputIndex: 0,
@@ -250,13 +250,13 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 			Satoshis:      500,
 			LockingScript: &script.Script{},
 		})
-		
+
 		childNode := &core.GASPNode{
 			RawTx:       childTx.Hex(),
 			OutputIndex: 0,
 			GraphID:     graphID,
 		}
-		
+
 		err = storage.AppendToGraph(ctx, childNode, rootTx.TxID())
 		require.NoError(t, err)
 
@@ -265,14 +265,14 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		
+
 		// Verify graph is empty by trying to add to the discarded graph
 		newNode := &core.GASPNode{
 			RawTx:       rootTx.Hex(),
 			OutputIndex: 1,
 			GraphID:     graphID,
 		}
-		
+
 		// This should fail because the parent node was discarded
 		err = storage.AppendToGraph(ctx, newNode, rootTx.TxID())
 		require.Error(t, err)
@@ -335,20 +335,20 @@ func TestOverlayGASPStorage_HydrateGASPNode(t *testing.T) {
 	t.Run("should hydrate node with valid BEEF", func(t *testing.T) {
 		// given
 		ctx := context.Background()
-		
+
 		// Create a transaction with merkle path
 		tx := transaction.NewTransaction()
 		tx.AddOutput(&transaction.TransactionOutput{
 			Satoshis:      1000,
 			LockingScript: &script.Script{},
 		})
-		
+
 		// Create mock merkle path
 		tx.MerklePath = &transaction.MerklePath{
 			BlockHeight: 100,
 			Path:        [][]*transaction.PathElement{},
 		}
-		
+
 		beef, err := transaction.NewBeefFromTransaction(tx)
 		require.NoError(t, err)
 		beefBytes, err := beef.AtomicBytes(tx.TxID())
@@ -419,7 +419,9 @@ func (m *mockStorage) FindOutputs(ctx context.Context, outpoints []*overlay.Outp
 }
 
 // Implement remaining Storage interface methods with empty implementations
-func (m *mockStorage) SetIncoming(ctx context.Context, txs []*transaction.Transaction) error { return nil }
+func (m *mockStorage) SetIncoming(ctx context.Context, txs []*transaction.Transaction) error {
+	return nil
+}
 func (m *mockStorage) SetOutgoing(ctx context.Context, tx *transaction.Transaction, steak *overlay.Steak) error {
 	return nil
 }

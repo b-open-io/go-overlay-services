@@ -278,12 +278,12 @@ func TestEngine_Submit_CoinsRetained(t *testing.T) {
 	// Verify outputs are marked spent but not deleted
 	ctx := context.Background()
 	taggedBEEF, prevTxID := createDummyValidTaggedBEEF(t)
-	
+
 	markSpentCalled := false
 	deleteOutputCalled := false
 	outputSpentCalled := false
 	outputNoLongerRetainedCalled := false
-	
+
 	sut := &engine.Engine{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
@@ -369,10 +369,10 @@ func TestEngine_Submit_CoinsRetained(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// when:
 	steak, err := sut.Submit(ctx, taggedBEEF, engine.SubmitModeCurrent, nil)
-	
+
 	// then:
 	require.NoError(t, err)
 	require.NotNil(t, steak)
@@ -380,7 +380,7 @@ func TestEngine_Submit_CoinsRetained(t *testing.T) {
 	require.False(t, deleteOutputCalled, "UTXO should NOT be deleted when retained")
 	require.True(t, outputSpentCalled, "Lookup service should be notified of spent output")
 	require.False(t, outputNoLongerRetainedCalled, "outputNoLongerRetainedInHistory should NOT be called for retained coins")
-	
+
 	// Verify the steak contains the retained coin info
 	require.Contains(t, steak, "test-topic")
 	require.Contains(t, steak["test-topic"].CoinsToRetain, uint32(0))
@@ -391,12 +391,12 @@ func TestEngine_Submit_CoinsNotRetained(t *testing.T) {
 	// Verify deleteUTXODeep is called
 	ctx := context.Background()
 	taggedBEEF, prevTxID := createDummyValidTaggedBEEF(t)
-	
+
 	markSpentCalled := false
 	deleteOutputCalled := false
 	outputSpentCalled := false
 	outputNoLongerRetainedCalled := false
-	
+
 	sut := &engine.Engine{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
@@ -474,10 +474,10 @@ func TestEngine_Submit_CoinsNotRetained(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// when:
 	steak, err := sut.Submit(ctx, taggedBEEF, engine.SubmitModeCurrent, nil)
-	
+
 	// then:
 	require.NoError(t, err)
 	require.NotNil(t, steak)
@@ -485,7 +485,7 @@ func TestEngine_Submit_CoinsNotRetained(t *testing.T) {
 	require.True(t, deleteOutputCalled, "UTXO should be deleted when not retained")
 	require.True(t, outputSpentCalled, "Lookup service should be notified of spent output")
 	require.True(t, outputNoLongerRetainedCalled, "Lookup service should be notified that output is no longer retained")
-	
+
 	// Verify the steak shows coins were removed
 	require.Contains(t, steak, "test-topic")
 	require.Empty(t, steak["test-topic"].CoinsToRetain)
@@ -560,10 +560,10 @@ func TestEngine_Submit_AppliedTransactionInsertionVerification(t *testing.T) {
 	// Test that applied transaction is inserted correctly
 	ctx := context.Background()
 	taggedBEEF, prevTxID := createDummyValidTaggedBEEF(t)
-	
+
 	appliedTxInserted := false
 	var insertedAppliedTx *overlay.AppliedTransaction
-	
+
 	sut := &engine.Engine{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
@@ -623,10 +623,10 @@ func TestEngine_Submit_AppliedTransactionInsertionVerification(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// when:
 	steak, err := sut.Submit(ctx, taggedBEEF, engine.SubmitModeCurrent, nil)
-	
+
 	// then:
 	require.NoError(t, err)
 	require.NotNil(t, steak)

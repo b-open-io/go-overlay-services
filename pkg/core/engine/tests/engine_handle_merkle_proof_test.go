@@ -18,7 +18,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 	t.Run("should handle simple proof", func(t *testing.T) {
 		// given
 		ctx := context.Background()
-		
+
 		// Create a transaction with outputs
 		tx := transaction.NewTransaction()
 		tx.AddOutput(&transaction.TransactionOutput{
@@ -50,11 +50,11 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				Txid:        *txid,
 				OutputIndex: 0,
 			},
-			Topic:        "test-topic",
-			Satoshis:     1000,
-			BlockHeight:  0,
-			BlockIdx:     0,
-			Beef:         beefBytes,
+			Topic:       "test-topic",
+			Satoshis:    1000,
+			BlockHeight: 0,
+			BlockIdx:    0,
+			Beef:        beefBytes,
 		}
 
 		// Mock storage
@@ -95,7 +95,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 	t.Run("should return error when transaction not found in proof", func(t *testing.T) {
 		// given
 		ctx := context.Background()
-		
+
 		tx := transaction.NewTransaction()
 		tx.AddOutput(&transaction.TransactionOutput{
 			Satoshis:      1000,
@@ -191,7 +191,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 	t.Run("should update consumedBy relationships for chain of transactions", func(t *testing.T) {
 		// given
 		ctx := context.Background()
-		
+
 		// Create a chain of transactions
 		tx1 := transaction.NewTransaction()
 		tx1.AddOutput(&transaction.TransactionOutput{
@@ -239,8 +239,8 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				Txid:        *txid1,
 				OutputIndex: 0,
 			},
-			Topic:       "test-topic",
-			ConsumedBy:  []*overlay.Outpoint{{Txid: *txid2, OutputIndex: 0}},
+			Topic:      "test-topic",
+			ConsumedBy: []*overlay.Outpoint{{Txid: *txid2, OutputIndex: 0}},
 		}
 
 		output2 := &engine.Output{
@@ -248,9 +248,9 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				Txid:        *txid2,
 				OutputIndex: 0,
 			},
-			Topic:          "test-topic",
+			Topic:           "test-topic",
 			OutputsConsumed: []*overlay.Outpoint{{Txid: *txid1, OutputIndex: 0}},
-			Beef:           beef2Bytes,
+			Beef:            beef2Bytes,
 		}
 
 		updateCount := 0

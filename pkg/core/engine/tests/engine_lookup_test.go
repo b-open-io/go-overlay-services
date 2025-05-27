@@ -156,21 +156,21 @@ func TestEngine_Lookup_ShouldHydrateOutputs_WhenFormulasProvided(t *testing.T) {
 func TestEngine_Lookup_MultipleFormulasWithHistory(t *testing.T) {
 	// Test when lookup returns multiple formulas each with different history requirements
 	ctx := context.Background()
-	
+
 	// Create mock outputs with history
 	parentOutput := &engine.Output{
 		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 0},
 		Beef:     []byte("parent beef"),
 		Topic:    "test",
 	}
-	
+
 	childOutput := &engine.Output{
 		Outpoint:        overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 1},
 		Beef:            []byte("child beef"),
 		Topic:           "test",
 		OutputsConsumed: []*overlay.Outpoint{&parentOutput.Outpoint},
 	}
-	
+
 	sut := &engine.Engine{
 		LookupServices: map[string]engine.LookupService{
 			"test": fakeLookupService{
@@ -203,16 +203,16 @@ func TestEngine_Lookup_MultipleFormulasWithHistory(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// when
 	actualAnswer, err := sut.Lookup(ctx, &lookup.LookupQuestion{Service: "test"})
-	
+
 	// then
 	require.NoError(t, err)
 	require.NotNil(t, actualAnswer)
 	require.Equal(t, lookup.AnswerTypeOutputList, actualAnswer.Type)
 	require.Len(t, actualAnswer.Outputs, 2)
-	
+
 	// Verify both outputs are included
 	foundParent := false
 	foundChild := false
@@ -230,15 +230,15 @@ func TestEngine_Lookup_MultipleFormulasWithHistory(t *testing.T) {
 func TestEngine_Lookup_HistorySelectorReturnsFalse(t *testing.T) {
 	// Test empty results when history selector returns false
 	ctx := context.Background()
-	
+
 	mockOutput := &engine.Output{
 		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 0},
 		Beef:     []byte("test beef"),
 		Topic:    "test",
 	}
-	
+
 	historySelectorCalled := false
-	
+
 	sut := &engine.Engine{
 		LookupServices: map[string]engine.LookupService{
 			"test": fakeLookupService{
@@ -265,10 +265,10 @@ func TestEngine_Lookup_HistorySelectorReturnsFalse(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// when
 	actualAnswer, err := sut.Lookup(ctx, &lookup.LookupQuestion{Service: "test"})
-	
+
 	// then
 	require.NoError(t, err)
 	require.NotNil(t, actualAnswer)
@@ -280,28 +280,28 @@ func TestEngine_Lookup_HistorySelectorReturnsFalse(t *testing.T) {
 func TestEngine_Lookup_ComplexHistoryGraph(t *testing.T) {
 	// Test lookup with complex multi-output history graph
 	ctx := context.Background()
-	
+
 	// Create a complex graph: grandparent -> parent1 & parent2 -> child
 	grandparentOutput := &engine.Output{
 		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 0},
 		Beef:     []byte("grandparent beef"),
 		Topic:    "test",
 	}
-	
+
 	parent1Output := &engine.Output{
 		Outpoint:        overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 1},
 		Beef:            []byte("parent1 beef"),
 		Topic:           "test",
 		OutputsConsumed: []*overlay.Outpoint{&grandparentOutput.Outpoint},
 	}
-	
+
 	parent2Output := &engine.Output{
 		Outpoint:        overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 2},
 		Beef:            []byte("parent2 beef"),
 		Topic:           "test",
 		OutputsConsumed: []*overlay.Outpoint{&grandparentOutput.Outpoint},
 	}
-	
+
 	childOutput := &engine.Output{
 		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 3},
 		Beef:     []byte("child beef"),
@@ -311,7 +311,7 @@ func TestEngine_Lookup_ComplexHistoryGraph(t *testing.T) {
 			&parent2Output.Outpoint,
 		},
 	}
-	
+
 	sut := &engine.Engine{
 		LookupServices: map[string]engine.LookupService{
 			"test": fakeLookupService{
@@ -345,23 +345,23 @@ func TestEngine_Lookup_ComplexHistoryGraph(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// when
 	actualAnswer, err := sut.Lookup(ctx, &lookup.LookupQuestion{Service: "test"})
-	
+
 	// then
 	require.NoError(t, err)
 	require.NotNil(t, actualAnswer)
 	require.Equal(t, lookup.AnswerTypeOutputList, actualAnswer.Type)
 	// With depth 2, we should get: child (depth 0), parent1 & parent2 (depth 1), grandparent (depth 2)
 	require.Len(t, actualAnswer.Outputs, 4, "Should include child, both parents, and grandparent")
-	
+
 	// Verify all outputs are included
 	beefContents := make(map[string]bool)
 	for _, output := range actualAnswer.Outputs {
 		beefContents[string(output.Beef)] = true
 	}
-	
+
 	require.True(t, beefContents["child beef"], "Child output should be included")
 	require.True(t, beefContents["parent1 beef"], "Parent1 output should be included")
 	require.True(t, beefContents["parent2 beef"], "Parent2 output should be included")
