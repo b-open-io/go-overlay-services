@@ -137,7 +137,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 
 		if beefBytes, err := beef.AtomicBytes(tx.TxID()); err != nil {
 			return nil, err
-		} else if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissableOutputs(ctx, beefBytes, previousCoins); err != nil {
+		} else if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
 			return nil, err
 		} else if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
 			if neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes); err != nil {
@@ -269,7 +269,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *o
 						}
 					}
 				}
-				if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissableOutputs(ctx, beef, previousCoins); err != nil {
+				if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beef, previousCoins); err != nil {
 					return err
 				} else {
 					for _, vout := range admit.OutputsToAdmit {
