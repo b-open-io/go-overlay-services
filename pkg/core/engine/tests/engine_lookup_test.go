@@ -152,3 +152,218 @@ func TestEngine_Lookup_ShouldHydrateOutputs_WhenFormulasProvided(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedAnswer, actualAnswer)
 }
+
+func TestEngine_Lookup_MultipleFormulasWithHistory(t *testing.T) {
+	// Test when lookup returns multiple formulas each with different history requirements
+	ctx := context.Background()
+	
+	// Create mock outputs with history
+	parentOutput := &engine.Output{
+		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 0},
+		Beef:     []byte("parent beef"),
+		Topic:    "test",
+	}
+	
+	childOutput := &engine.Output{
+		Outpoint:        overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 1},
+		Beef:            []byte("child beef"),
+		Topic:           "test",
+		OutputsConsumed: []*overlay.Outpoint{&parentOutput.Outpoint},
+	}
+	
+	sut := &engine.Engine{
+		LookupServices: map[string]engine.LookupService{
+			"test": fakeLookupService{
+				lookupFunc: func(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error) {
+					return &lookup.LookupAnswer{
+						Type: lookup.AnswerTypeFormula,
+						Formulas: []lookup.LookupFormula{
+							{
+								Outpoint: &childOutput.Outpoint,
+								History:  lookup.HistorySelectorNumber(1), // Include 1 level of history
+							},
+							{
+								Outpoint: &parentOutput.Outpoint,
+								History:  lookup.HistorySelectorNumber(0), // No history
+							},
+						},
+					}, nil
+				},
+			},
+		},
+		Storage: fakeStorage{
+			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
+				if outpoint.Txid.String() == childOutput.Outpoint.Txid.String() {
+					return childOutput, nil
+				}
+				if outpoint.Txid.String() == parentOutput.Outpoint.Txid.String() {
+					return parentOutput, nil
+				}
+				return nil, errors.New("output not found")
+			},
+		},
+	}
+	
+	// when
+	actualAnswer, err := sut.Lookup(ctx, &lookup.LookupQuestion{Service: "test"})
+	
+	// then
+	require.NoError(t, err)
+	require.NotNil(t, actualAnswer)
+	require.Equal(t, lookup.AnswerTypeOutputList, actualAnswer.Type)
+	require.Len(t, actualAnswer.Outputs, 2)
+	
+	// Verify both outputs are included
+	foundParent := false
+	foundChild := false
+	for _, output := range actualAnswer.Outputs {
+		if string(output.Beef) == "parent beef" {
+			foundParent = true
+		} else if string(output.Beef) == "child beef" {
+			foundChild = true
+		}
+	}
+	require.True(t, foundParent, "Parent output should be included")
+	require.True(t, foundChild, "Child output should be included")
+}
+
+func TestEngine_Lookup_HistorySelectorReturnsFalse(t *testing.T) {
+	// Test empty results when history selector returns false
+	ctx := context.Background()
+	
+	mockOutput := &engine.Output{
+		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 0},
+		Beef:     []byte("test beef"),
+		Topic:    "test",
+	}
+	
+	historySelectorCalled := false
+	
+	sut := &engine.Engine{
+		LookupServices: map[string]engine.LookupService{
+			"test": fakeLookupService{
+				lookupFunc: func(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error) {
+					return &lookup.LookupAnswer{
+						Type: lookup.AnswerTypeFormula,
+						Formulas: []lookup.LookupFormula{
+							{
+								Outpoint: &mockOutput.Outpoint,
+								History: lookup.HistorySelectorFunc(func(ctx context.Context, beef []byte, outputIndex uint32, currentDepth uint32) bool {
+									historySelectorCalled = true
+									// Always return false, meaning don't include this output
+									return false
+								}),
+							},
+						},
+					}, nil
+				},
+			},
+		},
+		Storage: fakeStorage{
+			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
+				return mockOutput, nil
+			},
+		},
+	}
+	
+	// when
+	actualAnswer, err := sut.Lookup(ctx, &lookup.LookupQuestion{Service: "test"})
+	
+	// then
+	require.NoError(t, err)
+	require.NotNil(t, actualAnswer)
+	require.Equal(t, lookup.AnswerTypeOutputList, actualAnswer.Type)
+	require.Empty(t, actualAnswer.Outputs, "No outputs should be returned when history selector returns false")
+	require.True(t, historySelectorCalled, "History selector should have been called")
+}
+
+func TestEngine_Lookup_ComplexHistoryGraph(t *testing.T) {
+	// Test lookup with complex multi-output history graph
+	ctx := context.Background()
+	
+	// Create a complex graph: grandparent -> parent1 & parent2 -> child
+	grandparentOutput := &engine.Output{
+		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 0},
+		Beef:     []byte("grandparent beef"),
+		Topic:    "test",
+	}
+	
+	parent1Output := &engine.Output{
+		Outpoint:        overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 1},
+		Beef:            []byte("parent1 beef"),
+		Topic:           "test",
+		OutputsConsumed: []*overlay.Outpoint{&grandparentOutput.Outpoint},
+	}
+	
+	parent2Output := &engine.Output{
+		Outpoint:        overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 2},
+		Beef:            []byte("parent2 beef"),
+		Topic:           "test",
+		OutputsConsumed: []*overlay.Outpoint{&grandparentOutput.Outpoint},
+	}
+	
+	childOutput := &engine.Output{
+		Outpoint: overlay.Outpoint{Txid: fakeTxID(t), OutputIndex: 3},
+		Beef:     []byte("child beef"),
+		Topic:    "test",
+		OutputsConsumed: []*overlay.Outpoint{
+			&parent1Output.Outpoint,
+			&parent2Output.Outpoint,
+		},
+	}
+	
+	sut := &engine.Engine{
+		LookupServices: map[string]engine.LookupService{
+			"test": fakeLookupService{
+				lookupFunc: func(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error) {
+					return &lookup.LookupAnswer{
+						Type: lookup.AnswerTypeFormula,
+						Formulas: []lookup.LookupFormula{
+							{
+								Outpoint: &childOutput.Outpoint,
+								History:  lookup.HistorySelectorNumber(2), // Include 2 levels of history
+							},
+						},
+					}, nil
+				},
+			},
+		},
+		Storage: fakeStorage{
+			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
+				switch outpoint.Txid.String() {
+				case childOutput.Outpoint.Txid.String():
+					return childOutput, nil
+				case parent1Output.Outpoint.Txid.String():
+					return parent1Output, nil
+				case parent2Output.Outpoint.Txid.String():
+					return parent2Output, nil
+				case grandparentOutput.Outpoint.Txid.String():
+					return grandparentOutput, nil
+				default:
+					return nil, errors.New("output not found")
+				}
+			},
+		},
+	}
+	
+	// when
+	actualAnswer, err := sut.Lookup(ctx, &lookup.LookupQuestion{Service: "test"})
+	
+	// then
+	require.NoError(t, err)
+	require.NotNil(t, actualAnswer)
+	require.Equal(t, lookup.AnswerTypeOutputList, actualAnswer.Type)
+	// With depth 2, we should get: child (depth 0), parent1 & parent2 (depth 1), grandparent (depth 2)
+	require.Len(t, actualAnswer.Outputs, 4, "Should include child, both parents, and grandparent")
+	
+	// Verify all outputs are included
+	beefContents := make(map[string]bool)
+	for _, output := range actualAnswer.Outputs {
+		beefContents[string(output.Beef)] = true
+	}
+	
+	require.True(t, beefContents["child beef"], "Child output should be included")
+	require.True(t, beefContents["parent1 beef"], "Parent1 output should be included")
+	require.True(t, beefContents["parent2 beef"], "Parent2 output should be included")
+	require.True(t, beefContents["grandparent beef"], "Grandparent output should be included")
+}

@@ -56,11 +56,20 @@ func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since uint32) (
 func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *overlay.Outpoint, outpoint *overlay.Outpoint, metadata bool) (*core.GASPNode, error) {
 	if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, nil, nil, true); err != nil {
 		return nil, err
-	} else if output.Beef == nil {
+	} else if output == nil || output.Beef == nil {
 		return nil, ErrMissingInput
-	} else if tx, err := transaction.NewTransactionFromBEEF(output.Beef); err != nil {
-		return nil, err
 	} else {
+		// Parse BEEF to get the transaction
+		_, tx, _, err := transaction.ParseBeef(output.Beef)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Check if we got a valid transaction
+		if tx == nil {
+			return nil, errors.New("parsed BEEF returned nil transaction")
+		}
+		
 		node := &core.GASPNode{
 			GraphID:     graphID,
 			OutputIndex: outpoint.OutputIndex,
@@ -189,8 +198,24 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 			if _, ok := s.tempGraphNodeRefs.LoadOrStore(gaspTx.GraphID.String(), newGraphNode); !ok {
 				s.tempGraphNodeCount++
 			}
-		} else if node, ok := s.tempGraphNodeRefs.Load(gaspTx.GraphID.String()); ok {
-			parentNode := node.(*GraphNode)
+		} else {
+			// Find parent node by spentBy txid
+			var parentNode *GraphNode
+			found := false
+			s.tempGraphNodeRefs.Range(func(key, value interface{}) bool {
+				node := value.(*GraphNode)
+				if node.Txid != nil && node.Txid.IsEqual(spentBy) {
+					parentNode = node
+					found = true
+					return false
+				}
+				return true
+			})
+			
+			if !found {
+				return ErrMissingInput
+			}
+			
 			parentNode.Children = append(parentNode.Children, newGraphNode)
 			newGraphNode.Parent = parentNode
 			newGraphOutpoint := &overlay.Outpoint{
@@ -200,8 +225,6 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 			if _, ok := s.tempGraphNodeRefs.LoadOrStore(newGraphOutpoint.String(), newGraphNode); !ok {
 				s.tempGraphNodeCount++
 			}
-		} else {
-			return ErrMissingInput
 		}
 		return nil
 	}
@@ -267,14 +290,34 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *o
 }
 
 func (s *OverlayGASPStorage) DiscardGraph(ctx context.Context, graphID *overlay.Outpoint) error {
+	// First, find all nodes that belong to this graph
+	nodesToDelete := make([]string, 0)
 	s.tempGraphNodeRefs.Range(func(nodeId, graphRef any) bool {
-		if graphRef.(*GraphNode).GraphID.Equal(graphID) {
-			s.tempGraphNodeRefs.Delete(nodeId)
-			s.tempGraphNodeCount--
-			return false
+		node := graphRef.(*GraphNode)
+		if node.GraphID.Equal(graphID) {
+			// Recursively collect all child nodes
+			var collectNodes func(*GraphNode)
+			collectNodes = func(n *GraphNode) {
+				nodesToDelete = append(nodesToDelete, nodeId.(string))
+				for _, child := range n.Children {
+					outpoint := &overlay.Outpoint{
+						Txid:        *child.Txid,
+						OutputIndex: child.OutputIndex,
+					}
+					nodesToDelete = append(nodesToDelete, outpoint.String())
+				}
+			}
+			collectNodes(node)
 		}
 		return true
 	})
+	
+	// Delete all collected nodes
+	for _, nodeId := range nodesToDelete {
+		s.tempGraphNodeRefs.Delete(nodeId)
+		s.tempGraphNodeCount--
+	}
+	
 	return nil
 }
 
