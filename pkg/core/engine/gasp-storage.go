@@ -284,8 +284,7 @@ func (s *OverlayGASPStorage) DiscardGraph(ctx context.Context, graphID *overlay.
 		node := graphRef.(*GraphNode)
 		if node.GraphID.Equal(graphID) {
 			// Recursively collect all child nodes
-			var collectNodes func(*GraphNode)
-			collectNodes = func(n *GraphNode) {
+			collectNodes := func(n *GraphNode) {
 				nodesToDelete = append(nodesToDelete, nodeId.(string))
 				for _, child := range n.Children {
 					outpoint := &overlay.Outpoint{

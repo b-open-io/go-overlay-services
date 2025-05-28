@@ -3,8 +3,6 @@ package engine_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"net/http"
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
@@ -157,18 +155,3 @@ func TestLookupResolver_ErrorScenarios(t *testing.T) {
 	})
 }
 
-// Mock lookup facilitator for testing
-type mockLookupFacilitator struct {
-	queryFunc func(ctx context.Context, q *lookup.LookupQuestion) (*lookup.LookupAnswer, error)
-}
-
-func (m *mockLookupFacilitator) Query(ctx context.Context, q *lookup.LookupQuestion) (*lookup.LookupAnswer, error) {
-	if m.queryFunc != nil {
-		return m.queryFunc(ctx, q)
-	}
-	return nil, errors.New("not implemented")
-}
-
-func (m *mockLookupFacilitator) SetHTTPClient(client *http.Client) {
-	// Mock implementation
-}
