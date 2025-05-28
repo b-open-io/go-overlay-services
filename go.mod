@@ -70,7 +70,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/bsv-blockchain/go-sdk => github.com/b-open-io/go-sdk v1.1.25-0.20250520163347-a6ea0e8b256c
+replace github.com/bsv-blockchain/go-sdk => github.com/b-open-io/go-sdk v1.1.25-0.20250527212112-589f967a4b18
 
 // replace github.com/bsv-blockchain/go-sdk => ../go-sdk
 
