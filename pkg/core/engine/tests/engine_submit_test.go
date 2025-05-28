@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
@@ -270,4 +271,69 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, steak)
 	require.EqualError(t, err, "forced failure for testing")
+}
+
+func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
+	// given:
+	ctx := context.Background()
+	taggedBEEF, prevTxID := createDummyValidTaggedBEEF(t)
+	expectedErr := errors.New("insert-failed")
+
+	sut := &engine.Engine{
+		Managers: map[string]engine.TopicManager{
+			"test-topic": fakeManager{
+				identifyAdmissibleOutputsFunc: func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+					return overlay.AdmittanceInstructions{
+						OutputsToAdmit: []uint32{0},
+					}, nil
+				},
+			},
+		},
+		Storage: fakeStorage{
+			findOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
+				return &engine.Output{
+					Outpoint: overlay.Outpoint{
+						Txid:        *prevTxID,
+						OutputIndex: 0,
+					},
+					Satoshis: 1000,
+					Script:   &script.Script{script.OpTRUE},
+					Topic:    "test-topic",
+				}, nil
+			},
+			findOutputsFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
+				return []*engine.Output{
+					{
+						Outpoint: overlay.Outpoint{
+							Txid:        *prevTxID,
+							OutputIndex: 0,
+						},
+						Satoshis: 1000,
+						Script:   &script.Script{script.OpTRUE},
+						Topic:    "test-topic",
+					},
+				}, nil
+			},
+			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
+				return false, nil
+			},
+			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*overlay.Outpoint, topic string, spendTxid *chainhash.Hash) error {
+				return nil
+			},
+			insertOutputFunc: func(ctx context.Context, output *engine.Output) error {
+				return expectedErr
+			},
+			deleteOutputFunc: func(ctx context.Context, outpoint *overlay.Outpoint, topic string) error {
+				return nil
+			},
+		},
+		ChainTracker: fakeChainTracker{},
+	}
+
+	// when:
+	steak, err := sut.Submit(ctx, taggedBEEF, engine.SubmitModeCurrent, nil)
+
+	// then:
+	require.ErrorIs(t, err, expectedErr)
+	require.Nil(t, steak)
 }
