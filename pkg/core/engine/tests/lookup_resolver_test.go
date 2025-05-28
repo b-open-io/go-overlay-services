@@ -154,4 +154,3 @@ func TestLookupResolver_ErrorScenarios(t *testing.T) {
 		_ = question
 	})
 }
-
