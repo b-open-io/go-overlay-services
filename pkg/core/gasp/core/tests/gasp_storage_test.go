@@ -59,7 +59,12 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			GraphID:     graphID,
 		}
 
-		err = storage.AppendToGraph(ctx, childNode, tx.TxID())
+		// The parent outpoint that the child is spending
+		parentOutpoint := &overlay.Outpoint{
+			Txid:        *tx.TxID(),
+			OutputIndex: 0,
+		}
+		err = storage.AppendToGraph(ctx, childNode, parentOutpoint)
 		require.NoError(t, err)
 	})
 
@@ -257,7 +262,12 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 			GraphID:     graphID,
 		}
 
-		err = storage.AppendToGraph(ctx, childNode, rootTx.TxID())
+		// The parent outpoint that the child is spending
+		rootOutpoint := &overlay.Outpoint{
+			Txid:        *rootTx.TxID(),
+			OutputIndex: 0,
+		}
+		err = storage.AppendToGraph(ctx, childNode, rootOutpoint)
 		require.NoError(t, err)
 
 		// when
@@ -274,7 +284,11 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 		}
 
 		// This should fail because the parent node was discarded
-		err = storage.AppendToGraph(ctx, newNode, rootTx.TxID())
+		rootOutpoint2 := &overlay.Outpoint{
+			Txid:        *rootTx.TxID(),
+			OutputIndex: 0,
+		}
+		err = storage.AppendToGraph(ctx, newNode, rootOutpoint2)
 		require.Error(t, err)
 	})
 

@@ -175,7 +175,7 @@ func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, respons
 	return response, nil
 }
 
-func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GASPNode, spentBy *chainhash.Hash) error {
+func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GASPNode, spentBy *overlay.Outpoint) error {
 	if s.MaxNodesInGraph != nil && s.tempGraphNodeCount >= *s.MaxNodesInGraph {
 		return ErrGraphFull
 	}
@@ -199,25 +199,13 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 				s.tempGraphNodeCount++
 			}
 		} else {
-			// Find parent node by spentBy txid
-			var parentNode *GraphNode
-			found := false
-			s.tempGraphNodeRefs.Range(func(key, value interface{}) bool {
-				node := value.(*GraphNode)
-				if node.Txid != nil && node.Txid.IsEqual(spentBy) {
-					parentNode = node
-					found = true
-					return false
-				}
-				return true
-			})
-
-			if !found {
+			// Find parent node by spentBy outpoint
+			if parentNode, ok := s.tempGraphNodeRefs.Load(spentBy.String()); !ok {
 				return ErrMissingInput
+			} else {
+				parentNode.(*GraphNode).Children = append(parentNode.(*GraphNode).Children, newGraphNode)
+				newGraphNode.Parent = parentNode.(*GraphNode)
 			}
-
-			parentNode.Children = append(parentNode.Children, newGraphNode)
-			newGraphNode.Parent = parentNode
 			newGraphOutpoint := &overlay.Outpoint{
 				Txid:        *txid,
 				OutputIndex: gaspTx.OutputIndex,

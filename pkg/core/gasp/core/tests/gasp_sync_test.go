@@ -34,7 +34,7 @@ type mockGASPStorage struct {
 	// Configurable behavior functions
 	findKnownUTXOsFunc      func(ctx context.Context, sinceWhen uint32) ([]*overlay.Outpoint, error)
 	hydrateGASPNodeFunc     func(ctx context.Context, graphID *overlay.Outpoint, outpoint *overlay.Outpoint, metadata bool) (*core.GASPNode, error)
-	appendToGraphFunc       func(ctx context.Context, tx *core.GASPNode, spentBy *chainhash.Hash) error
+	appendToGraphFunc       func(ctx context.Context, tx *core.GASPNode, spentBy *overlay.Outpoint) error
 	validateGraphAnchorFunc func(ctx context.Context, graphID *overlay.Outpoint) error
 	discardGraphFunc        func(ctx context.Context, graphID *overlay.Outpoint) error
 	finalizeGraphFunc       func(ctx context.Context, graphID *overlay.Outpoint) error
@@ -123,7 +123,7 @@ func (m *mockGASPStorage) FindNeededInputs(ctx context.Context, tx *core.GASPNod
 	}, nil
 }
 
-func (m *mockGASPStorage) AppendToGraph(ctx context.Context, tx *core.GASPNode, spentBy *chainhash.Hash) error {
+func (m *mockGASPStorage) AppendToGraph(ctx context.Context, tx *core.GASPNode, spentBy *overlay.Outpoint) error {
 	if m.appendToGraphFunc != nil {
 		return m.appendToGraphFunc(ctx, tx, spentBy)
 	}

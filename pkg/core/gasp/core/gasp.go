@@ -227,7 +227,7 @@ func (g *GASP) CompleteGraph(ctx context.Context, graphID *overlay.Outpoint) (er
 	return g.Storage.DiscardGraph(ctx, graphID)
 }
 
-func (g *GASP) processIncomingNode(ctx context.Context, node *GASPNode, spentBy *chainhash.Hash, seenNodes *sync.Map) error {
+func (g *GASP) processIncomingNode(ctx context.Context, node *GASPNode, spentBy *overlay.Outpoint, seenNodes *sync.Map) error {
 	if txid, err := g.computeTxID(node.RawTx); err != nil {
 		return err
 	} else {
@@ -264,7 +264,12 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *GASPNode, spentBy 
 						errors <- err
 					} else {
 						slog.Debug(fmt.Sprintf("%sReceived new node: %v", g.LogPrefix, newNode))
-						if err := g.processIncomingNode(ctx, newNode, txid, seenNodes); err != nil {
+						// Create outpoint for the current node that is spending this input
+						spendingOutpoint := &overlay.Outpoint{
+							Txid:        *txid,
+							OutputIndex: node.OutputIndex,
+						}
+						if err := g.processIncomingNode(ctx, newNode, spendingOutpoint, seenNodes); err != nil {
 							errors <- err
 						}
 					}
