@@ -10,6 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const DefaultTopic = "test-topic"
+
+const (
+	DefaultVersion = 1
+	DefaultSince   = 100000
+)
+
 // RequestSyncResponseProviderMockExpectations defines mock expectations.
 type RequestSyncResponseProviderMockExpectations struct {
 	Error                          error
@@ -19,57 +26,39 @@ type RequestSyncResponseProviderMockExpectations struct {
 	Topic                          string
 }
 
-// RequestSyncResponseProviderMock is a mock provider.
+// RequestSyncResponseProviderMock is a test double that implements the
+// behavior of a RequestSyncResponseProvider. It records call data and
+// validates expectations defined via RequestSyncResponseProviderMockExpectations.
 type RequestSyncResponseProviderMock struct {
-	t              *testing.T
+	t              *testing.T // The testing context
 	expectations   RequestSyncResponseProviderMockExpectations
-	called         bool
-	topic          string
-	initialRequest *core.GASPInitialRequest
+	called         bool                     // Tracks whether ProvideForeignSyncResponse was called
+	topic          string                   // Stores the topic passed to ProvideForeignSyncResponse
+	initialRequest *core.GASPInitialRequest // Stores the request passed to ProvideForeignSyncResponse
 }
 
-const (
-	DefaultVersion = 1
-	DefaultSince   = 100000
-	DefaultTopic   = "test-topic"
-)
+// NewDefaultGASPInitialResponseTestHelper creates a default GASPInitialResponse instance
+// for use in test scenarios.
+//
+// It includes a sample UTXO with a dummy transaction hash and a fixed "Since" value.
+func NewDefaultGASPInitialResponseTestHelper(t *testing.T) *core.GASPInitialResponse {
+	t.Helper()
 
-// NewDefaultRequestSyncResponseBody creates a new request sync response body.
-func NewDefaultRequestSyncResponseBody() openapi.RequestSyncResponseBody {
-	return openapi.RequestSyncResponseBody{
-		Version: DefaultVersion,
-		Since:   DefaultSince,
+	return &core.GASPInitialResponse{
+		UTXOList: []*overlay.Outpoint{
+			{
+				Txid:        *DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
+				OutputIndex: 0,
+			},
+		},
+		Since: 1000000,
 	}
 }
 
-// NewRequestSyncResponseProviderMock creates a new mock provider.
-func NewRequestSyncResponseProviderMock(t *testing.T, expectations RequestSyncResponseProviderMockExpectations) *RequestSyncResponseProviderMock {
-	return &RequestSyncResponseProviderMock{
-		t:            t,
-		expectations: expectations,
-	}
-}
-
-// NewMockRequestPayload creates a custom request payload using OpenAPI model.
-func NewMockRequestPayload(version, since int) openapi.RequestSyncResponseBody {
-	return openapi.RequestSyncResponseBody{
-		Version: version,
-		Since:   since,
-	}
-}
-
-// NewMockHeaders creates custom headers for testing.
-func NewMockHeaders(contentType, topic string) map[string]string {
-	headers := map[string]string{
-		"Content-Type": contentType,
-	}
-	if topic != "" {
-		headers["X-BSV-Topic"] = topic
-	}
-	return headers
-}
-
-// ProvideForeignSyncResponse mocks the method.
+// ProvideForeignSyncResponse simulates the behavior of a real provider.
+// It captures input values and returns either the expected mock response or error.
+//
+// Implements the same signature as the real method for interchangeability in tests.
 func (m *RequestSyncResponseProviderMock) ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
 	m.t.Helper()
 	m.called = true
@@ -83,7 +72,9 @@ func (m *RequestSyncResponseProviderMock) ProvideForeignSyncResponse(ctx context
 	return m.expectations.Response, nil
 }
 
-// AssertCalled verifies the method was called as expected.
+// AssertCalled verifies that ProvideForeignSyncResponse was called as expected.
+// It compares the actual call data (topic and request) with the expected values
+// and fails the test if discrepancies are found.
 func (m *RequestSyncResponseProviderMock) AssertCalled() {
 	m.t.Helper()
 	require.Equal(m.t, m.expectations.ProvideForeignSyncResponseCall, m.called, "Discrepancy between expected and actual ProvideForeignSyncResponseCall")
@@ -91,35 +82,20 @@ func (m *RequestSyncResponseProviderMock) AssertCalled() {
 	require.Equal(m.t, m.expectations.Topic, m.topic, "Discrepancy between expected and actual Topic")
 }
 
-// NewEmptyResponseExpectations creates expectations for an empty UTXO list response.
-func NewEmptyResponseExpectations() RequestSyncResponseProviderMockExpectations {
-	return RequestSyncResponseProviderMockExpectations{
-		Error: nil,
-		Response: &core.GASPInitialResponse{
-			UTXOList: []*overlay.Outpoint{},
-			Since:    0,
-		},
-		ProvideForeignSyncResponseCall: true,
+// NewDefaultRequestSyncResponseBody returns a default RequestSyncResponseBody
+// with predefined Version and Since values for use in OpenAPI tests.
+func NewDefaultRequestSyncResponseBody() openapi.RequestSyncResponseBody {
+	return openapi.RequestSyncResponseBody{
+		Version: DefaultVersion,
+		Since:   DefaultSince,
 	}
 }
 
-// NewErrorResponseExpectations creates expectations that return an error.
-func NewErrorResponseExpectations(err error) RequestSyncResponseProviderMockExpectations {
-	return RequestSyncResponseProviderMockExpectations{
-		Error:                          err,
-		Response:                       nil,
-		ProvideForeignSyncResponseCall: true,
-	}
-}
-
-// NewCustomUTXOListExpectations creates expectations with a custom list of UTXOs.
-func NewCustomUTXOListExpectations(utxos []*overlay.Outpoint, since uint32) RequestSyncResponseProviderMockExpectations {
-	return RequestSyncResponseProviderMockExpectations{
-		Error: nil,
-		Response: &core.GASPInitialResponse{
-			UTXOList: utxos,
-			Since:    since,
-		},
-		ProvideForeignSyncResponseCall: true,
+// NewRequestSyncResponseProviderMock constructs a new RequestSyncResponseProviderMock
+// with predefined expectations.
+func NewRequestSyncResponseProviderMock(t *testing.T, expectations RequestSyncResponseProviderMockExpectations) *RequestSyncResponseProviderMock {
+	return &RequestSyncResponseProviderMock{
+		t:            t,
+		expectations: expectations,
 	}
 }

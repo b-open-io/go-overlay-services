@@ -1,5 +1,7 @@
 package app
 
+import "fmt"
+
 // ErrorType represents a generic category of error used as descriptor
 // to clarify the nature of a failure that occurred in dependencies.
 type ErrorType struct {
@@ -92,6 +94,16 @@ func NewRawDataProcessingError(err, slug string) Error {
 	}
 }
 
+// NewRawDataProcessingWithFieldError returns an error that handles issues encountered
+// during raw data processing related to the specific field. Such as invalid or corrupt input
+// data that prevents successful processing.
+func NewRawDataProcessingWithFieldError(err error, field string) Error {
+	return NewRawDataProcessingError(
+		err.Error(),
+		fmt.Sprintf("Unable to process data structure the '%s' field. Please verify the content and try again later.", field),
+	)
+}
+
 // NewUnknownError returns an error that represents an unexpected or unclassified
 // issue that doesn't fall into predefined error categories. Useful as a fallback
 // when the exact nature of the error is unclear.
@@ -101,6 +113,16 @@ func NewUnknownError(err, slug string) Error {
 		errorType: ErrorTypeUnknown,
 		err:       err,
 	}
+}
+
+// NewIncorrectInputWithFieldError returns an error indicating that a specific input field is invalid.
+// This is typically caused by partial state, incorrect data formats, or other issues related to user input.
+func NewIncorrectInputWithFieldError(field string) Error {
+	msg := fmt.Sprintf("Unable to process the '%s' field. Please verify the content and try again.", field)
+	return NewIncorrectInputError(
+		msg,
+		msg,
+	)
 }
 
 // NewContextCancellationError returns an error indicating that the submitted request exceeded the context timeout limit or
