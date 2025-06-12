@@ -52,8 +52,8 @@ func TestGASP_GetInitialResponse_Success(t *testing.T) {
 
 	expectedResponse := &core.GASPInitialResponse{
 		UTXOList: []*transaction.Outpoint{
-			{OutputIndex: 1},
-			{OutputIndex: 2},
+			{Index: 1},
+			{Index: 2},
 		},
 		Since: 0,
 	}

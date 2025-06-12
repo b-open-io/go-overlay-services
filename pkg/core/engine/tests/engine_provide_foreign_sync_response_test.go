@@ -14,8 +14,8 @@ import (
 func TestEngine_ProvideForeignSyncResponse_ShouldReturnUTXOList(t *testing.T) {
 	// given
 	expectedOutpoint := &transaction.Outpoint{
-		Txid:        fakeTxID(t),
-		OutputIndex: 1,
+		Txid:  fakeTxID(t),
+		Index: 1,
 	}
 	expectedResponse := &core.GASPInitialResponse{
 		UTXOList: []*transaction.Outpoint{expectedOutpoint},

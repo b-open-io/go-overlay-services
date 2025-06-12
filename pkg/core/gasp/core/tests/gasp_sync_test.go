@@ -250,8 +250,8 @@ func createMockUTXO(txHex string, outputIndex uint32, time uint32) *mockUTXO {
 
 	return &mockUTXO{
 		GraphID: &transaction.Outpoint{
-			Txid:        *tx.TxID(),
-			OutputIndex: outputIndex,
+			Txid:  *tx.TxID(),
+			Index: outputIndex,
 		},
 		RawTx:       realTxHex,
 		OutputIndex: outputIndex,
@@ -432,7 +432,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		require.Len(t, utxos2, 1) // Only new UTXO should be synchronized
 
 		// Verify it's the new UTXO
-		require.Equal(t, newUTXO.GraphID.OutputIndex, utxos2[0].OutputIndex)
+		require.Equal(t, newUTXO.GraphID.Index, utxos2[0].Index)
 	})
 
 	t.Run("should not sync unnecessary graphs", func(t *testing.T) {

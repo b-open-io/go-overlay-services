@@ -47,8 +47,8 @@ func NewDefaultGASPInitialResponseTestHelper(t *testing.T) *core.GASPInitialResp
 	return &core.GASPInitialResponse{
 		UTXOList: []*transaction.Outpoint{
 			{
-				Txid:        *DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
-				OutputIndex: 0,
+				Txid:  *DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
+				Index: 0,
 			},
 		},
 		Since: 1000000,

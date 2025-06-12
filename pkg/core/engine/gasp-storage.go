@@ -72,7 +72,7 @@ func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *trans
 
 		node := &core.GASPNode{
 			GraphID:     graphID,
-			OutputIndex: outpoint.OutputIndex,
+			OutputIndex: outpoint.Index,
 			RawTx:       tx.Hex(),
 		}
 		if tx.MerklePath != nil {
@@ -94,8 +94,8 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 	if gaspTx.Proof == nil {
 		for _, input := range tx.Inputs {
 			outpoint := &transaction.Outpoint{
-				Txid:        *input.SourceTXID,
-				OutputIndex: input.SourceTxOutIndex,
+				Txid:  *input.SourceTXID,
+				Index: input.SourceTxOutIndex,
 			}
 			response.RequestedInputs[outpoint.String()] = &core.GASPNodeResponseData{
 				Metadata: false,
@@ -117,8 +117,8 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 		inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
 		for vin, input := range tx.Inputs {
 			inpoints[vin] = &transaction.Outpoint{
-				Txid:        *input.SourceTXID,
-				OutputIndex: input.SourceTxOutIndex,
+				Txid:  *input.SourceTXID,
+				Index: input.SourceTxOutIndex,
 			}
 		}
 		previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
@@ -207,8 +207,8 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 				newGraphNode.Parent = parentNode.(*GraphNode)
 			}
 			newGraphOutpoint := &transaction.Outpoint{
-				Txid:        *txid,
-				OutputIndex: gaspTx.OutputIndex,
+				Txid:  *txid,
+				Index: gaspTx.OutputIndex,
 			}
 			if _, ok := s.tempGraphNodeRefs.LoadOrStore(newGraphOutpoint.String(), newGraphNode); !ok {
 				s.tempGraphNodeCount++
@@ -240,8 +240,8 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 				inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
 				for vin, input := range tx.Inputs {
 					inpoints[vin] = &transaction.Outpoint{
-						Txid:        *input.SourceTXID,
-						OutputIndex: input.SourceTxOutIndex,
+						Txid:  *input.SourceTXID,
+						Index: input.SourceTxOutIndex,
 					}
 				}
 				previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
@@ -262,8 +262,8 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 				} else {
 					for _, vout := range admit.OutputsToAdmit {
 						outpoint := &transaction.Outpoint{
-							Txid:        *tx.TxID(),
-							OutputIndex: vout,
+							Txid:  *tx.TxID(),
+							Index: vout,
 						}
 						coins[outpoint.String()] = struct{}{}
 					}
@@ -288,8 +288,8 @@ func (s *OverlayGASPStorage) DiscardGraph(ctx context.Context, graphID *transact
 				nodesToDelete = append(nodesToDelete, nodeId.(string))
 				for _, child := range n.Children {
 					outpoint := &transaction.Outpoint{
-						Txid:        *child.Txid,
-						OutputIndex: child.OutputIndex,
+						Txid:  *child.Txid,
+						Index: child.OutputIndex,
 					}
 					nodesToDelete = append(nodesToDelete, outpoint.String())
 				}
@@ -372,8 +372,8 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 		} else {
 			for vin, input := range tx.Inputs {
 				outpoint := &transaction.Outpoint{
-					Txid:        *input.SourceTXID,
-					OutputIndex: input.SourceTxOutIndex,
+					Txid:  *input.SourceTXID,
+					Index: input.SourceTxOutIndex,
 				}
 				if foundNode, ok := s.tempGraphNodeRefs.Load(outpoint.String()); !ok {
 					return nil, errors.New("required input node for unproven parent not found in temporary graph store")

@@ -47,8 +47,8 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// Create output
 		output := &engine.Output{
 			Outpoint: transaction.Outpoint{
-				Txid:        *txid,
-				OutputIndex: 0,
+				Txid:  *txid,
+				Index: 0,
 			},
 			Topic:       "test-topic",
 			Satoshis:    1000,
@@ -117,8 +117,8 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 
 		output := &engine.Output{
 			Outpoint: transaction.Outpoint{
-				Txid:        *txid,
-				OutputIndex: 0,
+				Txid:  *txid,
+				Index: 0,
 			},
 		}
 
@@ -236,20 +236,20 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// Create outputs with consumedBy relationship
 		output1 := &engine.Output{
 			Outpoint: transaction.Outpoint{
-				Txid:        *txid1,
-				OutputIndex: 0,
+				Txid:  *txid1,
+				Index: 0,
 			},
 			Topic:      "test-topic",
-			ConsumedBy: []*transaction.Outpoint{{Txid: *txid2, OutputIndex: 0}},
+			ConsumedBy: []*transaction.Outpoint{{Txid: *txid2, Index: 0}},
 		}
 
 		output2 := &engine.Output{
 			Outpoint: transaction.Outpoint{
-				Txid:        *txid2,
-				OutputIndex: 0,
+				Txid:  *txid2,
+				Index: 0,
 			},
 			Topic:           "test-topic",
-			OutputsConsumed: []*transaction.Outpoint{{Txid: *txid1, OutputIndex: 0}},
+			OutputsConsumed: []*transaction.Outpoint{{Txid: *txid1, Index: 0}},
 			Beef:            beef2Bytes,
 		}
 

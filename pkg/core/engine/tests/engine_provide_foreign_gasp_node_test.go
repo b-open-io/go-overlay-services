@@ -15,13 +15,13 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 	// given:
 	ctx := context.Background()
 	graphID := &transaction.Outpoint{}
-	outpoint := &transaction.Outpoint{OutputIndex: 1}
+	outpoint := &transaction.Outpoint{Index: 1}
 	BEEF := createDummyBEEF(t)
 
 	expectedNode := &core.GASPNode{
 		GraphID:     graphID,
 		RawTx:       parseBEEFToTx(t, BEEF).Hex(),
-		OutputIndex: outpoint.OutputIndex,
+		OutputIndex: outpoint.Index,
 	}
 
 	sut := &engine.Engine{

@@ -166,8 +166,8 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	ancillaryBeefs := make(map[string][]byte, len(taggedBEEF.Topics))
 	for _, input := range tx.Inputs {
 		inpoints = append(inpoints, &transaction.Outpoint{
-			Txid:        *input.SourceTXID,
-			OutputIndex: input.SourceTxOutIndex,
+			Txid:  *input.SourceTXID,
+			Index: input.SourceTxOutIndex,
 		})
 	}
 	dupeTopics := make(map[string]struct{}, len(taggedBEEF.Topics))
@@ -305,8 +305,8 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			out := tx.Outputs[vout]
 			output := &Output{
 				Outpoint: transaction.Outpoint{
-					Txid:        *txid,
-					OutputIndex: uint32(vout),
+					Txid:  *txid,
+					Index: uint32(vout),
 				},
 				Script:          out.LockingScript,
 				Satoshis:        out.Satoshis,
@@ -418,7 +418,7 @@ func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*
 				} else if output != nil {
 					hydratedOutputs = append(hydratedOutputs, &lookup.OutputListItem{
 						Beef:        output.Beef,
-						OutputIndex: output.Outpoint.OutputIndex,
+						OutputIndex: output.Outpoint.Index,
 					})
 				}
 			}
@@ -434,7 +434,7 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 	if historySelector == nil {
 		return output, nil
 	}
-	shouldTravelHistory := historySelector(output.Beef, output.Outpoint.OutputIndex, currentDepth)
+	shouldTravelHistory := historySelector(output.Beef, output.Outpoint.Index, currentDepth)
 	if !shouldTravelHistory {
 		return nil, nil
 	}
@@ -463,8 +463,8 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 	} else {
 		for _, txin := range tx.Inputs {
 			outpoint := &transaction.Outpoint{
-				Txid:        *txin.SourceTXID,
-				OutputIndex: txin.SourceTxOutIndex,
+				Txid:  *txin.SourceTXID,
+				Index: txin.SourceTxOutIndex,
 			}
 			if input := childHistories[outpoint.String()]; input != nil {
 				if input.Beef == nil {
@@ -699,7 +699,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			node := &core.GASPNode{
 				GraphID:       graphId,
 				RawTx:         tx.Hex(),
-				OutputIndex:   outpoint.OutputIndex,
+				OutputIndex:   outpoint.Index,
 				AncillaryBeef: output.AncillaryBeef,
 			}
 			if tx.MerklePath != nil {

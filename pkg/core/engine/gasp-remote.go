@@ -54,7 +54,7 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transactio
 	if j, err := json.Marshal(&core.GASPNodeRequest{
 		GraphID:     graphID,
 		Txid:        &outpoint.Txid,
-		OutputIndex: outpoint.OutputIndex,
+		OutputIndex: outpoint.Index,
 		Metadata:    metadata,
 	}); err != nil {
 		return nil, err

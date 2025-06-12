@@ -104,16 +104,16 @@ func TestRequestSyncResponseHandler_ValidCase(t *testing.T) {
 			Since: testabilities.DefaultSince,
 			UTXOList: []*transaction.Outpoint{
 				{
-					Txid:        *testabilities.DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
-					OutputIndex: 0,
+					Txid:  *testabilities.DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
+					Index: 0,
 				},
 				{
-					Txid:        *testabilities.DummyTxHash(t, "27c8f37851aabc468d3dbb6bf0789dc398a602dcb897ca04e7815d939d621595"),
-					OutputIndex: 1,
+					Txid:  *testabilities.DummyTxHash(t, "27c8f37851aabc468d3dbb6bf0789dc398a602dcb897ca04e7815d939d621595"),
+					Index: 1,
 				},
 				{
-					Txid:        *testabilities.DummyTxHash(t, "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"),
-					OutputIndex: 2,
+					Txid:  *testabilities.DummyTxHash(t, "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"),
+					Index: 2,
 				},
 			},
 		},

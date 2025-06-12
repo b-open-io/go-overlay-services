@@ -190,7 +190,7 @@ func (g *GASP) GetInitialReply(ctx context.Context, response *GASPInitialRespons
 }
 
 func (g *GASP) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (node *GASPNode, err error) {
-	slog.Info(fmt.Sprintf("%sRemote is requesting node with graphID: %s, txid: %s, outputIndex: %d, metadata: %v", g.LogPrefix, graphID.String(), outpoint.Txid.String(), outpoint.OutputIndex, metadata))
+	slog.Info(fmt.Sprintf("%sRemote is requesting node with graphID: %s, txid: %s, outputIndex: %d, metadata: %v", g.LogPrefix, graphID.String(), outpoint.Txid.String(), outpoint.Index, metadata))
 	if node, err = g.Storage.HydrateGASPNode(ctx, graphID, outpoint, metadata); err != nil {
 		return nil, err
 	}
@@ -231,8 +231,8 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *GASPNode, spentBy 
 		return err
 	} else {
 		nodeId := (&transaction.Outpoint{
-			Txid:        *txid,
-			OutputIndex: node.OutputIndex,
+			Txid:  *txid,
+			Index: node.OutputIndex,
 		}).String()
 		slog.Debug(fmt.Sprintf("%sProcessing incoming node: %v, spentBy: %v", g.LogPrefix, node, spentBy))
 		if _, ok := seenNodes.Load(nodeId); ok {
@@ -265,8 +265,8 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *GASPNode, spentBy 
 						slog.Debug(fmt.Sprintf("%sReceived new node: %v", g.LogPrefix, newNode))
 						// Create outpoint for the current node that is spending this input
 						spendingOutpoint := &transaction.Outpoint{
-							Txid:        *txid,
-							OutputIndex: node.OutputIndex,
+							Txid:  *txid,
+							Index: node.OutputIndex,
 						}
 						if err := g.processIncomingNode(ctx, newNode, spendingOutpoint, seenNodes); err != nil {
 							errors <- err
@@ -300,8 +300,8 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *GASPNode, seenNode
 		return err
 	} else {
 		nodeId := (&transaction.Outpoint{
-			Txid:        *txid,
-			OutputIndex: node.OutputIndex,
+			Txid:  *txid,
+			Index: node.OutputIndex,
 		}).String()
 		slog.Debug(fmt.Sprintf("%sProcessing outgoing node: %v", g.LogPrefix, node))
 		if _, ok := seenNodes.Load(nodeId); ok {

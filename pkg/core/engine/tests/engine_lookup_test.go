@@ -110,7 +110,7 @@ func TestEngine_Lookup_ShouldHydrateOutputs_WhenFormulasProvided(t *testing.T) {
 	// given
 	ctx := context.Background()
 	expectedBeef := []byte("hydrated beef")
-	outpoint := &transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 0}
+	outpoint := &transaction.Outpoint{Txid: fakeTxID(t), Index: 0}
 
 	sut := &engine.Engine{
 		LookupServices: map[string]engine.LookupService{
@@ -119,7 +119,7 @@ func TestEngine_Lookup_ShouldHydrateOutputs_WhenFormulasProvided(t *testing.T) {
 					return &lookup.LookupAnswer{
 						Type: lookup.AnswerTypeFormula,
 						Formulas: []lookup.LookupFormula{
-							{Outpoint: &transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 0}},
+							{Outpoint: &transaction.Outpoint{Txid: fakeTxID(t), Index: 0}},
 						},
 					}, nil
 				},
@@ -139,7 +139,7 @@ func TestEngine_Lookup_ShouldHydrateOutputs_WhenFormulasProvided(t *testing.T) {
 		Type: lookup.AnswerTypeOutputList,
 		Outputs: []*lookup.OutputListItem{
 			{
-				OutputIndex: outpoint.OutputIndex,
+				OutputIndex: outpoint.Index,
 				Beef:        expectedBeef,
 			},
 		},

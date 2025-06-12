@@ -47,8 +47,8 @@ func (s *RequestForeignGASPNodeService) RequestForeignGASPNode(ctx context.Conte
 	}
 
 	node, err := s.provider.ProvideForeignGASPNode(ctx, graphID, &transaction.Outpoint{
-		OutputIndex: dto.OutputIndex,
-		Txid:        *txID,
+		Index: dto.OutputIndex,
+		Txid:  *txID,
 	}, dto.Topic)
 	if err != nil {
 		return nil, NewForeignGASPNodeProviderError(err)

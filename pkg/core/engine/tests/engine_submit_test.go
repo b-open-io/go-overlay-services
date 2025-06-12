@@ -293,8 +293,8 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 			findOutputFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 				return &engine.Output{
 					Outpoint: transaction.Outpoint{
-						Txid:        *prevTxID,
-						OutputIndex: 0,
+						Txid:  *prevTxID,
+						Index: 0,
 					},
 					Satoshis: 1000,
 					Script:   &script.Script{script.OpTRUE},
@@ -305,8 +305,8 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 				return []*engine.Output{
 					{
 						Outpoint: transaction.Outpoint{
-							Txid:        *prevTxID,
-							OutputIndex: 0,
+							Txid:  *prevTxID,
+							Index: 0,
 						},
 						Satoshis: 1000,
 						Script:   &script.Script{script.OpTRUE},

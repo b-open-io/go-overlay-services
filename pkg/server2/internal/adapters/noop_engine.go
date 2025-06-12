@@ -56,8 +56,8 @@ func (*NoopEngineProvider) Lookup(ctx context.Context, question *lookup.LookupQu
 		Formulas: []lookup.LookupFormula{
 			{
 				Outpoint: &transaction.Outpoint{
-					Txid:        chainhash.Hash{},
-					OutputIndex: 0,
+					Txid:  chainhash.Hash{},
+					Index: 0,
 				},
 			},
 		},

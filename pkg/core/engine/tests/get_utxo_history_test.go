@@ -65,8 +65,8 @@ func TestEngine_GetUTXOHistory_ShouldTravelRecursively_WhenOutputsConsumedPresen
 	// given
 	ctx := context.Background()
 
-	parentOutpoint := &transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 0}
-	childOutpoint := &transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 1}
+	parentOutpoint := &transaction.Outpoint{Txid: fakeTxID(t), Index: 0}
+	childOutpoint := &transaction.Outpoint{Txid: fakeTxID(t), Index: 1}
 
 	childBeef := createDummyBEEF(t)
 	parentBeef := createDummyBEEF(t)
@@ -109,8 +109,8 @@ func TestEngine_GetUTXOHistory_ShouldReturnError_WhenStorageFails(t *testing.T) 
 	// given
 	ctx := context.Background()
 
-	parentOutpoint := &transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 0}
-	childOutpoint := &transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 1}
+	parentOutpoint := &transaction.Outpoint{Txid: fakeTxID(t), Index: 0}
+	childOutpoint := &transaction.Outpoint{Txid: fakeTxID(t), Index: 1}
 
 	parentOutput := &engine.Output{
 		Outpoint:        *parentOutpoint,
@@ -145,18 +145,18 @@ func TestEngine_GetUTXOHistory_ShouldRespectDepthInHistorySelector(t *testing.T)
 
 	// Create a chain of 3 outputs
 	output3 := &engine.Output{
-		Outpoint: transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 3},
+		Outpoint: transaction.Outpoint{Txid: fakeTxID(t), Index: 3},
 		Beef:     createDummyBEEF(t),
 	}
 
 	output2 := &engine.Output{
-		Outpoint:        transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 2},
+		Outpoint:        transaction.Outpoint{Txid: fakeTxID(t), Index: 2},
 		Beef:            createDummyBEEF(t),
 		OutputsConsumed: []*transaction.Outpoint{&output3.Outpoint},
 	}
 
 	output1 := &engine.Output{
-		Outpoint:        transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 1},
+		Outpoint:        transaction.Outpoint{Txid: fakeTxID(t), Index: 1},
 		Beef:            createDummyBEEF(t),
 		OutputsConsumed: []*transaction.Outpoint{&output2.Outpoint},
 	}
@@ -164,7 +164,7 @@ func TestEngine_GetUTXOHistory_ShouldRespectDepthInHistorySelector(t *testing.T)
 	sut := &engine.Engine{
 		Storage: fakeStorage{
 			findOutputFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
-				switch outpoint.OutputIndex {
+				switch outpoint.Index {
 				case 2:
 					return output2, nil
 				case 3:
@@ -196,17 +196,17 @@ func TestEngine_GetUTXOHistory_ShouldHandleMultipleOutputsConsumed(t *testing.T)
 
 	// Create multiple consumed outputs
 	consumed1 := &engine.Output{
-		Outpoint: transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 10},
+		Outpoint: transaction.Outpoint{Txid: fakeTxID(t), Index: 10},
 		Beef:     createDummyBEEF(t),
 	}
 
 	consumed2 := &engine.Output{
-		Outpoint: transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 11},
+		Outpoint: transaction.Outpoint{Txid: fakeTxID(t), Index: 11},
 		Beef:     createDummyBEEF(t),
 	}
 
 	parentOutput := &engine.Output{
-		Outpoint: transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 1},
+		Outpoint: transaction.Outpoint{Txid: fakeTxID(t), Index: 1},
 		Beef:     createDummyBEEF(t),
 		OutputsConsumed: []*transaction.Outpoint{
 			&consumed1.Outpoint,
@@ -219,7 +219,7 @@ func TestEngine_GetUTXOHistory_ShouldHandleMultipleOutputsConsumed(t *testing.T)
 		Storage: fakeStorage{
 			findOutputFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 				findOutputCallCount++
-				switch outpoint.OutputIndex {
+				switch outpoint.Index {
 				case 10:
 					return consumed1, nil
 				case 11:
@@ -250,8 +250,8 @@ func TestEngine_GetUTXOHistory_ShouldHandleCircularReferences(t *testing.T) {
 	ctx := context.Background()
 
 	// Create outputs that reference each other (which shouldn't happen in practice)
-	output1 := &transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 1}
-	output2 := &transaction.Outpoint{Txid: fakeTxID(t), OutputIndex: 2}
+	output1 := &transaction.Outpoint{Txid: fakeTxID(t), Index: 1}
+	output2 := &transaction.Outpoint{Txid: fakeTxID(t), Index: 2}
 
 	output1Data := &engine.Output{
 		Outpoint:        *output1,
@@ -276,7 +276,7 @@ func TestEngine_GetUTXOHistory_ShouldHandleCircularReferences(t *testing.T) {
 					return nil, errors.New("max calls exceeded")
 				}
 
-				switch outpoint.OutputIndex {
+				switch outpoint.Index {
 				case 1:
 					return output1Data, nil
 				case 2:
@@ -333,7 +333,7 @@ func TestEngine_GetUTXOHistory_ShouldInvokeHistorySelectorWithCorrectParameters(
 	output := &engine.Output{
 		Beef: expectedBeef,
 		Outpoint: transaction.Outpoint{
-			OutputIndex: expectedOutputIndex,
+			Index: expectedOutputIndex,
 		},
 	}
 	sut := &engine.Engine{}

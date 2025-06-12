@@ -31,8 +31,8 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 		})
 
 		graphID := &transaction.Outpoint{
-			Txid:        *tx.TxID(),
-			OutputIndex: 0,
+			Txid:  *tx.TxID(),
+			Index: 0,
 		}
 
 		gaspNode := &core.GASPNode{
@@ -61,8 +61,8 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 
 		// The parent outpoint that the child is spending
 		parentOutpoint := &transaction.Outpoint{
-			Txid:        *tx.TxID(),
-			OutputIndex: 0,
+			Txid:  *tx.TxID(),
+			Index: 0,
 		}
 		err = storage.AppendToGraph(ctx, childNode, parentOutpoint)
 		require.NoError(t, err)
@@ -86,8 +86,8 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			})
 
 			graphID := &transaction.Outpoint{
-				Txid:        *tx.TxID(),
-				OutputIndex: uint32(i),
+				Txid:  *tx.TxID(),
+				Index: uint32(i),
 			}
 
 			gaspNode := &core.GASPNode{
@@ -108,8 +108,8 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 		})
 
 		graphID := &transaction.Outpoint{
-			Txid:        *tx.TxID(),
-			OutputIndex: 99,
+			Txid:  *tx.TxID(),
+			Index: 99,
 		}
 
 		gaspNode := &core.GASPNode{
@@ -138,8 +138,8 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			RawTx:       "invalid-hex",
 			OutputIndex: 0,
 			GraphID: &transaction.Outpoint{
-				Txid:        chainhash.Hash{},
-				OutputIndex: 0,
+				Txid:  chainhash.Hash{},
+				Index: 0,
 			},
 		}
 
@@ -159,14 +159,14 @@ func TestOverlayGASPStorage_FindKnownUTXOs(t *testing.T) {
 		expectedUTXOs := []*engine.Output{
 			{
 				Outpoint: transaction.Outpoint{
-					Txid:        chainhash.Hash{1},
-					OutputIndex: 0,
+					Txid:  chainhash.Hash{1},
+					Index: 0,
 				},
 			},
 			{
 				Outpoint: transaction.Outpoint{
-					Txid:        chainhash.Hash{2},
-					OutputIndex: 1,
+					Txid:  chainhash.Hash{2},
+					Index: 1,
 				},
 			},
 		}
@@ -235,8 +235,8 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 		})
 
 		graphID := &transaction.Outpoint{
-			Txid:        *rootTx.TxID(),
-			OutputIndex: 0,
+			Txid:  *rootTx.TxID(),
+			Index: 0,
 		}
 
 		rootNode := &core.GASPNode{
@@ -264,8 +264,8 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 
 		// The parent outpoint that the child is spending
 		rootOutpoint := &transaction.Outpoint{
-			Txid:        *rootTx.TxID(),
-			OutputIndex: 0,
+			Txid:  *rootTx.TxID(),
+			Index: 0,
 		}
 		err = storage.AppendToGraph(ctx, childNode, rootOutpoint)
 		require.NoError(t, err)
@@ -285,8 +285,8 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 
 		// This should fail because the parent node was discarded
 		rootOutpoint2 := &transaction.Outpoint{
-			Txid:        *rootTx.TxID(),
-			OutputIndex: 0,
+			Txid:  *rootTx.TxID(),
+			Index: 0,
 		}
 		err = storage.AppendToGraph(ctx, newNode, rootOutpoint2)
 		require.Error(t, err)
@@ -301,8 +301,8 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 		storage := engine.NewOverlayGASPStorage("test-topic", mockEngine, nil)
 
 		nonExistentGraphID := &transaction.Outpoint{
-			Txid:        chainhash.Hash{99, 99, 99},
-			OutputIndex: 0,
+			Txid:  chainhash.Hash{99, 99, 99},
+			Index: 0,
 		}
 
 		// when
@@ -329,12 +329,12 @@ func TestOverlayGASPStorage_HydrateGASPNode(t *testing.T) {
 		storage := engine.NewOverlayGASPStorage("test-topic", mockEngine, nil)
 
 		graphID := &transaction.Outpoint{
-			Txid:        chainhash.Hash{1},
-			OutputIndex: 0,
+			Txid:  chainhash.Hash{1},
+			Index: 0,
 		}
 		outpoint := &transaction.Outpoint{
-			Txid:        chainhash.Hash{2},
-			OutputIndex: 0,
+			Txid:  chainhash.Hash{2},
+			Index: 0,
 		}
 
 		// when
@@ -383,12 +383,12 @@ func TestOverlayGASPStorage_HydrateGASPNode(t *testing.T) {
 		storage := engine.NewOverlayGASPStorage("test-topic", mockEngine, nil)
 
 		graphID := &transaction.Outpoint{
-			Txid:        chainhash.Hash{1},
-			OutputIndex: 0,
+			Txid:  chainhash.Hash{1},
+			Index: 0,
 		}
 		outpoint := &transaction.Outpoint{
-			Txid:        *tx.TxID(),
-			OutputIndex: 0,
+			Txid:  *tx.TxID(),
+			Index: 0,
 		}
 
 		// when

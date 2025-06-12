@@ -48,7 +48,7 @@ func (h *RequestForeignGASPNodeHandler) Handle(w http.ResponseWriter, r *http.Re
 	}
 
 	outpoint := &transaction.Outpoint{
-		OutputIndex: payload.OutputIndex,
+		Index: payload.OutputIndex,
 	}
 	txid, err := chainhash.NewHashFromHex(payload.TxID)
 	if err != nil {
