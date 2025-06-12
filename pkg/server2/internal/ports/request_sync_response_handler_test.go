@@ -9,7 +9,7 @@ import (
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/ports"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/ports/openapi"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/testabilities"
-	"github.com/bsv-blockchain/go-sdk/overlay"
+	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -102,7 +102,7 @@ func TestRequestSyncResponseHandler_ValidCase(t *testing.T) {
 		Topic: testabilities.DefaultTopic,
 		Response: &core.GASPInitialResponse{
 			Since: testabilities.DefaultSince,
-			UTXOList: []*overlay.Outpoint{
+			UTXOList: []*transaction.Outpoint{
 				{
 					Txid:        *testabilities.DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
 					OutputIndex: 0,

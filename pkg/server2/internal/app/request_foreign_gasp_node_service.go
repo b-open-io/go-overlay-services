@@ -5,7 +5,7 @@ import (
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
-	"github.com/bsv-blockchain/go-sdk/overlay"
+	"github.com/bsv-blockchain/go-sdk/transaction"
 )
 
 // RequestForeignGASPNodeDTO represents the data transfer object used to request a foreign GASP node.
@@ -21,7 +21,7 @@ type RequestForeignGASPNodeDTO struct {
 type RequestForeignGASPNodeProvider interface {
 	// ProvideForeignGASPNode resolves the foreign GASP node using the given graphID, outpoint, and topic.
 	// Returns a pointer to a GASP node or an error if retrieval fails.
-	ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *overlay.Outpoint, topic string) (*core.GASPNode, error)
+	ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, topic string) (*core.GASPNode, error)
 }
 
 // RequestForeignGASPNodeService coordinates and orchestrates the process of requesting a foreign GASP node.
@@ -41,12 +41,12 @@ func (s *RequestForeignGASPNodeService) RequestForeignGASPNode(ctx context.Conte
 		return nil, NewRawDataProcessingWithFieldError(err, "TransactionID")
 	}
 
-	graphID, err := overlay.NewOutpointFromString(dto.GraphID)
+	graphID, err := transaction.OutpointFromString(dto.GraphID)
 	if err != nil {
 		return nil, NewRawDataProcessingWithFieldError(err, "GraphID")
 	}
 
-	node, err := s.provider.ProvideForeignGASPNode(ctx, graphID, &overlay.Outpoint{
+	node, err := s.provider.ProvideForeignGASPNode(ctx, graphID, &transaction.Outpoint{
 		OutputIndex: dto.OutputIndex,
 		Txid:        *txID,
 	}, dto.Topic)

@@ -162,10 +162,10 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	start = time.Now()
 	steak := make(overlay.Steak, len(taggedBEEF.Topics))
 	topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
-	inpoints := make([]*overlay.Outpoint, 0, len(tx.Inputs))
+	inpoints := make([]*transaction.Outpoint, 0, len(tx.Inputs))
 	ancillaryBeefs := make(map[string][]byte, len(taggedBEEF.Topics))
 	for _, input := range tx.Inputs {
-		inpoints = append(inpoints, &overlay.Outpoint{
+		inpoints = append(inpoints, &transaction.Outpoint{
 			Txid:        *input.SourceTXID,
 			OutputIndex: input.SourceTxOutIndex,
 		})
@@ -280,7 +280,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 		admit := steak[topic]
 		outputsConsumed := make([]*Output, 0, len(admit.CoinsToRetain))
-		outpointsConsumed := make([]*overlay.Outpoint, 0, len(admit.CoinsToRetain))
+		outpointsConsumed := make([]*transaction.Outpoint, 0, len(admit.CoinsToRetain))
 		for vin, output := range topicInputs[topic] {
 			for _, coin := range admit.CoinsToRetain {
 				if vin == coin {
@@ -300,11 +300,11 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			admit.CoinsRemoved = append(admit.CoinsRemoved, uint32(vin))
 		}
 
-		newOutpoints := make([]*overlay.Outpoint, 0, len(admit.OutputsToAdmit))
+		newOutpoints := make([]*transaction.Outpoint, 0, len(admit.OutputsToAdmit))
 		for _, vout := range admit.OutputsToAdmit {
 			out := tx.Outputs[vout]
 			output := &Output{
-				Outpoint: overlay.Outpoint{
+				Outpoint: transaction.Outpoint{
 					Txid:        *txid,
 					OutputIndex: uint32(vout),
 				},
@@ -462,7 +462,7 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 		return nil, err
 	} else {
 		for _, txin := range tx.Inputs {
-			outpoint := &overlay.Outpoint{
+			outpoint := &transaction.Outpoint{
 				Txid:        *txin.SourceTXID,
 				OutputIndex: txin.SourceTxOutIndex,
 			}
@@ -667,7 +667,7 @@ func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest 
 		slog.Error("failed to find UTXOs for topic in ProvideForeignSyncResponse", "topic", topic, "error", err)
 		return nil, err
 	} else {
-		utxoList := make([]*overlay.Outpoint, 0, len(utxos))
+		utxoList := make([]*transaction.Outpoint, 0, len(utxos))
 		for _, utxo := range utxos {
 			utxoList = append(utxoList, &utxo.Outpoint)
 		}
@@ -677,7 +677,7 @@ func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest 
 	}
 }
 
-func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *overlay.Outpoint, outpoint *overlay.Outpoint, topic string) (*core.GASPNode, error) {
+func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transaction.Outpoint, outpoint *transaction.Outpoint, topic string) (*core.GASPNode, error) {
 	var hydrator func(ctx context.Context, output *Output) (*core.GASPNode, error)
 	hydrator = func(ctx context.Context, output *Output) (*core.GASPNode, error) {
 		if output.Beef == nil {
@@ -746,7 +746,7 @@ func (e *Engine) deleteUTXODeep(ctx context.Context, output *Output) error {
 		}
 		if len(staleOutput.ConsumedBy) > 0 {
 			consumedBy := staleOutput.ConsumedBy
-			staleOutput.ConsumedBy = make([]*overlay.Outpoint, 0, len(consumedBy))
+			staleOutput.ConsumedBy = make([]*transaction.Outpoint, 0, len(consumedBy))
 			for _, outpoint := range consumedBy {
 				if !bytes.Equal(outpoint.TxBytes(), output.Outpoint.TxBytes()) {
 					staleOutput.ConsumedBy = append(staleOutput.ConsumedBy, outpoint)

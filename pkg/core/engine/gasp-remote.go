@@ -10,7 +10,7 @@ import (
 	"net/http"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
-	"github.com/bsv-blockchain/go-sdk/overlay"
+	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/go-sdk/util"
 )
 
@@ -50,7 +50,7 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *cor
 	}
 }
 
-func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *overlay.Outpoint, outpoint *overlay.Outpoint, metadata bool) (*core.GASPNode, error) {
+func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*core.GASPNode, error) {
 	if j, err := json.Marshal(&core.GASPNodeRequest{
 		GraphID:     graphID,
 		Txid:        &outpoint.Txid,
