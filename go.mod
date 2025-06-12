@@ -3,7 +3,7 @@ module github.com/4chain-ag/go-overlay-services
 go 1.24.3
 
 require (
-	github.com/bsv-blockchain/go-sdk v1.2.0
+	github.com/bsv-blockchain/go-sdk v1.2.1
 	github.com/bsv-blockchain/universal-test-vectors v0.5.0
 	github.com/go-resty/resty/v2 v2.16.5
 	github.com/go-viper/mapstructure/v2 v2.2.1
@@ -69,9 +69,5 @@ require (
 	golang.org/x/tools v0.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-// replace github.com/bsv-blockchain/go-sdk => github.com/b-open-io/go-sdk v1.1.25-0.20250527212112-589f967a4b18
-
-replace github.com/bsv-blockchain/go-sdk => ../go-sdk
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
