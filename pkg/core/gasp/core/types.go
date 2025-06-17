@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/bsv-blockchain/go-sdk/transaction"
@@ -12,121 +13,121 @@ type GASPInitialRequest struct {
 }
 
 type GASPInitialResponse struct {
-	UTXOList []*transaction.Outpoint `json:"utxo_list"`
+	UTXOList []*transaction.Outpoint `json:"UTXOList"`
 	Since    uint32                  `json:"since"`
 }
 
-// // MarshalJSON implements custom JSON marshaling for GASPInitialResponse
-// func (g GASPInitialResponse) MarshalJSON() ([]byte, error) {
-// 	type OutpointObj struct {
-// 		Txid  string `json:"txid"`
-// 		Index uint32 `json:"outputIndex"`
-// 	}
+// MarshalJSON implements custom JSON marshaling for GASPInitialResponse
+func (g GASPInitialResponse) MarshalJSON() ([]byte, error) {
+	type OutpointObj struct {
+		Txid  string `json:"txid"`
+		Index uint32 `json:"outputIndex"`
+	}
 
-// 	utxoList := make([]OutpointObj, len(g.UTXOList))
-// 	for i, outpoint := range g.UTXOList {
-// 		if outpoint != nil {
-// 			utxoList[i] = OutpointObj{
-// 				Txid:  outpoint.Txid.String(),
-// 				Index: outpoint.Index,
-// 			}
-// 		}
-// 	}
+	utxoList := make([]OutpointObj, len(g.UTXOList))
+	for i, outpoint := range g.UTXOList {
+		if outpoint != nil {
+			utxoList[i] = OutpointObj{
+				Txid:  outpoint.Txid.String(),
+				Index: outpoint.Index,
+			}
+		}
+	}
 
-// 	return json.Marshal(&struct {
-// 		UTXOList []OutpointObj `json:"utxo_list"`
-// 		Since    uint32        `json:"since"`
-// 	}{
-// 		UTXOList: utxoList,
-// 		Since:    g.Since,
-// 	})
-// }
-
-// // UnmarshalJSON implements custom JSON unmarshalling for GASPInitialResponse
-// func (g *GASPInitialResponse) UnmarshalJSON(data []byte) error {
-// 	type OutpointObj struct {
-// 		Txid  string `json:"txid"`
-// 		Index uint32 `json:"index"`
-// 	}
-
-// 	aux := &struct {
-// 		UTXOList []OutpointObj `json:"utxo_list"`
-// 		Since    uint32        `json:"since"`
-// 	}{}
-
-// 	if err := json.Unmarshal(data, aux); err != nil {
-// 		return err
-// 	}
-
-// 	g.Since = aux.Since
-// 	g.UTXOList = make([]*transaction.Outpoint, len(aux.UTXOList))
-
-// 	for i, obj := range aux.UTXOList {
-// 		outpoint, err := transaction.OutpointFromString(fmt.Sprintf("%s.%d", obj.Txid, obj.Index))
-// 		if err != nil {
-// 			return err
-// 		}
-// 		g.UTXOList[i] = outpoint
-// 	}
-
-// 	return nil
-// }
-
-type GASPInitialReply struct {
-	UTXOList []*transaction.Outpoint `json:"utxo_list"`
+	return json.Marshal(&struct {
+		UTXOList []OutpointObj `json:"UTXOList"`
+		Since    uint32        `json:"since"`
+	}{
+		UTXOList: utxoList,
+		Since:    g.Since,
+	})
 }
 
-// // MarshalJSON implements custom JSON marshaling for GASPInitialReply
-// func (g GASPInitialReply) MarshalJSON() ([]byte, error) {
-// 	type OutpointObj struct {
-// 		Txid  string `json:"txid"`
-// 		Index uint32 `json:"index"`
-// 	}
+// UnmarshalJSON implements custom JSON unmarshalling for GASPInitialResponse
+func (g *GASPInitialResponse) UnmarshalJSON(data []byte) error {
+	type OutpointObj struct {
+		Txid  string `json:"txid"`
+		Index uint32 `json:"outputIndex"`
+	}
 
-// 	utxoList := make([]OutpointObj, len(g.UTXOList))
-// 	for i, outpoint := range g.UTXOList {
-// 		if outpoint != nil {
-// 			utxoList[i] = OutpointObj{
-// 				Txid:  outpoint.Txid.String(),
-// 				Index: outpoint.Index,
-// 			}
-// 		}
-// 	}
+	aux := &struct {
+		UTXOList []OutpointObj `json:"UTXOList"`
+		Since    uint32        `json:"since"`
+	}{}
 
-// 	return json.Marshal(&struct {
-// 		UTXOList []OutpointObj `json:"utxo_list"`
-// 	}{
-// 		UTXOList: utxoList,
-// 	})
-// }
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
 
-// // UnmarshalJSON implements custom JSON unmarshalling for GASPInitialReply
-// func (g *GASPInitialReply) UnmarshalJSON(data []byte) error {
-// 	type OutpointObj struct {
-// 		Txid  string `json:"txid"`
-// 		Index uint32 `json:"index"`
-// 	}
+	g.Since = aux.Since
+	g.UTXOList = make([]*transaction.Outpoint, len(aux.UTXOList))
 
-// 	aux := &struct {
-// 		UTXOList []OutpointObj `json:"utxo_list"`
-// 	}{}
+	for i, obj := range aux.UTXOList {
+		outpoint, err := transaction.OutpointFromString(fmt.Sprintf("%s.%d", obj.Txid, obj.Index))
+		if err != nil {
+			return err
+		}
+		g.UTXOList[i] = outpoint
+	}
 
-// 	if err := json.Unmarshal(data, aux); err != nil {
-// 		return err
-// 	}
+	return nil
+}
 
-// 	g.UTXOList = make([]*transaction.Outpoint, len(aux.UTXOList))
+type GASPInitialReply struct {
+	UTXOList []*transaction.Outpoint `json:"UTXOList"`
+}
 
-// 	for i, obj := range aux.UTXOList {
-// 		outpoint, err := transaction.OutpointFromString(fmt.Sprintf("%s.%d", obj.Txid, obj.Index))
-// 		if err != nil {
-// 			return err
-// 		}
-// 		g.UTXOList[i] = outpoint
-// 	}
+// MarshalJSON implements custom JSON marshaling for GASPInitialReply
+func (g GASPInitialReply) MarshalJSON() ([]byte, error) {
+	type OutpointObj struct {
+		Txid  string `json:"txid"`
+		Index uint32 `json:"outputIndex"`
+	}
 
-// 	return nil
-// }
+	utxoList := make([]OutpointObj, len(g.UTXOList))
+	for i, outpoint := range g.UTXOList {
+		if outpoint != nil {
+			utxoList[i] = OutpointObj{
+				Txid:  outpoint.Txid.String(),
+				Index: outpoint.Index,
+			}
+		}
+	}
+
+	return json.Marshal(&struct {
+		UTXOList []OutpointObj `json:"UTXOList"`
+	}{
+		UTXOList: utxoList,
+	})
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling for GASPInitialReply
+func (g *GASPInitialReply) UnmarshalJSON(data []byte) error {
+	type OutpointObj struct {
+		Txid  string `json:"txid"`
+		Index uint32 `json:"outputIndex"`
+	}
+
+	aux := &struct {
+		UTXOList []OutpointObj `json:"UTXOList"`
+	}{}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	g.UTXOList = make([]*transaction.Outpoint, len(aux.UTXOList))
+
+	for i, obj := range aux.UTXOList {
+		outpoint, err := transaction.OutpointFromString(fmt.Sprintf("%s.%d", obj.Txid, obj.Index))
+		if err != nil {
+			return err
+		}
+		g.UTXOList[i] = outpoint
+	}
+
+	return nil
+}
 
 type GASPInput struct {
 	Hash string `json:"hash"`
