@@ -131,6 +131,7 @@ var ErrUnknownTopic = errors.New("unknown-topic")
 var ErrInvalidBeef = errors.New("invalid-beef")
 var ErrInvalidTransaction = errors.New("invalid-transaction")
 var ErrMissingInput = errors.New("missing-input")
+var ErrMissingOutput = errors.New("missing-output")
 var ErrInputSpent = errors.New("input-spent")
 
 func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady OnSteakReady) (overlay.Steak, error) {
@@ -714,6 +715,8 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 	if output, err := e.Storage.FindOutput(ctx, graphId, &topic, nil, true); err != nil {
 		slog.Error("failed to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "topic", topic, "error", err)
 		return nil, err
+	} else if output == nil {
+		return nil, ErrMissingOutput
 	} else {
 		return hydrator(ctx, output)
 	}
