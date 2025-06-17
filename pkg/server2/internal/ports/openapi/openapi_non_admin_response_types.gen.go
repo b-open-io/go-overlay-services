@@ -99,11 +99,11 @@ type TopicManagerDocumentation struct {
 
 // UTXOItem defines model for UTXOItem.
 type UTXOItem struct {
+	// OutputIndex Output index number
+	OutputIndex int `json:"outputIndex"`
+
 	// Txid Transaction ID in hexadecimal format
 	Txid string `json:"txid"`
-
-	// Vout Output index number
-	Vout int `json:"vout"`
 }
 
 // ArcIngestResponse defines model for ArcIngestResponse.

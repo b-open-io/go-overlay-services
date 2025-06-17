@@ -293,12 +293,12 @@ paths:
                         txid:
                           type: string
                           description: Transaction ID in hexadecimal format
-                        vout:
+                        outputIndex:
                           type: integer
                           description: Output index number
                       required:
                         - txid
-                        - vout
+                        - outputIndex
                   since:
                     type: integer
                     description: Timestamp or sequence number from which synchronization data was generated

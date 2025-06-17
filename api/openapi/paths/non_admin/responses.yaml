@@ -159,12 +159,12 @@ components:
         txid:
           type: string
           description: 'Transaction ID in hexadecimal format'
-        vout:
+        outputIndex:
           type: integer
           description: 'Output index number'
       required:
         - txid
-        - vout
+        - outputIndex
 
     RequestSyncRes:
       type: object
