@@ -21,7 +21,7 @@ type GASPInitialResponse struct {
 func (g GASPInitialResponse) MarshalJSON() ([]byte, error) {
 	type OutpointObj struct {
 		Txid  string `json:"txid"`
-		Index uint32 `json:"index"`
+		Index uint32 `json:"outputIndex"`
 	}
 
 	utxoList := make([]OutpointObj, len(g.UTXOList))
