@@ -169,6 +169,7 @@ components:
       required:
         - txid
         - outputIndex
+        - score
 
     RequestSyncRes:
       type: object
