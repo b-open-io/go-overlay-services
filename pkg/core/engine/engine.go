@@ -679,9 +679,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 }
 
 func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
-	// Pass limit from initial request, or 0 to get all
-	limit := initialRequest.Limit
-	if utxos, err := e.Storage.FindUTXOsForTopic(ctx, topic, initialRequest.Since, limit, false); err != nil {
+	if utxos, err := e.Storage.FindUTXOsForTopic(ctx, topic, initialRequest.Since, initialRequest.Limit, false); err != nil {
 		slog.Error("failed to find UTXOs for topic in ProvideForeignSyncResponse", "topic", topic, "error", err)
 		return nil, err
 	} else {
