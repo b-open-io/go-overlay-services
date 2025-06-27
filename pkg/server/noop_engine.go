@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
@@ -60,19 +60,16 @@ func (*NoopEngineProvider) GetUTXOHistory(ctx context.Context, output *engine.Ou
 func (*NoopEngineProvider) StartGASPSync(ctx context.Context) error { return nil }
 
 // ProvideForeignSyncResponse is a no-op call that always returns an empty initial GASP response with nil error.
-func (*NoopEngineProvider) ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
-	return &core.GASPInitialResponse{
-		UTXOList: []*transaction.Outpoint{
-			{},
-			{},
-		},
+func (*NoopEngineProvider) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
+	return &gasp.InitialResponse{
+		UTXOList: []*gasp.Output{},
 		Since: 0,
 	}, nil
 }
 
 // ProvideForeignGASPNode is a no-op call that always returns an empty GASP node with nil error.
-func (*NoopEngineProvider) ProvideForeignGASPNode(ctx context.Context, graphId, outpoint *transaction.Outpoint, topic string) (*core.GASPNode, error) {
-	return &core.GASPNode{}, nil
+func (*NoopEngineProvider) ProvideForeignGASPNode(ctx context.Context, graphId, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error) {
+	return &gasp.Node{}, nil
 }
 
 // ListTopicManagers is a no-op call that always returns an empty topic managers map with nil error.

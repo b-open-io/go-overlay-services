@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 )
@@ -21,7 +21,7 @@ type RequestForeignGASPNodeDTO struct {
 type RequestForeignGASPNodeProvider interface {
 	// ProvideForeignGASPNode resolves the foreign GASP node using the given graphID, outpoint, and topic.
 	// Returns a pointer to a GASP node or an error if retrieval fails.
-	ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, topic string) (*core.GASPNode, error)
+	ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error)
 }
 
 // RequestForeignGASPNodeService coordinates and orchestrates the process of requesting a foreign GASP node.
@@ -35,7 +35,7 @@ type RequestForeignGASPNodeService struct {
 // and the output index, and creates a graph outpoint from the GraphID string.
 // All validated data is then passed to the configured provider.
 // Returns the GASP node on success, or a detailed error if processing fails.
-func (s *RequestForeignGASPNodeService) RequestForeignGASPNode(ctx context.Context, dto RequestForeignGASPNodeDTO) (*core.GASPNode, error) {
+func (s *RequestForeignGASPNodeService) RequestForeignGASPNode(ctx context.Context, dto RequestForeignGASPNodeDTO) (*gasp.Node, error) {
 	txID, err := chainhash.NewHashFromHex(dto.TxID)
 	if err != nil {
 		return nil, NewRawDataProcessingWithFieldError(err, "TransactionID")

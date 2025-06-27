@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 )
 
 // OutpointDTO represents a single unspent transaction output (UTXO) reference,
@@ -18,7 +18,7 @@ type OutpointDTO struct {
 // latest processed sync height (Since).
 type RequestSyncResponseDTO struct {
 	UTXOList []OutpointDTO
-	Since    uint32
+	Since    float64
 }
 
 // Topic represents a named communication or synchronization channel identifier.
@@ -46,19 +46,19 @@ func (v Version) IsGreaterThanZero() bool { return v > 0 }
 func (v Version) Int() int { return int(v) }
 
 // Since represents a sync position or offset marker, typically used for incremental updates.
-type Since uint32
+type Since float64
 
-// NewSince constructs a new Since value from an unsigned 32-bit integer.
-func NewSince(v uint32) Since { return Since(v) }
+// NewSince constructs a new Since value from a float64.
+func NewSince(v float64) Since { return Since(v) }
 
-// Unit32 returns the raw uint32 value of the Since marker.
-func (s Since) Unit32() uint32 { return uint32(s) }
+// Float64 returns the raw float64 value of the Since marker.
+func (s Since) Float64() float64 { return float64(s) }
 
 // RequestSyncResponseProvider defines the interface for components that can
 // fulfill requests for foreign sync responses. It abstracts the underlying
 // sync logic and data source.
 type RequestSyncResponseProvider interface {
-	ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error)
+	ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error)
 }
 
 // RequestSyncResponseService coordinates the sync response operation within the
@@ -80,7 +80,7 @@ func (s *RequestSyncResponseService) RequestSyncResponse(ctx context.Context, to
 		return nil, NewIncorrectInputWithFieldError("version")
 	}
 
-	response, err := s.provider.ProvideForeignSyncResponse(ctx, &core.GASPInitialRequest{Version: version.Int(), Since: since.Unit32()}, topic.String())
+	response, err := s.provider.ProvideForeignSyncResponse(ctx, &gasp.InitialRequest{Version: version.Int(), Since: since.Float64()}, topic.String())
 	if err != nil {
 		return nil, NewRequestSyncResponseProviderError(err)
 	}
@@ -89,12 +89,12 @@ func (s *RequestSyncResponseService) RequestSyncResponse(ctx context.Context, to
 
 // NewRequestSyncResponseDTO transforms the core GASP sync response into a
 // client-friendly DTO, preserving only the required UTXO and sync progress data.
-func NewRequestSyncResponseDTO(response *core.GASPInitialResponse) *RequestSyncResponseDTO {
+func NewRequestSyncResponseDTO(response *gasp.InitialResponse) *RequestSyncResponseDTO {
 	outpoints := make([]OutpointDTO, 0, len(response.UTXOList))
 	for _, utxo := range response.UTXOList {
 		outpoints = append(outpoints, OutpointDTO{
 			TxID:        utxo.Txid.String(),
-			OutputIndex: utxo.Index,
+			OutputIndex: utxo.OutputIndex,
 		})
 	}
 

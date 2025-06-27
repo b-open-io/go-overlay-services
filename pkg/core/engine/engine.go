@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/advertiser"
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
@@ -21,6 +21,8 @@ import (
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/go-sdk/transaction/chaintracker"
 )
+
+const DEFAULT_GASP_SYNC_LIMIT = 10000
 
 var TRUE = true
 var FALSE = false
@@ -54,9 +56,6 @@ type LookupResolverProvider interface {
 	Query(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error)
 }
 
-type GASPProvider interface {
-	Sync(ctx context.Context) error
-}
 
 type Engine struct {
 	Managers                map[string]TopicManager
@@ -74,7 +73,6 @@ type Engine struct {
 	ErrorOnBroadcastFailure bool
 	BroadcastFacilitator    topic.Facilitator
 	LookupResolver          LookupResolverProvider
-	GASPProvider            GASPProvider
 	// Logger				  Logger //TODO: Implement Logger Interface
 }
 
@@ -640,22 +638,40 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 			for _, peer := range peers {
 				logPrefix := "[GASP Sync of " + topic + " with " + peer + "]"
 
-				if e.GASPProvider == nil {
-					e.GASPProvider = core.NewGASP(core.GASPParams{
-						Storage: NewOverlayGASPStorage(topic, e, nil),
-						Remote: &OverlayGASPRemote{
-							EndpointUrl: peer,
-							Topic:       topic,
-							HttpClient:  http.DefaultClient,
-						},
-						LogPrefix:      &logPrefix,
-						Unidirectional: true,
-						Concurrency:    syncEndpoints.Concurrency,
-					})
+				slog.Info("GASP sync starting", "topic", topic, "peer", peer)
+
+				// Read the last interaction score from storage
+				lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
+				if err != nil {
+					slog.Error("Failed to get last interaction", "topic", topic, "peer", peer, "error", err)
+					return err
 				}
 
-				if err := e.GASPProvider.Sync(ctx); err != nil {
+				// Create a new GASP provider for each peer to avoid state conflicts
+				gaspProvider := gasp.NewGASP(gasp.GASPParams{
+					Storage: NewOverlayGASPStorage(topic, e, nil),
+					Remote: &OverlayGASPRemote{
+						EndpointUrl: peer,
+						Topic:       topic,
+						HttpClient:  http.DefaultClient,
+					},
+					LastInteraction: lastInteraction,
+					LogPrefix:       &logPrefix,
+					Unidirectional:  true,
+					Concurrency:     syncEndpoints.Concurrency,
+				})
+
+				if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
 					slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
+				} else {
+					slog.Info("GASP sync successful", "topic", topic, "peer", peer)
+
+					// Save the updated last interaction score
+					if gaspProvider.LastInteraction > lastInteraction {
+						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err == nil {
+							slog.Info("Updated last interaction score", "topic", topic, "peer", peer, "score", gaspProvider.LastInteraction)
+						}
+					}
 				}
 			}
 		}
@@ -663,24 +679,33 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 	return nil
 }
 
-func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
-	if utxos, err := e.Storage.FindUTXOsForTopic(ctx, topic, initialRequest.Since, false); err != nil {
+func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
+	// Pass limit from initial request, or 0 to get all
+	limit := initialRequest.Limit
+	if utxos, err := e.Storage.FindUTXOsForTopic(ctx, topic, initialRequest.Since, limit, false); err != nil {
 		slog.Error("failed to find UTXOs for topic in ProvideForeignSyncResponse", "topic", topic, "error", err)
 		return nil, err
 	} else {
-		utxoList := make([]*transaction.Outpoint, 0, len(utxos))
+		// Convert to GASPOutput format
+		gaspOutputs := make([]*gasp.Output, 0, len(utxos))
 		for _, utxo := range utxos {
-			utxoList = append(utxoList, &utxo.Outpoint)
+			gaspOutputs = append(gaspOutputs, &gasp.Output{
+				Txid:        utxo.Outpoint.Txid,
+				OutputIndex: utxo.Outpoint.Index,
+				Score:       utxo.Score,
+			})
 		}
-		return &core.GASPInitialResponse{
-			UTXOList: utxoList,
+
+		return &gasp.InitialResponse{
+			UTXOList: gaspOutputs,
+			Since:    initialRequest.Since,
 		}, nil
 	}
 }
 
-func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transaction.Outpoint, outpoint *transaction.Outpoint, topic string) (*core.GASPNode, error) {
-	var hydrator func(ctx context.Context, output *Output) (*core.GASPNode, error)
-	hydrator = func(ctx context.Context, output *Output) (*core.GASPNode, error) {
+func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transaction.Outpoint, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error) {
+	var hydrator func(ctx context.Context, output *Output) (*gasp.Node, error)
+	hydrator = func(ctx context.Context, output *Output) (*gasp.Node, error) {
 		if output.Beef == nil {
 			slog.Error("missing BEEF in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", ErrMissingInput)
 			return nil, ErrMissingInput
@@ -697,7 +722,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			slog.Error("unable to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "error", err)
 			return nil, err
 		} else {
-			node := &core.GASPNode{
+			node := &gasp.Node{
 				GraphID:       graphId,
 				RawTx:         tx.Hex(),
 				OutputIndex:   outpoint.Index,

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/app"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
@@ -33,13 +33,13 @@ var ForeignGASPNodeDefaultDTO = app.RequestForeignGASPNodeDTO{
 var DefaultRequestForeignGASPNodeProviderMockExpectations = RequestForeignGASPNodeProviderMockExpectations{
 	ProvideForeignGASPNodeCall: true,
 	Error:                      nil,
-	Node:                       &core.GASPNode{},
+	Node:                       &gasp.Node{},
 }
 
 // RequestForeignGASPNodeProviderMockExpectations defines the expected behavior of the mock provider.
 type RequestForeignGASPNodeProviderMockExpectations struct {
 	Error                      error
-	Node                       *core.GASPNode
+	Node                       *gasp.Node
 	ProvideForeignGASPNodeCall bool
 }
 
@@ -51,7 +51,7 @@ type RequestForeignGASPNodeProviderMock struct {
 }
 
 // ProvideForeignGASPNode mocks the ProvideForeignGASPNode method.
-func (m *RequestForeignGASPNodeProviderMock) ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, topic string) (*core.GASPNode, error) {
+func (m *RequestForeignGASPNodeProviderMock) ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error) {
 	m.t.Helper()
 	m.called = true
 

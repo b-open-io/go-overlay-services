@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/internal/app/commands"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/internal/app/jsonutil"
 	"github.com/bsv-blockchain/go-sdk/transaction"
@@ -18,8 +18,8 @@ import (
 
 type stubEngine struct{}
 
-func (s *stubEngine) ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, topic string) (*core.GASPNode, error) {
-	return &core.GASPNode{}, nil
+func (s *stubEngine) ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error) {
+	return &gasp.Node{}, nil
 }
 
 func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) {
@@ -46,8 +46,8 @@ func TestRequestForeignGASPNodeHandler_ValidInput_ReturnsGASPNode(t *testing.T) 
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var actual core.GASPNode
-	expected := core.GASPNode{}
+	var actual gasp.Node
+	expected := gasp.Node{}
 	require.NoError(t, jsonutil.DecodeResponseBody(resp, &actual))
 	assert.EqualValues(t, expected, actual)
 }

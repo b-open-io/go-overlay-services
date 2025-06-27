@@ -24,7 +24,7 @@ type Storage interface {
 	FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*Output, error)
 
 	// Finds current UTXOs that have been admitted into a given topic
-	FindUTXOsForTopic(ctx context.Context, topic string, since uint32, includeBEEF bool) ([]*Output, error)
+	FindUTXOsForTopic(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*Output, error)
 
 	// Deletes an output from storage
 	DeleteOutput(ctx context.Context, outpoint *transaction.Outpoint, topic string) error
@@ -46,4 +46,11 @@ type Storage interface {
 
 	// Checks if a duplicate transaction exists
 	DoesAppliedTransactionExist(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error)
+
+	// Updates the last interaction score for a given host and topic
+	UpdateLastInteraction(ctx context.Context, host string, topic string, since float64) error
+
+	// Retrieves the last interaction score for a given host and topic
+	// Returns 0 if no record exists
+	GetLastInteraction(ctx context.Context, host string, topic string) (float64, error)
 }

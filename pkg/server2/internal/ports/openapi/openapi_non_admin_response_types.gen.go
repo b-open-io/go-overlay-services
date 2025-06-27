@@ -71,7 +71,7 @@ type RequestSyncRes struct {
 	UTXOList []UTXOItem `json:"UTXOList"`
 
 	// Since Timestamp or sequence number from which synchronization data was generated
-	Since int `json:"since"`
+	Since float64 `json:"since"`
 }
 
 // STEAK defines model for STEAK.

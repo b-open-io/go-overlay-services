@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	gasp "github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/script"
@@ -35,7 +35,7 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			Index: 0,
 		}
 
-		gaspNode := &core.GASPNode{
+		gaspNode := &gasp.Node{
 			RawTx:       tx.Hex(),
 			OutputIndex: 0,
 			GraphID:     graphID,
@@ -53,7 +53,7 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			LockingScript: &script.Script{},
 		})
 
-		childNode := &core.GASPNode{
+		childNode := &gasp.Node{
 			RawTx:       childTx.Hex(),
 			OutputIndex: 0,
 			GraphID:     graphID,
@@ -90,7 +90,7 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 				Index: uint32(i),
 			}
 
-			gaspNode := &core.GASPNode{
+			gaspNode := &gasp.Node{
 				RawTx:       tx.Hex(),
 				OutputIndex: uint32(i),
 				GraphID:     graphID,
@@ -112,7 +112,7 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 			Index: 99,
 		}
 
-		gaspNode := &core.GASPNode{
+		gaspNode := &gasp.Node{
 			RawTx:       tx.Hex(),
 			OutputIndex: 99,
 			GraphID:     graphID,
@@ -134,7 +134,7 @@ func TestOverlayGASPStorage_AppendToGraph(t *testing.T) {
 		}
 		storage := engine.NewOverlayGASPStorage("test-topic", mockEngine, nil)
 
-		gaspNode := &core.GASPNode{
+		gaspNode := &gasp.Node{
 			RawTx:       "invalid-hex",
 			OutputIndex: 0,
 			GraphID: &transaction.Outpoint{
@@ -172,7 +172,7 @@ func TestOverlayGASPStorage_FindKnownUTXOs(t *testing.T) {
 		}
 
 		mockStorage := &mockStorage{
-			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since uint32, historical bool) ([]*engine.Output, error) {
+			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since float64, limit uint32, historical bool) ([]*engine.Output, error) {
 				return expectedUTXOs, nil
 			},
 		}
@@ -183,13 +183,87 @@ func TestOverlayGASPStorage_FindKnownUTXOs(t *testing.T) {
 		storage := engine.NewOverlayGASPStorage("test-topic", mockEngine, nil)
 
 		// when
-		result, err := storage.FindKnownUTXOs(ctx, since)
+		result, err := storage.FindKnownUTXOs(ctx, float64(since), 0)
 
 		// then
 		require.NoError(t, err)
+		require.NotNil(t, result)
 		require.Len(t, result, 2)
-		require.Equal(t, &expectedUTXOs[0].Outpoint, result[0])
-		require.Equal(t, &expectedUTXOs[1].Outpoint, result[1])
+		require.Equal(t, expectedUTXOs[0].Outpoint.Txid, result[0].Txid)
+		require.Equal(t, expectedUTXOs[0].Outpoint.Index, result[0].OutputIndex)
+		require.Equal(t, expectedUTXOs[1].Outpoint.Txid, result[1].Txid)
+		require.Equal(t, expectedUTXOs[1].Outpoint.Index, result[1].OutputIndex)
+	})
+
+	t.Run("should return limited UTXOs when limit is specified", func(t *testing.T) {
+		// given
+		ctx := context.Background()
+		since := uint32(100)
+		limit := uint32(2)
+		// Create many UTXOs with different scores
+		expectedUTXOs := []*engine.Output{
+			{
+				Outpoint: transaction.Outpoint{
+					Txid:  chainhash.Hash{1},
+					Index: 0,
+				},
+				BlockHeight: 110,
+				Score:       110,
+			},
+			{
+				Outpoint: transaction.Outpoint{
+					Txid:  chainhash.Hash{2},
+					Index: 1,
+				},
+				BlockHeight: 120,
+				Score:       120,
+			},
+			{
+				Outpoint: transaction.Outpoint{
+					Txid:  chainhash.Hash{3},
+					Index: 2,
+				},
+				BlockHeight: 130,
+				Score:       130,
+			},
+			{
+				Outpoint: transaction.Outpoint{
+					Txid:  chainhash.Hash{4},
+					Index: 3,
+				},
+				BlockHeight: 140,
+				Score:       140,
+			},
+		}
+
+		mockStorage := &mockStorage{
+			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since float64, limit uint32, historical bool) ([]*engine.Output, error) {
+				// Mock should respect the limit
+				if limit > 0 && len(expectedUTXOs) > int(limit) {
+					return expectedUTXOs[:limit], nil
+				}
+				return expectedUTXOs, nil
+			},
+		}
+
+		mockEngine := &engine.Engine{
+			Storage: mockStorage,
+		}
+		storage := engine.NewOverlayGASPStorage("test-topic", mockEngine, nil)
+
+		// when
+		result, err := storage.FindKnownUTXOs(ctx, float64(since), limit)
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Len(t, result, int(limit)) // Should return exactly 'limit' UTXOs
+		
+		// Verify we got the first 2 UTXOs
+		require.Equal(t, expectedUTXOs[0].Outpoint.Txid, result[0].Txid)
+		require.Equal(t, expectedUTXOs[0].Outpoint.Index, result[0].OutputIndex)
+		require.Equal(t, expectedUTXOs[1].Outpoint.Txid, result[1].Txid)
+		require.Equal(t, expectedUTXOs[1].Outpoint.Index, result[1].OutputIndex)
 	})
 
 	t.Run("should handle storage errors", func(t *testing.T) {
@@ -198,7 +272,7 @@ func TestOverlayGASPStorage_FindKnownUTXOs(t *testing.T) {
 		expectedErr := errors.New("database error")
 
 		mockStorage := &mockStorage{
-			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since uint32, historical bool) ([]*engine.Output, error) {
+			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since float64, limit uint32, historical bool) ([]*engine.Output, error) {
 				return nil, expectedErr
 			},
 		}
@@ -209,7 +283,7 @@ func TestOverlayGASPStorage_FindKnownUTXOs(t *testing.T) {
 		storage := engine.NewOverlayGASPStorage("test-topic", mockEngine, nil)
 
 		// when
-		result, err := storage.FindKnownUTXOs(ctx, 0)
+		result, err := storage.FindKnownUTXOs(ctx, 0, 0)
 
 		// then
 		require.Error(t, err)
@@ -239,7 +313,7 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 			Index: 0,
 		}
 
-		rootNode := &core.GASPNode{
+		rootNode := &gasp.Node{
 			RawTx:       rootTx.Hex(),
 			OutputIndex: 0,
 			GraphID:     graphID,
@@ -256,7 +330,7 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 			LockingScript: &script.Script{},
 		})
 
-		childNode := &core.GASPNode{
+		childNode := &gasp.Node{
 			RawTx:       childTx.Hex(),
 			OutputIndex: 0,
 			GraphID:     graphID,
@@ -277,7 +351,7 @@ func TestOverlayGASPStorage_DiscardGraph(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify graph is empty by trying to add to the discarded graph
-		newNode := &core.GASPNode{
+		newNode := &gasp.Node{
 			RawTx:       rootTx.Hex(),
 			OutputIndex: 1,
 			GraphID:     graphID,
@@ -406,14 +480,14 @@ func TestOverlayGASPStorage_HydrateGASPNode(t *testing.T) {
 
 // Mock storage implementation
 type mockStorage struct {
-	findUTXOsForTopicFunc func(ctx context.Context, topic string, since uint32, historical bool) ([]*engine.Output, error)
+	findUTXOsForTopicFunc func(ctx context.Context, topic string, since float64, limit uint32, historical bool) ([]*engine.Output, error)
 	findOutputFunc        func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, historical bool) (*engine.Output, error)
 	findOutputsFunc       func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, historical bool) ([]*engine.Output, error)
 }
 
-func (m *mockStorage) FindUTXOsForTopic(ctx context.Context, topic string, since uint32, historical bool) ([]*engine.Output, error) {
+func (m *mockStorage) FindUTXOsForTopic(ctx context.Context, topic string, since float64, limit uint32, historical bool) ([]*engine.Output, error) {
 	if m.findUTXOsForTopicFunc != nil {
-		return m.findUTXOsForTopicFunc(ctx, topic, since, historical)
+		return m.findUTXOsForTopicFunc(ctx, topic, since, limit, historical)
 	}
 	return nil, nil
 }
@@ -478,4 +552,12 @@ func (m *mockStorage) FindOutputsForTransaction(ctx context.Context, txid *chain
 
 func (m *mockStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error {
 	return nil
+}
+
+func (m *mockStorage) UpdateLastInteraction(ctx context.Context, host string, topic string, since float64) error {
+	return nil
+}
+
+func (m *mockStorage) GetLastInteraction(ctx context.Context, host string, topic string) (float64, error) {
+	return 0, nil
 }

@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/go-sdk/util"
 )
@@ -20,7 +20,7 @@ type OverlayGASPRemote struct {
 	HttpClient  util.HTTPClient
 }
 
-func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *core.GASPInitialRequest) (*core.GASPInitialResponse, error) {
+func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(request); err != nil {
 		slog.Error("failed to encode GASP initial request", "endpoint", r.EndpointUrl, "topic", r.Topic, "error", err)
@@ -41,7 +41,7 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *cor
 					Err:        err,
 				}
 			}
-			result := &core.GASPInitialResponse{}
+			result := &gasp.InitialResponse{}
 			if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
 				return nil, err
 			}
@@ -50,8 +50,8 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *cor
 	}
 }
 
-func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*core.GASPNode, error) {
-	if j, err := json.Marshal(&core.GASPNodeRequest{
+func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
+	if j, err := json.Marshal(&gasp.NodeRequest{
 		GraphID:     graphID,
 		Txid:        &outpoint.Txid,
 		OutputIndex: outpoint.Index,
@@ -73,7 +73,7 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transactio
 					Err:        err,
 				}
 			}
-			result := &core.GASPNode{}
+			result := &gasp.Node{}
 			if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
 				return nil, err
 			}
@@ -82,10 +82,10 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transactio
 	}
 }
 
-func (r *OverlayGASPRemote) GetInitialReply(ctx context.Context, response *core.GASPInitialResponse) (*core.GASPInitialReply, error) {
+func (r *OverlayGASPRemote) GetInitialReply(ctx context.Context, response *gasp.InitialResponse) (*gasp.InitialReply, error) {
 	return nil, errors.New("not-implemented")
 }
 
-func (r *OverlayGASPRemote) SubmitNode(ctx context.Context, node *core.GASPNode) (*core.GASPNodeResponse, error) {
+func (r *OverlayGASPRemote) SubmitNode(ctx context.Context, node *gasp.Node) (*gasp.NodeResponse, error) {
 	return nil, errors.New("not-implemented")
 }

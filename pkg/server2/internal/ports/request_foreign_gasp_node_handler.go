@@ -1,7 +1,7 @@
 package ports
 
 import (
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/app"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/ports/openapi"
 	"github.com/gofiber/fiber/v2"
@@ -54,12 +54,12 @@ func NewRequestForeignGASPNodeHandler(provider app.RequestForeignGASPNodeProvide
 	return &RequestForeignGASPNodeHandler{service: app.NewRequestForeignGASPNodeService(provider)}
 }
 
-// NewRequestForeignGASPNodeSuccessResponse converts a core.GASPNode into a
+// NewRequestForeignGASPNodeSuccessResponse converts a gasp.Node into a
 // GASPNode object compatible with the OpenAPI specification.
 //
 // It ensures proper mapping of fields including inputs, optional graph ID and proof,
 // and transaction/output metadata.
-func NewRequestForeignGASPNodeSuccessResponse(node *core.GASPNode) openapi.GASPNode {
+func NewRequestForeignGASPNodeSuccessResponse(node *gasp.Node) openapi.GASPNode {
 	var inputs map[string]any
 	if len(node.Inputs) > 0 {
 		inputs = make(map[string]any, len(node.Inputs))

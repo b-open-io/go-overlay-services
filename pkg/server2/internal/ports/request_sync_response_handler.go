@@ -75,6 +75,6 @@ func NewRequestSyncResponseSuccessResponse(response *app.RequestSyncResponseDTO)
 
 	return &openapi.RequestSyncResResponse{
 		UTXOList: utxos,
-		Since:    int(response.Since),
+		Since:    response.Since,
 	}
 }

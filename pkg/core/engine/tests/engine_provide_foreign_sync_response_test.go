@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
 )
@@ -17,13 +17,18 @@ func TestEngine_ProvideForeignSyncResponse_ShouldReturnUTXOList(t *testing.T) {
 		Txid:  fakeTxID(t),
 		Index: 1,
 	}
-	expectedResponse := &core.GASPInitialResponse{
-		UTXOList: []*transaction.Outpoint{expectedOutpoint},
+	expectedResponse := &gasp.InitialResponse{
+		UTXOList: []*gasp.Output{{
+			Txid:        expectedOutpoint.Txid,
+			OutputIndex: expectedOutpoint.Index,
+			Score:       0,
+		}},
+		Since: 0,
 	}
 
 	sut := &engine.Engine{
 		Storage: fakeStorage{
-			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since uint32, includeBEEF bool) ([]*engine.Output, error) {
+			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*engine.Output, error) {
 				return []*engine.Output{
 					{Outpoint: *expectedOutpoint},
 				}, nil
@@ -32,7 +37,7 @@ func TestEngine_ProvideForeignSyncResponse_ShouldReturnUTXOList(t *testing.T) {
 	}
 
 	// when
-	actualResponse, actualErr := sut.ProvideForeignSyncResponse(context.Background(), &core.GASPInitialRequest{Since: 0}, "test-topic")
+	actualResponse, actualErr := sut.ProvideForeignSyncResponse(context.Background(), &gasp.InitialRequest{Since: 0}, "test-topic")
 
 	// then
 	require.NoError(t, actualErr)
@@ -44,14 +49,14 @@ func TestEngine_ProvideForeignSyncResponse_ShouldReturnError_WhenStorageFails(t 
 	expectedError := errors.New("storage failed")
 	sut := &engine.Engine{
 		Storage: fakeStorage{
-			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since uint32, includeBEEF bool) ([]*engine.Output, error) {
+			findUTXOsForTopicFunc: func(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*engine.Output, error) {
 				return nil, expectedError
 			},
 		},
 	}
 
 	// when
-	resp, err := sut.ProvideForeignSyncResponse(context.Background(), &core.GASPInitialRequest{Since: 0}, "test-topic")
+	resp, err := sut.ProvideForeignSyncResponse(context.Background(), &gasp.InitialRequest{Since: 0}, "test-topic")
 
 	// then
 	require.Error(t, err)

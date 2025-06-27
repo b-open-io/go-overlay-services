@@ -7,15 +7,16 @@ import (
 )
 
 type Output struct {
-	Outpoint        transaction.Outpoint    `json:"-"`
-	Topic           string                  `json:"topic"`
-	Script          *script.Script          `json:"-"`
-	Satoshis        uint64                  `json:"satoshis"`
-	Spent           bool                    `json:"spent"`
-	OutputsConsumed []*transaction.Outpoint `json:""`
+	Outpoint        transaction.Outpoint
+	Topic           string
+	Script          *script.Script
+	Satoshis        uint64
+	Spent           bool
+	OutputsConsumed []*transaction.Outpoint
 	ConsumedBy      []*transaction.Outpoint
 	BlockHeight     uint32
 	BlockIdx        uint64
+	Score           float64 // sort score for outputs. Usage is up to Storage implementation.
 	Beef            []byte
 	AncillaryTxids  []*chainhash.Hash
 	AncillaryBeef   []byte

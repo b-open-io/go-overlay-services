@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/internal/app/jsonutil"
 )
 
@@ -30,7 +30,7 @@ var ErrSyncResponseInvalidRequestBody = errors.New("invalid request body")
 
 // ForeignSyncResponseProvider defines the contract for providing a foreign sync response.
 type ForeignSyncResponseProvider interface {
-	ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error)
+	ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error)
 }
 
 // RequestSyncResponseHandler orchestrates the /request-sync-response flow.
@@ -59,7 +59,7 @@ func (h *RequestSyncResponseHandler) Handle(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var initialRequest core.GASPInitialRequest
+	var initialRequest gasp.InitialRequest
 	if err := jsonutil.DecodeRequestBody(r, &initialRequest); err != nil {
 		http.Error(w, ErrSyncResponseInvalidRequestBody.Error(), http.StatusBadRequest)
 		return

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/app"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
@@ -253,14 +253,14 @@ func (s *TestOverlayEngineStub) Lookup(ctx context.Context, question *lookup.Loo
 }
 
 // ProvideForeignGASPNode returns a foreign GASP node using the configured RequestForeignGASPNodeProvider.
-func (s *TestOverlayEngineStub) ProvideForeignGASPNode(ctx context.Context, graphId *transaction.Outpoint, outpoints *transaction.Outpoint, topic string) (*core.GASPNode, error) {
+func (s *TestOverlayEngineStub) ProvideForeignGASPNode(ctx context.Context, graphId *transaction.Outpoint, outpoints *transaction.Outpoint, topic string) (*gasp.Node, error) {
 	s.t.Helper()
 	return s.requestForeignGASPNodeProvider.ProvideForeignGASPNode(ctx, graphId, outpoints, topic)
 }
 
 // ProvideForeignSyncResponse returns a foreign sync response.
 // It calls the ProvideForeignSyncResponse method of the configured RequestSyncResponseProvider.
-func (s *TestOverlayEngineStub) ProvideForeignSyncResponse(ctx context.Context, initialRequess *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
+func (s *TestOverlayEngineStub) ProvideForeignSyncResponse(ctx context.Context, initialRequess *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
 	s.t.Helper()
 	return s.requestSyncResponseProvider.ProvideForeignSyncResponse(ctx, initialRequess, topic)
 }
