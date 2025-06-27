@@ -159,12 +159,17 @@ components:
         txid:
           type: string
           description: 'Transaction ID in hexadecimal format'
-        vout:
+        outputIndex:
           type: integer
           description: 'Output index number'
+        score:
+          type: number
+          format: double
+          description: 'Sort score of the UTXO, used for prioritization in synchronization'
       required:
         - txid
-        - vout
+        - outputIndex
+        - score
 
     RequestSyncRes:
       type: object
@@ -174,7 +179,8 @@ components:
           items:
             $ref: "#/components/schemas/UTXOItem"
         since:
-          type: integer
+          type: number
+          format: double
           description: 'Timestamp or sequence number from which synchronization data was generated'
       required:
         - UTXOList

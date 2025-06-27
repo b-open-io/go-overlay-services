@@ -3,13 +3,12 @@ package ports_test
 import (
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/app"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/ports"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/ports/openapi"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/testabilities"
-	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -54,9 +53,9 @@ func TestRequestSyncResponseHandler_InvalidCases(t *testing.T) {
 			expectations: testabilities.RequestSyncResponseProviderMockExpectations{
 				Error:                          testabilities.ErrTestNoopOpFailure,
 				ProvideForeignSyncResponseCall: true,
-				InitialRequest: &core.GASPInitialRequest{
+				InitialRequest: &gasp.InitialRequest{
 					Version: testabilities.DefaultVersion,
-					Since:   uint32(testabilities.DefaultSince),
+					Since:   testabilities.DefaultSince,
 				},
 				Topic: testabilities.DefaultTopic,
 			},
@@ -95,25 +94,28 @@ func TestRequestSyncResponseHandler_ValidCase(t *testing.T) {
 	// given:
 	expectations := testabilities.RequestSyncResponseProviderMockExpectations{
 		ProvideForeignSyncResponseCall: true,
-		InitialRequest: &core.GASPInitialRequest{
+		InitialRequest: &gasp.InitialRequest{
 			Version: testabilities.DefaultVersion,
 			Since:   testabilities.DefaultSince,
 		},
 		Topic: testabilities.DefaultTopic,
-		Response: &core.GASPInitialResponse{
+		Response: &gasp.InitialResponse{
 			Since: testabilities.DefaultSince,
-			UTXOList: []*transaction.Outpoint{
+			UTXOList: []*gasp.Output{
 				{
-					Txid:  *testabilities.DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
-					Index: 0,
+					Txid:        *testabilities.DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
+					OutputIndex: 0,
+					Score:       0,
 				},
 				{
-					Txid:  *testabilities.DummyTxHash(t, "27c8f37851aabc468d3dbb6bf0789dc398a602dcb897ca04e7815d939d621595"),
-					Index: 1,
+					Txid:        *testabilities.DummyTxHash(t, "27c8f37851aabc468d3dbb6bf0789dc398a602dcb897ca04e7815d939d621595"),
+					OutputIndex: 1,
+					Score:       0,
 				},
 				{
-					Txid:  *testabilities.DummyTxHash(t, "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"),
-					Index: 2,
+					Txid:        *testabilities.DummyTxHash(t, "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"),
+					OutputIndex: 2,
+					Score:       0,
 				},
 			},
 		},

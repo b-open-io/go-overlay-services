@@ -7,10 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/internal/app/commands"
 	"github.com/4chain-ag/go-overlay-services/pkg/server/internal/app/commands/testutil"
-	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,9 +27,9 @@ func setSyncResponseRequestHeaders(req *http.Request, includeBSVTopic bool) {
 // Mock provider that always succeeds.
 type foreignSyncProviderAlwaysSuccess struct{}
 
-func (foreignSyncProviderAlwaysSuccess) ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
-	return &core.GASPInitialResponse{
-		UTXOList: []*transaction.Outpoint{},
+func (foreignSyncProviderAlwaysSuccess) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
+	return &gasp.InitialResponse{
+		UTXOList: []*gasp.Output{},
 		Since:    initialRequest.Since,
 	}, nil
 }
@@ -38,7 +37,7 @@ func (foreignSyncProviderAlwaysSuccess) ProvideForeignSyncResponse(ctx context.C
 // Mock provider that always fails.
 type foreignSyncProviderAlwaysFailure struct{}
 
-func (foreignSyncProviderAlwaysFailure) ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
+func (foreignSyncProviderAlwaysFailure) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
 	return nil, fmt.Errorf("simulated sync failure")
 }
 
@@ -49,7 +48,7 @@ func TestRequestSyncResponseHandler_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
-	payload := core.GASPInitialRequest{
+	payload := gasp.InitialRequest{
 		Version: 1,
 		Since:   1000,
 	}
@@ -74,7 +73,7 @@ func TestRequestSyncResponseHandler_MissingTopic(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
-	payload := core.GASPInitialRequest{
+	payload := gasp.InitialRequest{
 		Version: 1,
 		Since:   1000,
 	}
@@ -149,7 +148,7 @@ func TestRequestSyncResponseHandler_InternalServerError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
 	defer ts.Close()
 
-	payload := core.GASPInitialRequest{
+	payload := gasp.InitialRequest{
 		Version: 1,
 		Since:   1000,
 	}

@@ -3,7 +3,7 @@ package ports_test
 import (
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/app"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/ports"
@@ -83,7 +83,7 @@ func TestRequestForeignGASPNodeHandler_ValidCase(t *testing.T) {
 	// given:
 	expectations := testabilities.RequestForeignGASPNodeProviderMockExpectations{
 		ProvideForeignGASPNodeCall: true,
-		Node:                       &core.GASPNode{},
+		Node:                       &gasp.Node{},
 	}
 
 	stub := testabilities.NewTestOverlayEngineStub(t, testabilities.WithRequestForeignGASPNodeProvider(

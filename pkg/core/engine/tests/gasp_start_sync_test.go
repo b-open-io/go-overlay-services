@@ -27,14 +27,21 @@ func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 			},
 		},
 	}
-	gasp := GASPMock{
-		ExpectedErr:    nil,
-		ExpectSyncCall: true,
-	}
-
 	advertiser := fakeAdvertiser{
 		parseAdvertisement: func(script *script.Script) (*advertiser.Advertisement, error) {
 			return &advertiser.Advertisement{Protocol: "SHIP"}, nil
+		},
+	}
+
+	mockStorage := &fakeStorage{
+		getLastInteractionFunc: func(ctx context.Context, host string, topic string) (float64, error) {
+			return 0, nil
+		},
+		findUTXOsForTopicFunc: func(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*engine.Output, error) {
+			return []*engine.Output{}, nil
+		},
+		updateLastInteractionFunc: func(ctx context.Context, host string, topic string, since float64) error {
+			return nil
 		},
 	}
 
@@ -44,7 +51,7 @@ func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 		HostingURL:        "http://localhost",
 		SHIPTrackers:      []string{"http://localhost"},
 		LookupResolver:    &resolver,
-		GASPProvider:      &gasp,
+		Storage:           mockStorage,
 	})
 
 	// when:
@@ -54,7 +61,6 @@ func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 	require.NoError(t, err)
 
 	resolver.AssertCalled(t)
-	gasp.AssertCalled(t)
 }
 
 func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
@@ -75,13 +81,21 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 		},
 	}
 
-	gasp := GASPMock{
-		ExpectSyncCall: false,
-	}
-
 	advertiser := fakeAdvertiser{
 		parseAdvertisement: func(script *script.Script) (*advertiser.Advertisement, error) {
 			return &advertiser.Advertisement{Protocol: "SHIP"}, nil
+		},
+	}
+
+	mockStorage := &fakeStorage{
+		getLastInteractionFunc: func(ctx context.Context, host string, topic string) (float64, error) {
+			return 0, nil
+		},
+		findUTXOsForTopicFunc: func(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*engine.Output, error) {
+			return []*engine.Output{}, nil
+		},
+		updateLastInteractionFunc: func(ctx context.Context, host string, topic string, since float64) error {
+			return nil
 		},
 	}
 
@@ -91,7 +105,7 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 		HostingURL:        "http://localhost",
 		SHIPTrackers:      []string{"http://localhost"},
 		LookupResolver:    &resolver,
-		GASPProvider:      &gasp,
+		Storage:           mockStorage,
 	})
 
 	// when:
@@ -101,7 +115,6 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 	require.ErrorIs(t, err, expectedQueryCallErr)
 
 	resolver.AssertCalled(t)
-	gasp.AssertCalled(t)
 }
 
 func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
@@ -120,14 +133,21 @@ func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
 		},
 	}
 
-	gasp := GASPMock{
-		ExpectedErr:    nil,
-		ExpectSyncCall: true,
-	}
-
 	advertiser := fakeAdvertiser{
 		parseAdvertisement: func(script *script.Script) (*advertiser.Advertisement, error) {
 			return &advertiser.Advertisement{Protocol: "SHIP"}, nil
+		},
+	}
+
+	mockStorage := &fakeStorage{
+		getLastInteractionFunc: func(ctx context.Context, host string, topic string) (float64, error) {
+			return 0, nil
+		},
+		findUTXOsForTopicFunc: func(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*engine.Output, error) {
+			return []*engine.Output{}, nil
+		},
+		updateLastInteractionFunc: func(ctx context.Context, host string, topic string, since float64) error {
+			return nil
 		},
 	}
 
@@ -137,7 +157,7 @@ func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
 		HostingURL:        "http://localhost",
 		SHIPTrackers:      []string{"http://localhost"},
 		LookupResolver:    &resolver,
-		GASPProvider:      &gasp,
+		Storage:           mockStorage,
 	})
 
 	// when:
@@ -147,7 +167,6 @@ func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
 	require.NoError(t, err)
 
 	resolver.AssertCalled(t)
-	gasp.AssertCalled(t)
 }
 
 // GASPMock is a test double for a GASP implementation.

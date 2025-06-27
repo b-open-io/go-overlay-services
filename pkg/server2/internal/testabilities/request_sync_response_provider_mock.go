@@ -4,9 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/4chain-ag/go-overlay-services/pkg/server2/internal/ports/openapi"
-	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,15 +13,15 @@ const DefaultTopic = "test-topic"
 
 const (
 	DefaultVersion = 1
-	DefaultSince   = 100000
+	DefaultSince   = float64(100000)
 )
 
 // RequestSyncResponseProviderMockExpectations defines mock expectations.
 type RequestSyncResponseProviderMockExpectations struct {
 	Error                          error
-	Response                       *core.GASPInitialResponse
+	Response                       *gasp.InitialResponse
 	ProvideForeignSyncResponseCall bool
-	InitialRequest                 *core.GASPInitialRequest
+	InitialRequest                 *gasp.InitialRequest
 	Topic                          string
 }
 
@@ -32,23 +31,24 @@ type RequestSyncResponseProviderMockExpectations struct {
 type RequestSyncResponseProviderMock struct {
 	t              *testing.T // The testing context
 	expectations   RequestSyncResponseProviderMockExpectations
-	called         bool                     // Tracks whether ProvideForeignSyncResponse was called
-	topic          string                   // Stores the topic passed to ProvideForeignSyncResponse
-	initialRequest *core.GASPInitialRequest // Stores the request passed to ProvideForeignSyncResponse
+	called         bool                 // Tracks whether ProvideForeignSyncResponse was called
+	topic          string               // Stores the topic passed to ProvideForeignSyncResponse
+	initialRequest *gasp.InitialRequest // Stores the request passed to ProvideForeignSyncResponse
 }
 
 // NewDefaultGASPInitialResponseTestHelper creates a default GASPInitialResponse instance
 // for use in test scenarios.
 //
 // It includes a sample UTXO with a dummy transaction hash and a fixed "Since" value.
-func NewDefaultGASPInitialResponseTestHelper(t *testing.T) *core.GASPInitialResponse {
+func NewDefaultGASPInitialResponseTestHelper(t *testing.T) *gasp.InitialResponse {
 	t.Helper()
 
-	return &core.GASPInitialResponse{
-		UTXOList: []*transaction.Outpoint{
+	return &gasp.InitialResponse{
+		UTXOList: []*gasp.Output{
 			{
-				Txid:  *DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
-				Index: 0,
+				Txid:        *DummyTxHash(t, "03895fb984362a4196bc9931629318fcbb2aeba7c6293638119ea653fa31d119"),
+				OutputIndex: 0,
+				Score:       0,
 			},
 		},
 		Since: 1000000,
@@ -59,7 +59,7 @@ func NewDefaultGASPInitialResponseTestHelper(t *testing.T) *core.GASPInitialResp
 // It captures input values and returns either the expected mock response or error.
 //
 // Implements the same signature as the real method for interchangeability in tests.
-func (m *RequestSyncResponseProviderMock) ProvideForeignSyncResponse(ctx context.Context, initialRequest *core.GASPInitialRequest, topic string) (*core.GASPInitialResponse, error) {
+func (m *RequestSyncResponseProviderMock) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
 	m.t.Helper()
 	m.called = true
 	m.topic = topic

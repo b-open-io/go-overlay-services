@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/4chain-ag/go-overlay-services/pkg/core/engine"
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +18,7 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 	outpoint := &transaction.Outpoint{Index: 1}
 	BEEF := createDummyBEEF(t)
 
-	expectedNode := &core.GASPNode{
+	expectedNode := &gasp.Node{
 		GraphID:     graphID,
 		RawTx:       parseBEEFToTx(t, BEEF).Hex(),
 		OutputIndex: outpoint.Index,

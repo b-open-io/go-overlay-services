@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/spv"
@@ -17,7 +17,7 @@ import (
 var ErrGraphFull = errors.New("graph is full")
 
 type GraphNode struct {
-	core.GASPNode
+	gasp.Node
 	Txid     *chainhash.Hash `json:"txid"`
 	SpentBy  *chainhash.Hash `json:"spentBy"`
 	Children []*GraphNode    `json:"children"`
@@ -40,20 +40,25 @@ func NewOverlayGASPStorage(topic string, engine *Engine, maxNodesInGraph *int) *
 	}
 }
 
-func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since uint32) ([]*transaction.Outpoint, error) {
-	if utxos, err := s.Engine.Storage.FindUTXOsForTopic(ctx, s.Topic, since, false); err != nil {
+func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since float64, limit uint32) ([]*gasp.Output, error) {
+	if utxos, err := s.Engine.Storage.FindUTXOsForTopic(ctx, s.Topic, since, limit, false); err != nil {
 		return nil, err
 	} else {
-		outpoints := make([]*transaction.Outpoint, len(utxos))
+		gaspOutputs := make([]*gasp.Output, len(utxos))
+
 		for i, utxo := range utxos {
-			outpoints[i] = &utxo.Outpoint
+			gaspOutputs[i] = &gasp.Output{
+				Txid:        utxo.Outpoint.Txid,
+				OutputIndex: utxo.Outpoint.Index,
+				Score:       utxo.Score,
+			}
 		}
 
-		return outpoints, nil
+		return gaspOutputs, nil
 	}
 }
 
-func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*core.GASPNode, error) {
+func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
 	if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, nil, nil, true); err != nil {
 		return nil, err
 	} else if output == nil || output.Beef == nil {
@@ -70,7 +75,7 @@ func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *trans
 			return nil, errors.New("parsed BEEF returned nil transaction")
 		}
 
-		node := &core.GASPNode{
+		node := &gasp.Node{
 			GraphID:     graphID,
 			OutputIndex: outpoint.Index,
 			RawTx:       tx.Hex(),
@@ -83,9 +88,9 @@ func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *trans
 	}
 }
 
-func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.GASPNode) (*core.GASPNodeResponse, error) {
-	response := &core.GASPNodeResponse{
-		RequestedInputs: make(map[string]*core.GASPNodeResponseData),
+func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.Node) (*gasp.NodeResponse, error) {
+	response := &gasp.NodeResponse{
+		RequestedInputs: make(map[string]*gasp.NodeResponseData),
 	}
 	tx, err := transaction.NewTransactionFromHex(gaspTx.RawTx)
 	if err != nil {
@@ -97,7 +102,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 				Txid:  *input.SourceTXID,
 				Index: input.SourceTxOutIndex,
 			}
-			response.RequestedInputs[outpoint.String()] = &core.GASPNodeResponseData{
+			response.RequestedInputs[outpoint.String()] = &gasp.NodeResponseData{
 				Metadata: false,
 			}
 		}
@@ -144,7 +149,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 				return nil, err
 			} else {
 				for _, outpoint := range neededInputs {
-					response.RequestedInputs[outpoint.String()] = &core.GASPNodeResponseData{
+					response.RequestedInputs[outpoint.String()] = &gasp.NodeResponseData{
 						Metadata: true,
 					}
 				}
@@ -156,7 +161,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *core.
 	return response, nil
 }
 
-func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *core.GASPNodeResponse) (*core.GASPNodeResponse, error) {
+func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {
 	if response == nil {
 		return nil, nil
 	}
@@ -175,7 +180,7 @@ func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, respons
 	return response, nil
 }
 
-func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GASPNode, spentBy *transaction.Outpoint) error {
+func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *gasp.Node, spentBy *transaction.Outpoint) error {
 	if s.MaxNodesInGraph != nil && s.tempGraphNodeCount >= *s.MaxNodesInGraph {
 		return ErrGraphFull
 	}
@@ -190,7 +195,7 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *core.GAS
 			}
 		}
 		newGraphNode := &GraphNode{
-			GASPNode: *gaspTx,
+			Node:     *gaspTx,
 			Txid:     txid,
 			Children: []*GraphNode{},
 		}

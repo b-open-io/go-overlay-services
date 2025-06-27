@@ -71,7 +71,7 @@ type RequestSyncRes struct {
 	UTXOList []UTXOItem `json:"UTXOList"`
 
 	// Since Timestamp or sequence number from which synchronization data was generated
-	Since int `json:"since"`
+	Since float64 `json:"since"`
 }
 
 // STEAK defines model for STEAK.
@@ -99,11 +99,14 @@ type TopicManagerDocumentation struct {
 
 // UTXOItem defines model for UTXOItem.
 type UTXOItem struct {
+	// OutputIndex Output index number
+	OutputIndex int `json:"outputIndex"`
+
+	// Score Sort score of the UTXO, used for prioritization in synchronization
+	Score float64 `json:"score"`
+
 	// Txid Transaction ID in hexadecimal format
 	Txid string `json:"txid"`
-
-	// Vout Output index number
-	Vout int `json:"vout"`
 }
 
 // ArcIngestResponse defines model for ArcIngestResponse.

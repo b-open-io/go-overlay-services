@@ -334,7 +334,7 @@ func (m *mockHandleMerkleProofStorage) FindTransaction(ctx context.Context, txid
 func (m *mockHandleMerkleProofStorage) FindTransactionsCreatingUtxos(ctx context.Context) ([]*chainhash.Hash, error) {
 	return nil, nil
 }
-func (m *mockHandleMerkleProofStorage) FindUTXOsForTopic(ctx context.Context, topic string, since uint32, includeBEEF bool) ([]*engine.Output, error) {
+func (m *mockHandleMerkleProofStorage) FindUTXOsForTopic(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*engine.Output, error) {
 	return nil, nil
 }
 func (m *mockHandleMerkleProofStorage) FindOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
@@ -359,6 +359,14 @@ func (m *mockHandleMerkleProofStorage) MarkUTXOsAsSpent(ctx context.Context, out
 
 func (m *mockHandleMerkleProofStorage) UpdateTransactionBEEF(ctx context.Context, txid *chainhash.Hash, beef []byte) error {
 	return nil
+}
+
+func (m *mockHandleMerkleProofStorage) UpdateLastInteraction(ctx context.Context, host string, topic string, since float64) error {
+	return nil
+}
+
+func (m *mockHandleMerkleProofStorage) GetLastInteraction(ctx context.Context, host string, topic string) (float64, error) {
+	return 0, nil
 }
 
 // Mock lookup service

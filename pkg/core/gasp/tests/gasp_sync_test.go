@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp/core"
+	"github.com/4chain-ag/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
@@ -31,13 +31,13 @@ type mockGASPStorage struct {
 	updateCallback func()
 
 	// Configurable behavior functions
-	findKnownUTXOsFunc      func(ctx context.Context, sinceWhen uint32) ([]*transaction.Outpoint, error)
-	hydrateGASPNodeFunc     func(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*core.GASPNode, error)
-	appendToGraphFunc       func(ctx context.Context, tx *core.GASPNode, spentBy *transaction.Outpoint) error
+	findKnownUTXOsFunc      func(ctx context.Context, sinceWhen float64, limit uint32) ([]*gasp.Output, error)
+	hydrateGASPNodeFunc     func(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error)
+	appendToGraphFunc       func(ctx context.Context, tx *gasp.Node, spentBy *transaction.Outpoint) error
 	validateGraphAnchorFunc func(ctx context.Context, graphID *transaction.Outpoint) error
 	discardGraphFunc        func(ctx context.Context, graphID *transaction.Outpoint) error
 	finalizeGraphFunc       func(ctx context.Context, graphID *transaction.Outpoint) error
-	findNeededInputsFunc    func(ctx context.Context, tx *core.GASPNode) (*core.GASPNodeResponse, error)
+	findNeededInputsFunc    func(ctx context.Context, tx *gasp.Node) (*gasp.NodeResponse, error)
 }
 
 func newMockGASPStorage(knownStore []*mockUTXO) *mockGASPStorage {
@@ -52,24 +52,35 @@ func (m *mockGASPStorage) SetUpdateCallback(f func()) {
 	m.updateCallback = f
 }
 
-func (m *mockGASPStorage) FindKnownUTXOs(ctx context.Context, sinceWhen uint32) ([]*transaction.Outpoint, error) {
+func (m *mockGASPStorage) FindKnownUTXOs(ctx context.Context, sinceWhen float64, limit uint32) ([]*gasp.Output, error) {
 	if m.findKnownUTXOsFunc != nil {
-		return m.findKnownUTXOsFunc(ctx, sinceWhen)
+		return m.findKnownUTXOsFunc(ctx, sinceWhen, limit)
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var result []*transaction.Outpoint
+	var result []*gasp.Output
+
 	for _, utxo := range m.knownStore {
-		if utxo.Time >= sinceWhen {
-			result = append(result, utxo.GraphID)
+		if float64(utxo.Time) >= sinceWhen {
+			result = append(result, &gasp.Output{
+				Txid:        *utxo.Txid,
+				OutputIndex: utxo.OutputIndex,
+				Score:       float64(utxo.Time),
+			})
 		}
 	}
+
+	// Apply limit if specified
+	if limit > 0 && len(result) > int(limit) {
+		result = result[:limit]
+	}
+
 	return result, nil
 }
 
-func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*core.GASPNode, error) {
+func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
 	if m.hydrateGASPNodeFunc != nil {
 		return m.hydrateGASPNodeFunc(ctx, graphID, outpoint, metadata)
 	}
@@ -80,16 +91,16 @@ func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transact
 	// Check in known store
 	for _, utxo := range m.knownStore {
 		if utxo.GraphID.String() == outpoint.String() {
-			node := &core.GASPNode{
+			node := &gasp.Node{
 				GraphID:     graphID,
 				RawTx:       utxo.RawTx,
 				OutputIndex: utxo.OutputIndex,
-				Inputs:      make(map[string]*core.GASPInput),
+				Inputs:      make(map[string]*gasp.Input),
 			}
 
 			// Add inputs
 			for id, input := range utxo.Inputs {
-				node.Inputs[id] = &core.GASPInput{
+				node.Inputs[id] = &gasp.Input{
 					Hash: input.Txid.String(),
 				}
 			}
@@ -100,29 +111,29 @@ func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transact
 
 	// Check in temp store
 	if tempUTXO, exists := m.tempGraphStore[outpoint.String()]; exists {
-		return &core.GASPNode{
+		return &gasp.Node{
 			GraphID:     graphID,
 			RawTx:       tempUTXO.RawTx,
 			OutputIndex: tempUTXO.OutputIndex,
-			Inputs:      make(map[string]*core.GASPInput),
+			Inputs:      make(map[string]*gasp.Input),
 		}, nil
 	}
 
 	return nil, nil
 }
 
-func (m *mockGASPStorage) FindNeededInputs(ctx context.Context, tx *core.GASPNode) (*core.GASPNodeResponse, error) {
+func (m *mockGASPStorage) FindNeededInputs(ctx context.Context, tx *gasp.Node) (*gasp.NodeResponse, error) {
 	if m.findNeededInputsFunc != nil {
 		return m.findNeededInputsFunc(ctx, tx)
 	}
 
 	// Default: no inputs needed
-	return &core.GASPNodeResponse{
-		RequestedInputs: make(map[string]*core.GASPNodeResponseData),
+	return &gasp.NodeResponse{
+		RequestedInputs: make(map[string]*gasp.NodeResponseData),
 	}, nil
 }
 
-func (m *mockGASPStorage) AppendToGraph(ctx context.Context, tx *core.GASPNode, spentBy *transaction.Outpoint) error {
+func (m *mockGASPStorage) AppendToGraph(ctx context.Context, tx *gasp.Node, spentBy *transaction.Outpoint) error {
 	if m.appendToGraphFunc != nil {
 		return m.appendToGraphFunc(ctx, tx, spentBy)
 	}
@@ -185,12 +196,12 @@ func (m *mockGASPStorage) FinalizeGraph(ctx context.Context, graphID *transactio
 }
 
 type mockGASPRemote struct {
-	targetGASP          *core.GASP
-	initialResponseFunc func(ctx context.Context, request *core.GASPInitialRequest) (*core.GASPInitialResponse, error)
-	requestNodeFunc     func(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*core.GASPNode, error)
+	targetGASP          *gasp.GASP
+	initialResponseFunc func(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error)
+	requestNodeFunc     func(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error)
 }
 
-func (m *mockGASPRemote) GetInitialResponse(ctx context.Context, request *core.GASPInitialRequest) (*core.GASPInitialResponse, error) {
+func (m *mockGASPRemote) GetInitialResponse(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error) {
 	if m.initialResponseFunc != nil {
 		return m.initialResponseFunc(ctx, request)
 	}
@@ -202,18 +213,18 @@ func (m *mockGASPRemote) GetInitialResponse(ctx context.Context, request *core.G
 	return nil, nil
 }
 
-func (m *mockGASPRemote) GetInitialReply(ctx context.Context, response *core.GASPInitialResponse) (*core.GASPInitialReply, error) {
+func (m *mockGASPRemote) GetInitialReply(ctx context.Context, response *gasp.InitialResponse) (*gasp.InitialReply, error) {
 	if m.targetGASP != nil {
 		return m.targetGASP.GetInitialReply(ctx, response)
 	}
 
 	// Default implementation
-	return &core.GASPInitialReply{
-		UTXOList: []*transaction.Outpoint{},
+	return &gasp.InitialReply{
+		UTXOList: []*gasp.Output{},
 	}, nil
 }
 
-func (m *mockGASPRemote) RequestNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*core.GASPNode, error) {
+func (m *mockGASPRemote) RequestNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
 	if m.requestNodeFunc != nil {
 		return m.requestNodeFunc(ctx, graphID, outpoint, metadata)
 	}
@@ -226,14 +237,14 @@ func (m *mockGASPRemote) RequestNode(ctx context.Context, graphID, outpoint *tra
 	return nil, nil
 }
 
-func (m *mockGASPRemote) SubmitNode(ctx context.Context, node *core.GASPNode) (*core.GASPNodeResponse, error) {
+func (m *mockGASPRemote) SubmitNode(ctx context.Context, node *gasp.Node) (*gasp.NodeResponse, error) {
 	if m.targetGASP != nil {
 		return m.targetGASP.SubmitNode(ctx, node)
 	}
 
 	// Default implementation
-	return &core.GASPNodeResponse{
-		RequestedInputs: make(map[string]*core.GASPNodeResponseData),
+	return &gasp.NodeResponse{
+		RequestedInputs: make(map[string]*gasp.NodeResponseData),
 	}, nil
 }
 
@@ -268,11 +279,11 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
 
-		gasp1 := core.NewGASP(core.GASPParams{
+		gasp1 := gasp.NewGASP(gasp.GASPParams{
 			Storage: storage1,
 			Version: intPtr(2), // Different version
 		})
-		gasp2 := core.NewGASP(core.GASPParams{
+		gasp2 := gasp.NewGASP(gasp.GASPParams{
 			Storage: storage2,
 			Version: intPtr(1),
 		})
@@ -280,7 +291,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		gasp1.Remote = &mockGASPRemote{targetGASP: gasp2}
 
 		// when & then
-		err := gasp1.Sync(ctx)
+		err := gasp1.Sync(ctx, "test-host", 0)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "GASP version mismatch")
 	})
@@ -293,23 +304,23 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{utxo1}) // Alice has UTXO
 		storage2 := newMockGASPStorage([]*mockUTXO{})      // Bob has no UTXOs
 
-		gasp1 := core.NewGASP(core.GASPParams{Storage: storage1})
-		gasp2 := core.NewGASP(core.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
 
 		// Bob syncs from Alice
 		gasp2.Remote = &mockGASPRemote{targetGASP: gasp1}
 
 		// when
-		err := gasp2.Sync(ctx)
+		err := gasp2.Sync(ctx, "test-host", 0)
 
 		// then
 		require.NoError(t, err)
 
-		utxos1, _ := storage1.FindKnownUTXOs(ctx, 0)
-		utxos2, _ := storage2.FindKnownUTXOs(ctx, 0)
+		result1, _ := storage1.FindKnownUTXOs(ctx, 0, 0)
+		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
 
-		require.Len(t, utxos2, 1)
-		require.Equal(t, len(utxos1), len(utxos2))
+		require.Len(t, result2, 1)
+		require.Equal(t, len(result1), len(result2))
 	})
 
 	t.Run("should synchronize a single UTXO from Bob to Alice", func(t *testing.T) {
@@ -320,22 +331,22 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{})      // Alice has no UTXOs
 		storage2 := newMockGASPStorage([]*mockUTXO{utxo1}) // Bob has UTXO
 
-		gasp1 := core.NewGASP(core.GASPParams{Storage: storage1})
-		gasp2 := core.NewGASP(core.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
 
 		gasp1.Remote = &mockGASPRemote{targetGASP: gasp2}
 
 		// when
-		err := gasp1.Sync(ctx)
+		err := gasp1.Sync(ctx, "test-host", 0)
 
 		// then
 		require.NoError(t, err)
 
-		utxos1, _ := storage1.FindKnownUTXOs(ctx, 0)
-		utxos2, _ := storage2.FindKnownUTXOs(ctx, 0)
+		result1, _ := storage1.FindKnownUTXOs(ctx, 0, 0)
+		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
 
-		require.Len(t, utxos1, 1)
-		require.Equal(t, len(utxos1), len(utxos2))
+		require.Len(t, result1, 1)
+		require.Equal(t, len(result1), len(result2))
 	})
 
 	t.Run("should discard graphs that do not validate", func(t *testing.T) {
@@ -356,20 +367,20 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 			return nil
 		}
 
-		gasp1 := core.NewGASP(core.GASPParams{Storage: storage1})
-		gasp2 := core.NewGASP(core.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
 
 		// Bob syncs from Alice
 		gasp2.Remote = &mockGASPRemote{targetGASP: gasp1}
 
 		// when
-		err := gasp2.Sync(ctx)
+		err := gasp2.Sync(ctx, "test-host", 0)
 
 		// then
 		require.NoError(t, err) // Sync should complete despite validation failure
 
-		utxos2, _ := storage2.FindKnownUTXOs(ctx, 0)
-		require.Len(t, utxos2, 0) // No UTXOs should be synchronized
+		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
+		require.Len(t, result2, 0) // No UTXOs should be synchronized
 		require.True(t, discardGraphCalled)
 	})
 
@@ -382,23 +393,23 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{utxo1, utxo2})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
 
-		gasp1 := core.NewGASP(core.GASPParams{Storage: storage1})
-		gasp2 := core.NewGASP(core.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
 
 		// Bob syncs from Alice
 		gasp2.Remote = &mockGASPRemote{targetGASP: gasp1}
 
 		// when
-		err := gasp2.Sync(ctx)
+		err := gasp2.Sync(ctx, "test-host", 0)
 
 		// then
 		require.NoError(t, err)
 
-		utxos1, _ := storage1.FindKnownUTXOs(ctx, 0)
-		utxos2, _ := storage2.FindKnownUTXOs(ctx, 0)
+		result1, _ := storage1.FindKnownUTXOs(ctx, 0, 0)
+		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
 
-		require.Len(t, utxos2, 2)
-		require.Equal(t, len(utxos1), len(utxos2))
+		require.Len(t, result2, 2)
+		require.Equal(t, len(result1), len(result2))
 	})
 
 	t.Run("should synchronize only UTXOs created after the specified since timestamp", func(t *testing.T) {
@@ -410,11 +421,11 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{oldUTXO, newUTXO})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
 
-		gasp1 := core.NewGASP(core.GASPParams{
+		gasp1 := gasp.NewGASP(gasp.GASPParams{
 			Storage:         storage1,
 			LastInteraction: 0,
 		})
-		gasp2 := core.NewGASP(core.GASPParams{
+		gasp2 := gasp.NewGASP(gasp.GASPParams{
 			Storage:         storage2,
 			LastInteraction: 150, // Bob only wants UTXOs newer than 150
 		})
@@ -423,16 +434,16 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		gasp2.Remote = &mockGASPRemote{targetGASP: gasp1}
 
 		// when
-		err := gasp2.Sync(ctx)
+		err := gasp2.Sync(ctx, "test-host", 0)
 
 		// then
 		require.NoError(t, err)
 
-		utxos2, _ := storage2.FindKnownUTXOs(ctx, 0)
-		require.Len(t, utxos2, 1) // Only new UTXO should be synchronized
+		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
+		require.Len(t, result2, 1) // Only new UTXO should be synchronized
 
 		// Verify it's the new UTXO
-		require.Equal(t, newUTXO.GraphID.Index, utxos2[0].Index)
+		require.Equal(t, newUTXO.GraphID.Index, result2[0].OutputIndex)
 	})
 
 	t.Run("should not sync unnecessary graphs", func(t *testing.T) {
@@ -455,22 +466,22 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 			return nil
 		}
 
-		gasp1 := core.NewGASP(core.GASPParams{Storage: storage1})
-		gasp2 := core.NewGASP(core.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
 
 		gasp1.Remote = &mockGASPRemote{targetGASP: gasp2}
 
 		// when
-		err := gasp1.Sync(ctx)
+		err := gasp1.Sync(ctx, "test-host", 0)
 
 		// then
 		require.NoError(t, err)
 
-		utxos1, _ := storage1.FindKnownUTXOs(ctx, 0)
-		utxos2, _ := storage2.FindKnownUTXOs(ctx, 0)
+		result1, _ := storage1.FindKnownUTXOs(ctx, 0, 0)
+		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
 
-		require.Len(t, utxos1, 1)
-		require.Len(t, utxos2, 1)
+		require.Len(t, result1, 1)
+		require.Len(t, result2, 1)
 		require.False(t, finalizeGraphCalled1, "FinalizeGraph should not be called when no sync needed")
 		require.False(t, finalizeGraphCalled2, "FinalizeGraph should not be called when no sync needed")
 	})
