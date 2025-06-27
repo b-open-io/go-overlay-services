@@ -21,7 +21,7 @@ type Output struct {
 
 type InitialResponse struct {
 	UTXOList []*Output `json:"UTXOList"`
-	Since    float64       `json:"since"`
+	Since    float64   `json:"since"`
 }
 
 func (g *Output) Outpoint() *transaction.Outpoint {
@@ -50,7 +50,7 @@ type Node struct {
 	Proof          *string               `json:"proof"`
 	TxMetadata     string                `json:"txMetadata"`
 	OutputMetadata string                `json:"outputMetadata"`
-	Inputs         map[string]*Input `json:"inputs"`
+	Inputs         map[string]*Input     `json:"inputs"`
 	AncillaryBeef  []byte                `json:"ancillaryBeef"`
 }
 

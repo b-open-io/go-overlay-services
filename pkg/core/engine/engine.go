@@ -56,7 +56,6 @@ type LookupResolverProvider interface {
 	Query(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error)
 }
 
-
 type Engine struct {
 	Managers                map[string]TopicManager
 	LookupServices          map[string]LookupService

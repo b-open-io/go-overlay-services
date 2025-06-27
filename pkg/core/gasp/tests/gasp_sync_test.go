@@ -61,7 +61,7 @@ func (m *mockGASPStorage) FindKnownUTXOs(ctx context.Context, sinceWhen float64,
 	defer m.mu.Unlock()
 
 	var result []*gasp.Output
-	
+
 	for _, utxo := range m.knownStore {
 		if float64(utxo.Time) >= sinceWhen {
 			result = append(result, &gasp.Output{
@@ -71,12 +71,12 @@ func (m *mockGASPStorage) FindKnownUTXOs(ctx context.Context, sinceWhen float64,
 			})
 		}
 	}
-	
+
 	// Apply limit if specified
 	if limit > 0 && len(result) > int(limit) {
 		result = result[:limit]
 	}
-	
+
 	return result, nil
 }
 

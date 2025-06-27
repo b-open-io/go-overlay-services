@@ -63,7 +63,7 @@ func (*NoopEngineProvider) StartGASPSync(ctx context.Context) error { return nil
 func (*NoopEngineProvider) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
 	return &gasp.InitialResponse{
 		UTXOList: []*gasp.Output{},
-		Since: 0,
+		Since:    0,
 	}, nil
 }
 

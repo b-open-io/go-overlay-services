@@ -258,7 +258,7 @@ func TestOverlayGASPStorage_FindKnownUTXOs(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.Len(t, result, int(limit)) // Should return exactly 'limit' UTXOs
-		
+
 		// Verify we got the first 2 UTXOs
 		require.Equal(t, expectedUTXOs[0].Outpoint.Txid, result[0].Txid)
 		require.Equal(t, expectedUTXOs[0].Outpoint.Index, result[0].OutputIndex)

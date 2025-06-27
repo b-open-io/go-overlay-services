@@ -195,7 +195,7 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *gasp.Nod
 			}
 		}
 		newGraphNode := &GraphNode{
-			Node: *gaspTx,
+			Node:     *gaspTx,
 			Txid:     txid,
 			Children: []*GraphNode{},
 		}

@@ -31,8 +31,8 @@ type RequestSyncResponseProviderMockExpectations struct {
 type RequestSyncResponseProviderMock struct {
 	t              *testing.T // The testing context
 	expectations   RequestSyncResponseProviderMockExpectations
-	called         bool                     // Tracks whether ProvideForeignSyncResponse was called
-	topic          string                   // Stores the topic passed to ProvideForeignSyncResponse
+	called         bool                 // Tracks whether ProvideForeignSyncResponse was called
+	topic          string               // Stores the topic passed to ProvideForeignSyncResponse
 	initialRequest *gasp.InitialRequest // Stores the request passed to ProvideForeignSyncResponse
 }
 
