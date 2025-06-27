@@ -70,6 +70,7 @@ func NewRequestSyncResponseSuccessResponse(response *app.RequestSyncResponseDTO)
 		utxos = append(utxos, openapi.UTXOItem{
 			Txid:        utxo.TxID,
 			OutputIndex: int(utxo.OutputIndex),
+			Score:       utxo.Score,
 		})
 	}
 
