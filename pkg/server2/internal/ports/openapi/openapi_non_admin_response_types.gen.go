@@ -103,7 +103,7 @@ type UTXOItem struct {
 	OutputIndex int `json:"outputIndex"`
 
 	// Score Sort score of the UTXO, used for prioritization in synchronization
-	Score *float64 `json:"score,omitempty"`
+	Score float64 `json:"score"`
 
 	// Txid Transaction ID in hexadecimal format
 	Txid string `json:"txid"`
