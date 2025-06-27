@@ -11,6 +11,7 @@ import (
 type OutpointDTO struct {
 	TxID        string
 	OutputIndex uint32
+	Score       float64
 }
 
 // RequestSyncResponseDTO is a transport-friendly structure that encapsulates
@@ -95,6 +96,7 @@ func NewRequestSyncResponseDTO(response *gasp.InitialResponse) *RequestSyncRespo
 		outpoints = append(outpoints, OutpointDTO{
 			TxID:        utxo.Txid.String(),
 			OutputIndex: utxo.OutputIndex,
+			Score:       utxo.Score,
 		})
 	}
 

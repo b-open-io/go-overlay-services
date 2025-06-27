@@ -162,6 +162,10 @@ components:
         outputIndex:
           type: integer
           description: 'Output index number'
+        score:
+          type: number
+          format: double
+          description: 'Sort score of the UTXO, used for prioritization in synchronization'
       required:
         - txid
         - outputIndex
