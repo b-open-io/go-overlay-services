@@ -230,7 +230,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 		return err
 	} else if tx, err := transaction.NewTransactionFromBEEF(beef); err != nil {
 		return err
-	} else if valid, err := spv.Verify(tx, s.Engine.ChainTracker, nil); err != nil {
+	} else if valid, err := spv.Verify(ctx, tx, s.Engine.ChainTracker, nil); err != nil {
 		return err
 	} else if !valid {
 		return errors.New("graph anchor is not a valid transaction")

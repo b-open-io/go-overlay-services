@@ -149,7 +149,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		slog.Error("invalid BEEF in Submit - tx is nil", "error", ErrInvalidBeef)
 		return nil, ErrInvalidBeef
 	}
-	if valid, err := spv.Verify(tx, e.ChainTracker, nil); err != nil {
+	if valid, err := spv.Verify(ctx, tx, e.ChainTracker, nil); err != nil {
 		slog.Error("SPV verification failed in Submit", "txid", txid, "error", err)
 		return nil, err
 	} else if !valid {
