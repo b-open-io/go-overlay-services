@@ -390,9 +390,9 @@ func createDummyValidTaggedBEEF(t *testing.T) (overlay.TaggedBEEF, *chainhash.Ha
 
 	beef := &transaction.Beef{
 		Version: transaction.BEEF_V2,
-		Transactions: map[string]*transaction.BeefTx{
-			prevTxID.String():    {Transaction: prevTx},
-			currentTxID.String(): {Transaction: currentTx},
+		Transactions: map[chainhash.Hash]*transaction.BeefTx{
+			*prevTxID:    {Transaction: prevTx},
+			*currentTxID: {Transaction: currentTx},
 		},
 	}
 	beefBytes, err := beef.AtomicBytes(currentTxID)
@@ -441,9 +441,9 @@ func createDummyBeefWithInputs(t *testing.T) []byte {
 
 	beef := &transaction.Beef{
 		Version: transaction.BEEF_V2,
-		Transactions: map[string]*transaction.BeefTx{
-			prevTx.TxID().String():    {Transaction: prevTx},
-			currentTx.TxID().String(): {Transaction: currentTx},
+		Transactions: map[chainhash.Hash]*transaction.BeefTx{
+			*prevTx.TxID():    {Transaction: prevTx},
+			*currentTx.TxID(): {Transaction: currentTx},
 		},
 	}
 

@@ -207,7 +207,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				if len(admit.AncillaryTxids) > 0 {
 					ancillaryBeef := transaction.Beef{
 						Version:      transaction.BEEF_V2,
-						Transactions: make(map[string]*transaction.BeefTx, len(admit.AncillaryTxids)),
+						Transactions: make(map[chainhash.Hash]*transaction.BeefTx, len(admit.AncillaryTxids)),
 					}
 					for _, txid := range admit.AncillaryTxids {
 						if tx := beef.FindTransaction(txid.String()); tx == nil {
@@ -850,7 +850,7 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 		if len(output.AncillaryTxids) > 0 {
 			ancillaryBeef := transaction.Beef{
 				Version:      transaction.BEEF_V2,
-				Transactions: make(map[string]*transaction.BeefTx, len(output.AncillaryTxids)),
+				Transactions: make(map[chainhash.Hash]*transaction.BeefTx, len(output.AncillaryTxids)),
 			}
 			for _, dep := range output.AncillaryTxids {
 				if depTx := beef.FindTransaction(dep.String()); depTx == nil {
