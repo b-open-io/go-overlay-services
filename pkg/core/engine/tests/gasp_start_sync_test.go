@@ -17,6 +17,7 @@ func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 	resolver := LookupResolverMock{
 		ExpectQueryCall:       true,
 		ExpectSetTrackersCall: true,
+		ExpectTrackersAccess:  true,
 		ExpectedAnswer: &lookup.LookupAnswer{
 			Type: lookup.AnswerTypeOutputList,
 			Outputs: []*lookup.OutputListItem{
@@ -69,6 +70,7 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 	resolver := LookupResolverMock{
 		ExpectQueryCall:       true,
 		ExpectSetTrackersCall: true,
+		ExpectTrackersAccess:  true,
 		ExpectedError:         expectedQueryCallErr,
 		ExpectedAnswer: &lookup.LookupAnswer{
 			Type: lookup.AnswerTypeOutputList,
@@ -112,7 +114,7 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 	err := sut.StartGASPSync(context.Background())
 
 	// then:
-	require.ErrorIs(t, err, expectedQueryCallErr)
+	require.NoError(t, err) // The method should continue with other topics even if one fails
 
 	resolver.AssertCalled(t)
 }
@@ -122,6 +124,7 @@ func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
 	resolver := LookupResolverMock{
 		ExpectQueryCall:       true,
 		ExpectSetTrackersCall: true,
+		ExpectTrackersAccess:  true,
 		ExpectedAnswer: &lookup.LookupAnswer{
 			Type: lookup.AnswerTypeOutputList,
 			Outputs: []*lookup.OutputListItem{

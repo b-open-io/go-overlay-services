@@ -42,6 +42,20 @@ const (
 	SyncConfigurationNone
 )
 
+// String returns the string representation of SyncConfigurationType
+func (s SyncConfigurationType) String() string {
+	switch s {
+	case SyncConfigurationPeers:
+		return "Peers"
+	case SyncConfigurationSHIP:
+		return "SHIP"
+	case SyncConfigurationNone:
+		return "None"
+	default:
+		return "Unknown"
+	}
+}
+
 type SyncConfiguration struct {
 	Type        SyncConfigurationType
 	Peers       []string
@@ -580,8 +594,20 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 			continue
 		}
 
+		slog.Info(fmt.Sprintf("[GASP SYNC] Processing topic \"%s\" with sync type \"%s\"", topic, syncEndpoints.Type))
+
 		if syncEndpoints.Type == SyncConfigurationSHIP {
+			slog.Info(fmt.Sprintf("[GASP SYNC] Discovering peers for topic \"%s\" using SHIP lookup", topic))
+			slog.Info(fmt.Sprintf("[GASP SYNC] Setting SLAP trackers for topic \"%s\", count: %d", topic, len(e.SLAPTrackers)))
+			if len(e.SLAPTrackers) > 0 {
+				for i, tracker := range e.SLAPTrackers {
+					slog.Info(fmt.Sprintf("[GASP SYNC] SLAP tracker %d: %s", i, tracker))
+				}
+			} else {
+				slog.Warn(fmt.Sprintf("[GASP SYNC] No SLAP trackers configured for topic \"%s\"", topic))
+			}
 			e.LookupResolver.SetSLAPTrackers(e.SLAPTrackers)
+			slog.Debug(fmt.Sprintf("[GASP SYNC] Current SLAP trackers after setting: %v", e.LookupResolver.SLAPTrackers()))
 
 			query, err := json.Marshal(map[string]any{"topics": []string{topic}})
 			if err != nil {
@@ -589,20 +615,65 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				return err
 			}
 
+			slog.Info(fmt.Sprintf("[GASP SYNC] Querying lookup resolver for topic \"%s\" with service \"ls_ship\"", topic))
+			slog.Debug(fmt.Sprintf("[GASP SYNC] Query payload: %s", string(query)))
+
 			timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
+
+			slog.Debug(fmt.Sprintf("[GASP SYNC] About to call LookupResolver.Query for topic \"%s\"", topic))
 			lookupAnswer, err := e.LookupResolver.Query(timeoutCtx, &lookup.LookupQuestion{Service: "ls_ship", Query: query})
+			slog.Debug(fmt.Sprintf("[GASP SYNC] LookupResolver.Query returned for topic \"%s\", err: %v", topic, err))
+
 			if err != nil {
 				slog.Error("failed to query lookup resolver for GASP sync", "topic", topic, "error", err)
-				return err
+				// Continue with other topics instead of returning - matches TypeScript behavior
+				continue
 			}
+
+			slog.Info(fmt.Sprintf("[GASP SYNC] Lookup query completed for topic \"%s\", answer type: %s, outputs count: %d", topic, lookupAnswer.Type, len(lookupAnswer.Outputs)))
 
 			if lookupAnswer.Type == lookup.AnswerTypeOutputList {
 				endpointSet := make(map[string]struct{}, len(lookupAnswer.Outputs))
 				for _, output := range lookupAnswer.Outputs {
-					tx, err := transaction.NewTransactionFromBEEF(output.Beef)
+					beef, err := transaction.NewBeefFromBytes(output.Beef)
 					if err != nil {
 						slog.Error("failed to parse advertisement output BEEF", "topic", topic, "error", err)
+						continue
+					}
+					slog.Info(fmt.Sprintf("[GASP SYNC] Successfully parsed BEEF for topic \"%s\", transaction count: %d", topic, len(beef.Transactions)))
+
+					// Find the transaction that contains the output at the specified index
+					var tx *transaction.Transaction
+					for _, beefTx := range beef.Transactions {
+						if beefTx.Transaction != nil && beefTx.Transaction.Outputs != nil && len(beefTx.Transaction.Outputs) > int(output.OutputIndex) {
+							tx = beefTx.Transaction
+							break
+						}
+					}
+					if tx == nil {
+						slog.Error("failed to find transaction with output index in BEEF", "topic", topic, "outputIndex", output.OutputIndex)
+						continue
+					}
+
+					// Additional safety check before accessing the output
+					if tx.Outputs == nil || len(tx.Outputs) <= int(output.OutputIndex) {
+						slog.Error("transaction outputs is nil or output index out of bounds", "topic", topic, "outputIndex", output.OutputIndex, "outputsLength", len(tx.Outputs))
+						continue
+					}
+
+					if tx.Outputs[output.OutputIndex] == nil {
+						slog.Error("output at index is nil", "topic", topic, "outputIndex", output.OutputIndex)
+						continue
+					}
+
+					if tx.Outputs[output.OutputIndex].LockingScript == nil {
+						slog.Error("locking script is nil", "topic", topic, "outputIndex", output.OutputIndex)
+						continue
+					}
+
+					if e.Advertiser == nil {
+						slog.Debug("advertiser is nil, skipping advertisement parsing", "topic", topic)
 						continue
 					}
 
@@ -623,53 +694,61 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 						syncEndpoints.Peers = append(syncEndpoints.Peers, endpoint)
 					}
 				}
+				slog.Info(fmt.Sprintf("[GASP SYNC] Discovered %d unique peer endpoint(s) for topic \"%s\"", len(syncEndpoints.Peers), topic))
+			} else {
+				slog.Warn(fmt.Sprintf("[GASP SYNC] Unexpected answer type \"%s\" for topic \"%s\", expected \"%s\"", lookupAnswer.Type, topic, lookup.AnswerTypeOutputList))
 			}
+		} else {
+			slog.Info(fmt.Sprintf("[GASP SYNC] Skipping topic \"%s\" - sync type is not SHIP (type: \"%s\")", topic, syncEndpoints.Type))
 		}
 
 		if len(syncEndpoints.Peers) > 0 {
-			peers := make([]string, 0, len(syncEndpoints.Peers))
-			for _, peer := range syncEndpoints.Peers {
-				if peer != e.HostingURL {
-					peers = append(peers, peer)
-				}
+			// Log the number of peers we will attempt to sync with
+			plural := ""
+			if len(syncEndpoints.Peers) != 1 {
+				plural = "s"
+			}
+			slog.Info(fmt.Sprintf("[GASP SYNC] Will attempt to sync with %d peer%s", len(syncEndpoints.Peers), plural), "topic", topic)
+		} else {
+			slog.Info(fmt.Sprintf("[GASP SYNC] No peers found for topic \"%s\", skipping sync", topic))
+			continue
+		}
+
+		for _, peer := range syncEndpoints.Peers {
+			logPrefix := "[GASP Sync of " + topic + " with " + peer + "]"
+
+			slog.Info(fmt.Sprintf("[GASP SYNC] Starting sync for topic \"%s\" with peer \"%s\"", topic, peer))
+
+			// Read the last interaction score from storage
+			lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
+			if err != nil {
+				slog.Error("Failed to get last interaction", "topic", topic, "peer", peer, "error", err)
+				return err
 			}
 
-			for _, peer := range peers {
-				logPrefix := "[GASP Sync of " + topic + " with " + peer + "]"
+			// Create a new GASP provider for each peer to avoid state conflicts
+			gaspProvider := gasp.NewGASP(gasp.GASPParams{
+				Storage: NewOverlayGASPStorage(topic, e, nil),
+				Remote: &OverlayGASPRemote{
+					EndpointUrl: peer,
+					Topic:       topic,
+					HttpClient:  http.DefaultClient,
+				},
+				LastInteraction: lastInteraction,
+				LogPrefix:       &logPrefix,
+				Unidirectional:  true,
+				Concurrency:     syncEndpoints.Concurrency,
+			})
 
-				slog.Info("GASP sync starting", "topic", topic, "peer", peer)
+			if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
+				slog.Error(fmt.Sprintf("[GASP SYNC] Sync failed for topic \"%s\" with peer \"%s\"", topic, peer), "error", err)
+			} else {
+				slog.Info(fmt.Sprintf("[GASP SYNC] Sync successful for topic \"%s\" with peer \"%s\"", topic, peer))
 
-				// Read the last interaction score from storage
-				lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
-				if err != nil {
-					slog.Error("Failed to get last interaction", "topic", topic, "peer", peer, "error", err)
-					return err
-				}
-
-				// Create a new GASP provider for each peer to avoid state conflicts
-				gaspProvider := gasp.NewGASP(gasp.GASPParams{
-					Storage: NewOverlayGASPStorage(topic, e, nil),
-					Remote: &OverlayGASPRemote{
-						EndpointUrl: peer,
-						Topic:       topic,
-						HttpClient:  http.DefaultClient,
-					},
-					LastInteraction: lastInteraction,
-					LogPrefix:       &logPrefix,
-					Unidirectional:  true,
-					Concurrency:     syncEndpoints.Concurrency,
-				})
-
-				if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
-					slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
-				} else {
-					slog.Info("GASP sync successful", "topic", topic, "peer", peer)
-
-					// Save the updated last interaction score
-					if gaspProvider.LastInteraction > lastInteraction {
-						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err == nil {
-							slog.Info("Updated last interaction score", "topic", topic, "peer", peer, "score", gaspProvider.LastInteraction)
-						}
+				// Save the updated last interaction score
+				if gaspProvider.LastInteraction > lastInteraction {
+					if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err == nil {
+						slog.Info("Updated last interaction score", "topic", topic, "peer", peer, "score", gaspProvider.LastInteraction)
 					}
 				}
 			}
