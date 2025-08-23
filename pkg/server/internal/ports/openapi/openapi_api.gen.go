@@ -90,9 +90,6 @@ type RequestSyncResponseJSONBody struct {
 
 	// Version The version number of the GASP protocol
 	Version int `json:"version"`
-
-	// Limit The maximum number of results to return
-	Limit uint32 `json:"limit"`
 }
 
 // RequestSyncResponseParams defines parameters for RequestSyncResponse.
