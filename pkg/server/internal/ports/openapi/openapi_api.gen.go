@@ -85,6 +85,9 @@ type RequestForeignGASPNodeParams struct {
 
 // RequestSyncResponseJSONBody defines parameters for RequestSyncResponse.
 type RequestSyncResponseJSONBody struct {
+	// Limit Maximum number of items to return
+	Limit uint32 `json:"limit"`
+
 	// Since Timestamp or sequence number from which to start synchronization
 	Since float64 `json:"since"`
 
