@@ -49,7 +49,9 @@ func TestRequestSyncResponseService_ValidCase(t *testing.T) {
 		t.Context(),
 		testabilities.DefaultTopic,
 		testabilities.DefaultVersion,
-		app.NewSince(testabilities.DefaultSince))
+		app.NewSince(testabilities.DefaultSince),
+		100,
+	)
 
 	// then:
 	require.NoError(t, err)
@@ -117,6 +119,7 @@ func TestRequestSyncResponseService_InvalidCases(t *testing.T) {
 				tc.topic,
 				tc.version,
 				tc.since,
+				100,
 			)
 
 			// then:
