@@ -39,7 +39,7 @@ type GASP struct {
 	LogPrefix       string
 	Unidirectional  bool
 	LogLevel        slog.Level
-	limiter         chan struct{}
+	limiterSize     int
 }
 
 func NewGASP(params GASPParams) *GASP {
@@ -51,9 +51,9 @@ func NewGASP(params GASPParams) *GASP {
 		// Sequential:      params.Sequential,
 	}
 	if params.Concurrency > 1 {
-		gasp.limiter = make(chan struct{}, params.Concurrency)
+		gasp.limiterSize = params.Concurrency
 	} else {
-		gasp.limiter = make(chan struct{}, 1)
+		gasp.limiterSize = 1
 	}
 	if params.Version != nil {
 		gasp.Version = *params.Version
@@ -112,12 +112,13 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		}
 
 		var wg sync.WaitGroup
+		limiter := make(chan struct{}, g.limiterSize)
 		for _, utxo := range ingestQueue {
 			wg.Add(1)
-			g.limiter <- struct{}{}
+			limiter <- struct{}{}
 			go func(utxo *Output) {
 				defer func() {
-					<-g.limiter
+					<-limiter
 					wg.Done()
 				}()
 				outpoint := utxo.Outpoint()
@@ -162,11 +163,12 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		if len(replyUTXOs) > 0 {
 			var wg sync.WaitGroup
 			for _, utxo := range replyUTXOs {
+				limiter := make(chan struct{}, g.limiterSize)
 				wg.Add(1)
-				g.limiter <- struct{}{}
+				limiter <- struct{}{}
 				go func(utxo *Output) {
 					defer func() {
-						<-g.limiter
+						<-limiter
 						wg.Done()
 					}()
 					slog.Info(fmt.Sprintf("%sHydrating GASP node for UTXO: %s.%d", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
@@ -298,12 +300,13 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 			slog.Debug(fmt.Sprintf("%sNeeded inputs for node %s: %v", g.LogPrefix, nodeId, neededInputs))
 			var wg sync.WaitGroup
 			errors := make(chan error)
+			limiter := make(chan struct{}, g.limiterSize)
 			for outpointStr, data := range neededInputs.RequestedInputs {
 				wg.Add(1)
-				g.limiter <- struct{}{}
+				limiter <- struct{}{}
 				go func(outpointStr string, data *NodeResponseData) {
 					defer func() {
-						<-g.limiter
+						<-limiter
 						wg.Done()
 					}()
 					slog.Info(fmt.Sprintf("%sRequesting new node for outpoint: %s, metadata: %v", g.LogPrefix, outpointStr, data.Metadata))
@@ -363,12 +366,13 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 			return err
 		} else if response != nil {
 			var wg sync.WaitGroup
+			limiter := make(chan struct{}, g.limiterSize)
 			for outpointStr, data := range response.RequestedInputs {
 				wg.Add(1)
-				g.limiter <- struct{}{}
+				limiter <- struct{}{}
 				go func(outpointStr string, data *NodeResponseData) {
 					defer func() {
-						<-g.limiter
+						<-limiter
 						wg.Done()
 					}()
 					var outpoint *transaction.Outpoint
