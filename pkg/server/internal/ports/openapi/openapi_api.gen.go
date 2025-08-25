@@ -68,14 +68,14 @@ type LookupQuestionJSONBody struct {
 
 // RequestForeignGASPNodeJSONBody defines parameters for RequestForeignGASPNode.
 type RequestForeignGASPNodeJSONBody struct {
-	// GraphID The graph ID in the format of "txID.outputIndex"
+	// GraphID The graph ID in the format of "txid.outputIndex"
 	GraphID string `json:"graphID"`
 
 	// OutputIndex The output index
 	OutputIndex uint32 `json:"outputIndex"`
 
-	// TxID The transaction ID
-	TxID string `json:"txID"`
+	// Txid The transaction ID
+	Txid string `json:"txid"`
 }
 
 // RequestForeignGASPNodeParams defines parameters for RequestForeignGASPNode.
