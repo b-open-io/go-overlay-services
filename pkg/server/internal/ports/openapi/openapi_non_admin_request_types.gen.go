@@ -26,14 +26,14 @@ type LookupQuestionBody struct {
 
 // RequestForeignGASPNodeBody defines model for RequestForeignGASPNodeBody.
 type RequestForeignGASPNodeBody struct {
-	// GraphID The graph ID in the format of "txID.outputIndex"
+	// GraphID The graph ID in the format of "txid.outputIndex"
 	GraphID string `json:"graphID"`
 
 	// OutputIndex The output index
 	OutputIndex uint32 `json:"outputIndex"`
 
-	// TxID The transaction ID
-	TxID string `json:"txID"`
+	// Txid The transaction ID
+	Txid string `json:"txid"`
 }
 
 // RequestSyncResponseBody defines model for RequestSyncResponseBody.
