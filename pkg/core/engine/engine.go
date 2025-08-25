@@ -252,17 +252,25 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		if _, ok := dupeTopics[topic]; ok {
 			continue
 		}
-		if err := e.Storage.MarkUTXOsAsSpent(ctx, inpoints, topic, txid); err != nil {
-			slog.Error("failed to mark UTXOs as spent", "topic", topic, "txid", txid, "error", err)
-			return nil, err
+		// Build list of inputs that actually exist in this topic's storage
+		if len(topicInputs[topic]) > 0 {
+			topicInpoints := make([]*transaction.Outpoint, 0, len(topicInputs[topic]))
+			for _, output := range topicInputs[topic] {
+				topicInpoints = append(topicInpoints, &output.Outpoint)
+			}
+			if err := e.Storage.MarkUTXOsAsSpent(ctx, topicInpoints, topic, txid); err != nil {
+				slog.Error("failed to mark UTXOs as spent", "topic", topic, "txid", txid, "error", err)
+				return nil, err
+			}
 		}
-		for vin, outpoint := range inpoints {
+		// Notify lookup services about spent outputs
+		for vin, output := range topicInputs[topic] {
 			for _, l := range e.LookupServices {
 				if err := l.OutputSpent(ctx, &OutputSpent{
-					Outpoint:           outpoint,
+					Outpoint:           &output.Outpoint,
 					Topic:              topic,
 					SpendingTxid:       txid,
-					InputIndex:         uint32(vin),
+					InputIndex:         vin,
 					UnlockingScript:    tx.Inputs[vin].UnlockingScript,
 					SequenceNumber:     tx.Inputs[vin].SequenceNumber,
 					SpendingAtomicBEEF: taggedBEEF.Beef,
@@ -367,12 +375,15 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 		slog.Debug("consumed by references updated", "duration", time.Since(start))
 		start = time.Now()
-		if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
-			Txid:  txid,
-			Topic: topic,
-		}); err != nil {
-			slog.Error("failed to insert applied transaction", "topic", topic, "txid", txid, "error", err)
-			return nil, err
+		// Insert applied transaction if any changes were made
+		if len(admit.OutputsToAdmit) > 0 || len(admit.CoinsRemoved) > 0 || len(admit.CoinsToRetain) > 0 || len(admit.AncillaryTxids) > 0 {
+			if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
+				Txid:  txid,
+				Topic: topic,
+			}); err != nil {
+				slog.Error("failed to insert applied transaction", "topic", topic, "txid", txid, "error", err)
+				return nil, err
+			}
 		}
 		slog.Debug("transaction applied", "duration", time.Since(start))
 	}

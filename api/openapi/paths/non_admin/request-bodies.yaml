@@ -26,9 +26,15 @@ components:
                 type: number
                 format: double
                 description: 'Timestamp or sequence number from which to start synchronization'
+              limit:
+                type: integer
+                format: uint32
+                default: 0
+                description: 'Maximum number of items to return'
             required:
               - version
               - since
+              - limit
 
     RequestForeignGASPNodeBody:
       content:

@@ -16,6 +16,7 @@ func TestRequestSyncResponseService_ValidCase(t *testing.T) {
 		InitialRequest: &gasp.InitialRequest{
 			Version: testabilities.DefaultVersion,
 			Since:   testabilities.DefaultSince,
+			Limit:   100,
 		},
 		Topic: testabilities.DefaultTopic,
 		Response: &gasp.InitialResponse{
@@ -49,7 +50,9 @@ func TestRequestSyncResponseService_ValidCase(t *testing.T) {
 		t.Context(),
 		testabilities.DefaultTopic,
 		testabilities.DefaultVersion,
-		app.NewSince(testabilities.DefaultSince))
+		app.NewSince(testabilities.DefaultSince),
+		100,
+	)
 
 	// then:
 	require.NoError(t, err)
@@ -96,6 +99,7 @@ func TestRequestSyncResponseService_InvalidCases(t *testing.T) {
 				InitialRequest: &gasp.InitialRequest{
 					Version: testabilities.DefaultVersion,
 					Since:   testabilities.DefaultSince,
+					Limit:   100,
 				},
 				Topic:                          testabilities.DefaultTopic,
 				ProvideForeignSyncResponseCall: true,
@@ -117,6 +121,7 @@ func TestRequestSyncResponseService_InvalidCases(t *testing.T) {
 				tc.topic,
 				tc.version,
 				tc.since,
+				100,
 			)
 
 			// then:
