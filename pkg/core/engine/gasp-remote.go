@@ -25,15 +25,15 @@ type OverlayGASPRemote struct {
 	endpointUrl    string
 	topic          string
 	httpClient     util.HTTPClient
-	inflightMap    sync.Map       // Map to track in-flight node requests
-	networkLimiter chan struct{}  // Controls max concurrent network requests
+	inflightMap    sync.Map      // Map to track in-flight node requests
+	networkLimiter chan struct{} // Controls max concurrent network requests
 }
 
 func NewOverlayGASPRemote(endpointUrl, topic string, httpClient util.HTTPClient, maxConcurrency int) *OverlayGASPRemote {
 	if maxConcurrency <= 0 {
 		maxConcurrency = 8 // Default network concurrency
 	}
-	
+
 	return &OverlayGASPRemote{
 		endpointUrl:    endpointUrl,
 		topic:          topic,

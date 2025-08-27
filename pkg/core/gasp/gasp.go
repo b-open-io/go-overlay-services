@@ -40,11 +40,10 @@ type GASP struct {
 	Unidirectional  bool
 	LogLevel        slog.Level
 	limiter         chan struct{} // Concurrency limiter controlled by Concurrency config
-	
-	// Global deduplication cache for processed nodes across all UTXOs
-	processedNodes  sync.Map       // map[transaction.Outpoint]struct{} - prevents duplicate processing
-}
 
+	// Global deduplication cache for processed nodes across all UTXOs
+	processedNodes sync.Map // map[transaction.Outpoint]struct{} - prevents duplicate processing
+}
 
 func NewGASP(params GASPParams) *GASP {
 	gasp := &GASP{
@@ -119,7 +118,7 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		// Process all UTXOs from this batch with shared deduplication
 		var wg sync.WaitGroup
 		seenNodes := &sync.Map{} // Shared across all UTXOs in this batch
-		
+
 		for _, utxo := range ingestQueue {
 			wg.Add(1)
 			g.limiter <- struct{}{}
@@ -293,22 +292,22 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 			Index: node.OutputIndex,
 		}
 		nodeId := nodeOutpoint.String()
-		
+
 		slog.Debug(fmt.Sprintf("%sProcessing incoming node: %v, spentBy: %v", g.LogPrefix, node, spentBy))
-		
+
 		// Global deduplication check
 		if _, exists := g.processedNodes.LoadOrStore(*nodeOutpoint, struct{}{}); exists {
 			slog.Debug(fmt.Sprintf("%sNode %s already processed globally, skipping", g.LogPrefix, nodeId))
 			return nil
 		}
-		
-		// Per-graph cycle detection  
+
+		// Per-graph cycle detection
 		if _, ok := seenNodes.Load(nodeId); ok {
 			slog.Debug(fmt.Sprintf("%sNode %s already seen in this graph, skipping.", g.LogPrefix, nodeId))
 			return nil
 		}
 		seenNodes.Store(nodeId, struct{}{})
-		
+
 		if err := g.Storage.AppendToGraph(ctx, node, spentBy); err != nil {
 			return err
 		} else if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
@@ -321,14 +320,14 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 				wg.Add(1)
 				go func(outpointStr string, data *NodeResponseData) {
 					defer wg.Done()
-					
+
 					slog.Info(fmt.Sprintf("%sRequesting new node for outpoint: %s, metadata: %v", g.LogPrefix, outpointStr, data.Metadata))
 					if outpoint, err := transaction.OutpointFromString(outpointStr); err != nil {
 						errors <- err
 					} else if newNode, err := g.Remote.RequestNode(ctx, outpoint, outpoint, data.Metadata); err != nil {
 						errors <- err
 					} else {
-						
+
 						slog.Debug(fmt.Sprintf("%sReceived new node: %v", g.LogPrefix, newNode))
 						// Create outpoint for the current node that is spending this input
 						spendingOutpoint := &transaction.Outpoint{
@@ -404,8 +403,6 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 	}
 	return nil
 }
-
-
 
 func (g *GASP) computeTxID(rawtx string) (*chainhash.Hash, error) {
 	if tx, err := transaction.NewTransactionFromHex(rawtx); err != nil {
