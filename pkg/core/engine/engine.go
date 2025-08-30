@@ -766,12 +766,8 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 
 			// Create a new GASP provider for each peer to avoid state conflicts
 			gaspProvider := gasp.NewGASP(gasp.GASPParams{
-				Storage: NewOverlayGASPStorage(topic, e, nil),
-				Remote: &OverlayGASPRemote{
-					endpointUrl: peer,
-					topic:       topic,
-					httpClient:  http.DefaultClient,
-				},
+				Storage:         NewOverlayGASPStorage(topic, e, nil),
+				Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),
 				LastInteraction: lastInteraction,
 				LogPrefix:       &logPrefix,
 				Unidirectional:  true,

@@ -142,7 +142,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 
 		if beefBytes, err := beef.AtomicBytes(tx.TxID()); err != nil {
 			return nil, err
-		} else if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+		} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
 			return nil, err
 		} else if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
 			if neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes); err != nil {
@@ -159,6 +159,13 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	}
 
 	return response, nil
+}
+
+func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+	if _, ok := s.Engine.Managers[s.Topic]; !ok {
+		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic: " + s.Topic)
+	}
+	return s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
 }
 
 func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {
@@ -262,7 +269,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 						}
 					}
 				}
-				if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beef, previousCoins); err != nil {
+				if admit, err := s.IdentifyAdmissibleOutputs(ctx, beef, previousCoins); err != nil {
 					return err
 				} else {
 					for _, vout := range admit.OutputsToAdmit {
