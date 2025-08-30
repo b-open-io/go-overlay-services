@@ -405,8 +405,10 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		// then
 		require.NoError(t, err)
 
-		result1, _ := storage1.FindKnownUTXOs(ctx, 0, 0)
-		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
+		result1, err := storage1.FindKnownUTXOs(ctx, 0, 0)
+		require.NoError(t, err)
+		result2, err := storage2.FindKnownUTXOs(ctx, 0, 0)
+		require.NoError(t, err)
 
 		require.Len(t, result2, 2)
 		require.Equal(t, len(result1), len(result2))

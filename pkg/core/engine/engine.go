@@ -768,9 +768,9 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 			gaspProvider := gasp.NewGASP(gasp.GASPParams{
 				Storage: NewOverlayGASPStorage(topic, e, nil),
 				Remote: &OverlayGASPRemote{
-					EndpointUrl: peer,
-					Topic:       topic,
-					HttpClient:  http.DefaultClient,
+					endpointUrl: peer,
+					topic:       topic,
+					httpClient:  http.DefaultClient,
 				},
 				LastInteraction: lastInteraction,
 				LogPrefix:       &logPrefix,
@@ -782,11 +782,33 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				slog.Error(fmt.Sprintf("[GASP SYNC] Sync failed for topic \"%s\" with peer \"%s\"", topic, peer), "error", err)
 			} else {
 				slog.Info(fmt.Sprintf("[GASP SYNC] Sync successful for topic \"%s\" with peer \"%s\"", topic, peer))
+				// Read the last interaction score from storage
+				lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
+				if err != nil {
+					slog.Error("Failed to get last interaction", "topic", topic, "peer", peer, "error", err)
+					return err
+				}
 
-				// Save the updated last interaction score
-				if gaspProvider.LastInteraction > lastInteraction {
-					if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err == nil {
-						slog.Info("Updated last interaction score", "topic", topic, "peer", peer, "score", gaspProvider.LastInteraction)
+				// Create a new GASP provider for each peer to avoid state conflicts
+				gaspProvider := gasp.NewGASP(gasp.GASPParams{
+					Storage:         NewOverlayGASPStorage(topic, e, nil),
+					Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),
+					LastInteraction: lastInteraction,
+					LogPrefix:       &logPrefix,
+					Unidirectional:  true,
+					Concurrency:     syncEndpoints.Concurrency,
+				})
+
+				if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
+					slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
+				} else {
+					slog.Info("GASP sync successful", "topic", topic, "peer", peer)
+
+					// Save the updated last interaction score
+					if gaspProvider.LastInteraction > lastInteraction {
+						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err == nil {
+							slog.Info("Updated last interaction score", "topic", topic, "peer", peer, "score", gaspProvider.LastInteraction)
+						}
 					}
 				}
 			}
@@ -837,7 +859,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			return nil, err
 		} else {
 			node := &gasp.Node{
-				GraphID:       graphId,
+				GraphID:       outpoint,
 				RawTx:         tx.Hex(),
 				OutputIndex:   outpoint.Index,
 				AncillaryBeef: output.AncillaryBeef,
@@ -851,8 +873,8 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		}
 
 	}
-	if output, err := e.Storage.FindOutput(ctx, graphId, &topic, nil, true); err != nil {
-		slog.Error("failed to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "topic", topic, "error", err)
+	if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true); err != nil {
+		slog.Error("failed to find output in ProvideForeignGASPNode", "outpoint", outpoint.String(), "topic", topic, "error", err)
 		return nil, err
 	} else if output == nil {
 		return nil, ErrMissingOutput

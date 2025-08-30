@@ -8,30 +8,52 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sync"
 
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/go-sdk/util"
 )
 
+type inflightNodeRequest struct {
+	wg     *sync.WaitGroup
+	result *gasp.Node
+	err    error
+}
+
 type OverlayGASPRemote struct {
-	EndpointUrl string
-	Topic       string
-	HttpClient  util.HTTPClient
+	endpointUrl    string
+	topic          string
+	httpClient     util.HTTPClient
+	inflightMap    sync.Map      // Map to track in-flight node requests
+	networkLimiter chan struct{} // Controls max concurrent network requests
+}
+
+func NewOverlayGASPRemote(endpointUrl, topic string, httpClient util.HTTPClient, maxConcurrency int) *OverlayGASPRemote {
+	if maxConcurrency <= 0 {
+		maxConcurrency = 8 // Default network concurrency
+	}
+
+	return &OverlayGASPRemote{
+		endpointUrl:    endpointUrl,
+		topic:          topic,
+		httpClient:     httpClient,
+		networkLimiter: make(chan struct{}, maxConcurrency),
+	}
 }
 
 func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(request); err != nil {
-		slog.Error("failed to encode GASP initial request", "endpoint", r.EndpointUrl, "topic", r.Topic, "error", err)
+		slog.Error("failed to encode GASP initial request", "endpoint", r.endpointUrl, "topic", r.topic, "error", err)
 		return nil, err
-	} else if req, err := http.NewRequest("POST", r.EndpointUrl+"/requestSyncResponse", io.NopCloser(&buf)); err != nil {
-		slog.Error("failed to create HTTP request for GASP initial response", "endpoint", r.EndpointUrl, "topic", r.Topic, "error", err)
+	} else if req, err := http.NewRequest("POST", r.endpointUrl+"/requestSyncResponse", io.NopCloser(&buf)); err != nil {
+		slog.Error("failed to create HTTP request for GASP initial response", "endpoint", r.endpointUrl, "topic", r.topic, "error", err)
 		return nil, err
 	} else {
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-BSV-Topic", r.Topic)
-		if resp, err := r.HttpClient.Do(req); err != nil {
+		req.Header.Set("X-BSV-Topic", r.topic)
+		if resp, err := r.httpClient.Do(req); err != nil {
 			return nil, err
 		} else {
 			defer func() { _ = resp.Body.Close() }()
@@ -51,6 +73,35 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gas
 }
 
 func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
+	outpointStr := outpoint.String()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Done()
+
+	// Check if there's already an in-flight request for this outpoint
+	if inflight, loaded := r.inflightMap.LoadOrStore(outpointStr, &inflightNodeRequest{wg: &wg}); loaded {
+		req := inflight.(*inflightNodeRequest)
+		req.wg.Wait()
+		return req.result, req.err
+	} else {
+		req := inflight.(*inflightNodeRequest)
+		slog.Info("Requesting GASP node", "outpoint", outpointStr, "metadata", metadata, "topic", r.topic)
+		req.result, req.err = r.doNodeRequest(ctx, graphID, outpoint, metadata)
+
+		// Clean up inflight map
+		r.inflightMap.Delete(outpointStr)
+		return req.result, req.err
+	}
+}
+
+func (r *OverlayGASPRemote) doNodeRequest(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
+	// Acquire network limiter
+	select {
+	case r.networkLimiter <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-r.networkLimiter }()
 	if j, err := json.Marshal(&gasp.NodeRequest{
 		GraphID:     graphID,
 		Txid:        &outpoint.Txid,
@@ -58,12 +109,12 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transactio
 		Metadata:    metadata,
 	}); err != nil {
 		return nil, err
-	} else if req, err := http.NewRequest("POST", r.EndpointUrl+"/requestForeignGASPNode", bytes.NewReader(j)); err != nil {
+	} else if req, err := http.NewRequest("POST", r.endpointUrl+"/requestForeignGASPNode", bytes.NewReader(j)); err != nil {
 		return nil, err
 	} else {
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-BSV-Topic", r.Topic)
-		if resp, err := r.HttpClient.Do(req); err != nil {
+		req.Header.Set("X-BSV-Topic", r.topic)
+		if resp, err := r.httpClient.Do(req); err != nil {
 			return nil, err
 		} else {
 			defer func() { _ = resp.Body.Close() }()

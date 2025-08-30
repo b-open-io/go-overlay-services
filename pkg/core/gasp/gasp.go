@@ -39,7 +39,10 @@ type GASP struct {
 	LogPrefix       string
 	Unidirectional  bool
 	LogLevel        slog.Level
-	limiterSize     int
+	limiter         chan struct{} // Concurrency limiter controlled by Concurrency config
+
+	// Global deduplication cache for processed nodes across all UTXOs
+	processedNodes sync.Map // map[transaction.Outpoint]struct{} - prevents duplicate processing
 }
 
 func NewGASP(params GASPParams) *GASP {
@@ -50,11 +53,7 @@ func NewGASP(params GASPParams) *GASP {
 		Unidirectional:  params.Unidirectional,
 		// Sequential:      params.Sequential,
 	}
-	if params.Concurrency > 1 {
-		gasp.limiterSize = params.Concurrency
-	} else {
-		gasp.limiterSize = 1
-	}
+	// Concurrency limiter controlled by Concurrency config
 	if params.Version != nil {
 		gasp.Version = *params.Version
 	} else {
@@ -83,7 +82,7 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		outpoint := fmt.Sprintf("%s.%d", utxo.Txid, utxo.OutputIndex)
 		knownOutpoints[outpoint] = struct{}{}
 	}
-	sharedOutpoints := make(map[string]struct{})
+	var sharedOutpoints sync.Map
 
 	var initialResponse *InitialResponse
 	for {
@@ -104,21 +103,21 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 			}
 			outpoint := utxo.OutpointString()
 			if _, exists := knownOutpoints[outpoint]; exists {
-				sharedOutpoints[outpoint] = struct{}{}
+				sharedOutpoints.Store(outpoint, struct{}{})
 				delete(knownOutpoints, outpoint)
-			} else if _, shared := sharedOutpoints[outpoint]; !shared {
+			} else if _, shared := sharedOutpoints.Load(outpoint); !shared {
 				ingestQueue = append(ingestQueue, utxo)
 			}
 		}
 
+		// Process all UTXOs from this batch with shared deduplication
 		var wg sync.WaitGroup
-		limiter := make(chan struct{}, g.limiterSize)
+		seenNodes := &sync.Map{} // Shared across all UTXOs in this batch
+
 		for _, utxo := range ingestQueue {
 			wg.Add(1)
-			limiter <- struct{}{}
 			go func(utxo *Output) {
 				defer func() {
-					<-limiter
 					wg.Done()
 				}()
 				outpoint := utxo.Outpoint()
@@ -128,7 +127,7 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 					return
 				}
 				slog.Debug(fmt.Sprintf("%sReceived unspent graph node from remote: %v", g.LogPrefix, resolvedNode))
-				if err = g.processIncomingNode(ctx, resolvedNode, nil, &sync.Map{}); err != nil {
+				if err = g.processIncomingNode(ctx, resolvedNode, nil, seenNodes); err != nil {
 					slog.Warn(fmt.Sprintf("%sError processing incoming node %s: %v", g.LogPrefix, outpoint, err))
 					return
 				}
@@ -136,7 +135,7 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 					slog.Warn(fmt.Sprintf("%sError completing graph for %s: %v", g.LogPrefix, outpoint, err))
 					return
 				}
-				sharedOutpoints[outpoint.String()] = struct{}{}
+				sharedOutpoints.Store(outpoint.String(), struct{}{})
 			}(utxo)
 		}
 		wg.Wait()
@@ -154,7 +153,7 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		for _, utxo := range localUTXOs {
 			outpoint := fmt.Sprintf("%s.%d", utxo.Txid, utxo.OutputIndex)
 			if utxo.Score >= initialResponse.Since {
-				if _, shared := sharedOutpoints[outpoint]; !shared {
+				if _, shared := sharedOutpoints.Load(outpoint); !shared {
 					replyUTXOs = append(replyUTXOs, utxo)
 				}
 			}
@@ -163,12 +162,9 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		if len(replyUTXOs) > 0 {
 			var wg sync.WaitGroup
 			for _, utxo := range replyUTXOs {
-				limiter := make(chan struct{}, g.limiterSize)
 				wg.Add(1)
-				limiter <- struct{}{}
 				go func(utxo *Output) {
 					defer func() {
-						<-limiter
 						wg.Done()
 					}()
 					slog.Info(fmt.Sprintf("%sHydrating GASP node for UTXO: %s.%d", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
@@ -282,16 +278,27 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 	if txid, err := g.computeTxID(node.RawTx); err != nil {
 		return err
 	} else {
-		nodeId := (&transaction.Outpoint{
+		nodeOutpoint := &transaction.Outpoint{
 			Txid:  *txid,
 			Index: node.OutputIndex,
-		}).String()
+		}
+		nodeId := nodeOutpoint.String()
+
 		slog.Debug(fmt.Sprintf("%sProcessing incoming node: %v, spentBy: %v", g.LogPrefix, node, spentBy))
+
+		// Global deduplication check
+		if _, exists := g.processedNodes.LoadOrStore(*nodeOutpoint, struct{}{}); exists {
+			slog.Debug(fmt.Sprintf("%sNode %s already processed globally, skipping", g.LogPrefix, nodeId))
+			return nil
+		}
+
+		// Per-graph cycle detection
 		if _, ok := seenNodes.Load(nodeId); ok {
-			slog.Debug(fmt.Sprintf("%sNode %s already processed, skipping.", g.LogPrefix, nodeId))
+			slog.Debug(fmt.Sprintf("%sNode %s already seen in this graph, skipping.", g.LogPrefix, nodeId))
 			return nil
 		}
 		seenNodes.Store(nodeId, struct{}{})
+
 		if err := g.Storage.AppendToGraph(ctx, node, spentBy); err != nil {
 			return err
 		} else if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
@@ -300,21 +307,18 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 			slog.Debug(fmt.Sprintf("%sNeeded inputs for node %s: %v", g.LogPrefix, nodeId, neededInputs))
 			var wg sync.WaitGroup
 			errors := make(chan error)
-			limiter := make(chan struct{}, g.limiterSize)
 			for outpointStr, data := range neededInputs.RequestedInputs {
 				wg.Add(1)
-				limiter <- struct{}{}
 				go func(outpointStr string, data *NodeResponseData) {
-					defer func() {
-						<-limiter
-						wg.Done()
-					}()
+					defer wg.Done()
+
 					slog.Info(fmt.Sprintf("%sRequesting new node for outpoint: %s, metadata: %v", g.LogPrefix, outpointStr, data.Metadata))
 					if outpoint, err := transaction.OutpointFromString(outpointStr); err != nil {
 						errors <- err
-					} else if newNode, err := g.Remote.RequestNode(ctx, node.GraphID, outpoint, data.Metadata); err != nil {
+					} else if newNode, err := g.Remote.RequestNode(ctx, outpoint, outpoint, data.Metadata); err != nil {
 						errors <- err
 					} else {
+
 						slog.Debug(fmt.Sprintf("%sReceived new node: %v", g.LogPrefix, newNode))
 						// Create outpoint for the current node that is spending this input
 						spendingOutpoint := &transaction.Outpoint{
@@ -366,15 +370,10 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 			return err
 		} else if response != nil {
 			var wg sync.WaitGroup
-			limiter := make(chan struct{}, g.limiterSize)
 			for outpointStr, data := range response.RequestedInputs {
 				wg.Add(1)
-				limiter <- struct{}{}
 				go func(outpointStr string, data *NodeResponseData) {
-					defer func() {
-						<-limiter
-						wg.Done()
-					}()
+					defer wg.Done()
 					var outpoint *transaction.Outpoint
 					var err error
 					if outpoint, err = transaction.OutpointFromString(outpointStr); err == nil {
