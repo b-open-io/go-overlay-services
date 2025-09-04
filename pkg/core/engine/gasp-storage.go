@@ -136,6 +136,17 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 						LockingScript: output.Script,
 						Satoshis:      output.Satoshis,
 					}
+				} else {
+					// Check if this input exists in temporary graph storage
+					inpoint := inpoints[vin]
+					if graphNode, ok := s.tempGraphNodeRefs.Load(inpoint.String()); ok {
+						node := graphNode.(*GraphNode)
+						if sourceTx, err := transaction.NewTransactionFromHex(node.RawTx); err == nil {
+							if int(inpoint.Index) < len(sourceTx.Outputs) {
+								previousCoins[uint32(vin)] = sourceTx.Outputs[inpoint.Index]
+							}
+						}
+					}
 				}
 			}
 		}
@@ -260,16 +271,13 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 								Satoshis:      output.Satoshis,
 							}
 						} else {
-							// Check if this input exists in our local admitted coins
+							// Check if this input exists in temporary graph storage
 							inpoint := inpoints[vin]
-							if _, exists := coins[inpoint.String()]; exists {
-								// Extract output from temporary graph storage
-								if graphNode, ok := s.tempGraphNodeRefs.Load(inpoint.String()); ok {
-									node := graphNode.(*GraphNode)
-									if sourceTx, err := transaction.NewTransactionFromHex(node.RawTx); err == nil {
-										if int(inpoint.Index) < len(sourceTx.Outputs) {
-											previousCoins[uint32(vin)] = sourceTx.Outputs[inpoint.Index]
-										}
+							if graphNode, ok := s.tempGraphNodeRefs.Load(inpoint.String()); ok {
+								node := graphNode.(*GraphNode)
+								if sourceTx, err := transaction.NewTransactionFromHex(node.RawTx); err == nil {
+									if int(inpoint.Index) < len(sourceTx.Outputs) {
+										previousCoins[uint32(vin)] = sourceTx.Outputs[inpoint.Index]
 									}
 								}
 							}
