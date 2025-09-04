@@ -136,6 +136,17 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 						LockingScript: output.Script,
 						Satoshis:      output.Satoshis,
 					}
+				} else {
+					// Check if this input exists in temporary graph storage
+					inpoint := inpoints[vin]
+					if graphNode, ok := s.tempGraphNodeRefs.Load(inpoint.String()); ok {
+						node := graphNode.(*GraphNode)
+						if sourceTx, err := transaction.NewTransactionFromHex(node.RawTx); err == nil {
+							if int(inpoint.Index) < len(sourceTx.Outputs) {
+								previousCoins[uint32(vin)] = sourceTx.Outputs[inpoint.Index]
+							}
+						}
+					}
 				}
 			}
 		}
@@ -266,10 +277,21 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 								LockingScript: output.Script,
 								Satoshis:      output.Satoshis,
 							}
+						} else {
+							// Check if this input exists in temporary graph storage
+							inpoint := inpoints[vin]
+							if graphNode, ok := s.tempGraphNodeRefs.Load(inpoint.String()); ok {
+								node := graphNode.(*GraphNode)
+								if sourceTx, err := transaction.NewTransactionFromHex(node.RawTx); err == nil {
+									if int(inpoint.Index) < len(sourceTx.Outputs) {
+										previousCoins[uint32(vin)] = sourceTx.Outputs[inpoint.Index]
+									}
+								}
+							}
 						}
 					}
 				}
-				if admit, err := s.IdentifyAdmissibleOutputs(ctx, beef, previousCoins); err != nil {
+				if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
 					return err
 				} else {
 					for _, vout := range admit.OutputsToAdmit {
