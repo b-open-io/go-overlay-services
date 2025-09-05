@@ -49,7 +49,6 @@ func NewOverlayGASPStorage(topic string, engine *Engine, maxNodesInGraph *int) *
 	}
 }
 
-
 func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since float64, limit uint32) ([]*gasp.Output, error) {
 	if utxos, err := s.Engine.Storage.FindUTXOsForTopic(ctx, s.Topic, since, limit, false); err != nil {
 		return nil, err
@@ -301,20 +300,21 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 
 func (s *OverlayGASPStorage) DiscardGraph(_ context.Context, graphID *transaction.Outpoint) error {
 	// Find and delete all nodes that belong to this graph
-	nodesToDelete := make([]string, 0)
-	
+	nodesToDelete := make([]*transaction.Outpoint, 0)
+
 	// First pass: collect all node IDs that belong to this graph
 	s.tempGraphNodeRefs.Range(func(nodeId, graphRef any) bool {
 		node := graphRef.(*GraphNode)
 		if node.GraphID.Equal(graphID) {
-			nodesToDelete = append(nodesToDelete, nodeId.(string))
+			outpoint := nodeId.(transaction.Outpoint)
+			nodesToDelete = append(nodesToDelete, &outpoint)
 		}
 		return true
 	})
 
 	// Delete all collected nodes
 	for _, nodeId := range nodesToDelete {
-		s.tempGraphNodeRefs.Delete(nodeId)
+		s.tempGraphNodeRefs.Delete(*nodeId)
 		s.tempGraphNodeCount--
 	}
 
@@ -334,15 +334,15 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 			if tx == nil {
 				return errors.New("no transaction in BEEF")
 			}
-			
+
 			txid := *tx.TxID()
-			
+
 			// Deduplicate submissions by transaction ID
-			
+
 			// Pre-initialize the submission state to avoid race conditions
 			newState := &submissionState{}
 			newState.wg.Add(1)
-			
+
 			if existing, loaded := s.submissionTracker.LoadOrStore(txid, newState); loaded {
 				// Another goroutine is already submitting this transaction, wait for it
 				state := existing.(*submissionState)
@@ -353,8 +353,8 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 			} else {
 				// We're the first caller, do the submission using our pre-initialized state
 				state := newState
-				defer state.wg.Done()                  // Signal completion
-				
+				defer state.wg.Done() // Signal completion
+
 				// Perform the actual submission
 				_, state.err = s.Engine.Submit(
 					ctx,
