@@ -54,6 +54,11 @@ func NewGASP(params GASPParams) *GASP {
 		// Sequential:      params.Sequential,
 	}
 	// Concurrency limiter controlled by Concurrency config
+	if params.Concurrency > 1 {
+		gasp.limiter = make(chan struct{}, params.Concurrency)
+	} else {
+		gasp.limiter = make(chan struct{}, 1)
+	}
 	if params.Version != nil {
 		gasp.Version = *params.Version
 	} else {
@@ -116,8 +121,10 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 
 		for _, utxo := range ingestQueue {
 			wg.Add(1)
+			g.limiter <- struct{}{}
 			go func(utxo *Output) {
 				defer func() {
+					<-g.limiter
 					wg.Done()
 				}()
 				outpoint := utxo.Outpoint()
@@ -163,8 +170,10 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 			var wg sync.WaitGroup
 			for _, utxo := range replyUTXOs {
 				wg.Add(1)
+				g.limiter <- struct{}{}
 				go func(utxo *Output) {
 					defer func() {
+						<-g.limiter
 						wg.Done()
 					}()
 					slog.Info(fmt.Sprintf("%sHydrating GASP node for UTXO: %s.%d", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
