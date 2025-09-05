@@ -19,7 +19,7 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 	BEEF := createDummyBEEF(t)
 
 	expectedNode := &gasp.Node{
-		GraphID:     graphID,
+		GraphID:     outpoint,
 		RawTx:       parseBEEFToTx(t, BEEF).Hex(),
 		OutputIndex: outpoint.Index,
 	}

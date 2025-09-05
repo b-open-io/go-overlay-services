@@ -388,7 +388,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		// given
 		ctx := context.Background()
 		utxo1 := createMockUTXO("mock_sender1_rawtx1", 0, 111)
-		utxo2 := createMockUTXO("mock_sender2_rawtx1", 0, 222)
+		utxo2 := createMockUTXO("mock_sender2_rawtx1", 1, 222)
 
 		storage1 := newMockGASPStorage([]*mockUTXO{utxo1, utxo2})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
