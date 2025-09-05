@@ -683,39 +683,42 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 						continue
 					}
 
-					if e.Advertiser != nil {
-						slog.Debug("parsing advertisement from locking script", "topic", topic, "outputIndex", output.OutputIndex)
-						advertisement, err := e.Advertiser.ParseAdvertisement(tx.Outputs[output.OutputIndex].LockingScript)
-						if err != nil {
-							slog.Error("failed to parse advertisement from locking script", "topic", topic, "error", err)
-							continue
-						}
+					if e.Advertiser == nil {
+						slog.Warn("advertiser is nil, skipping advertisement parsing", "topic", topic)
+						continue
+					}
 
-						if advertisement == nil {
-							slog.Debug("advertisement parsed as nil", "topic", topic)
-							continue
-						}
+					slog.Debug("parsing advertisement from locking script", "topic", topic, "outputIndex", output.OutputIndex)
+					advertisement, err := e.Advertiser.ParseAdvertisement(tx.Outputs[output.OutputIndex].LockingScript)
+					if err != nil {
+						slog.Error("failed to parse advertisement from locking script", "topic", topic, "error", err)
+						continue
+					}
 
-						slog.Debug("successfully parsed advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
+					if advertisement == nil {
+						slog.Debug("advertisement parsed as nil", "topic", topic)
+						continue
+					}
 
-						// Determine expected protocol based on topic
-						var expectedProtocol overlay.Protocol
-						if topic == "tm_ship" {
-							expectedProtocol = overlay.ProtocolSHIP
-						} else if topic == "tm_slap" {
-							expectedProtocol = overlay.ProtocolSLAP
-						} else {
-							// For unknown topics, log a warning but continue
-							slog.Warn("unknown topic, cannot determine expected protocol", "topic", topic)
-							continue
-						}
+					slog.Debug("successfully parsed advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
 
-						if advertisement.Protocol == expectedProtocol {
-							slog.Debug("found matching advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
-							endpointSet[advertisement.Domain] = struct{}{}
-						} else {
-							slog.Debug("skipping advertisement with mismatched protocol", "topic", topic, "expected", expectedProtocol, "actual", advertisement.Protocol, "domain", advertisement.Domain)
-						}
+					// Determine expected protocol based on topic
+					var expectedProtocol overlay.Protocol
+					if topic == "tm_ship" {
+						expectedProtocol = overlay.ProtocolSHIP
+					} else if topic == "tm_slap" {
+						expectedProtocol = overlay.ProtocolSLAP
+					} else {
+						// For unknown topics, log a warning but continue
+						slog.Warn("unknown topic, cannot determine expected protocol", "topic", topic)
+						continue
+					}
+
+					if advertisement.Protocol == expectedProtocol {
+						slog.Debug("found matching advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
+						endpointSet[advertisement.Domain] = struct{}{}
+					} else {
+						slog.Debug("skipping advertisement with mismatched protocol", "topic", topic, "expected", expectedProtocol, "actual", advertisement.Protocol, "domain", advertisement.Domain)
 					}
 				}
 
