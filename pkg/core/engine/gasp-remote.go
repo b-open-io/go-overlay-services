@@ -121,7 +121,7 @@ func (r *OverlayGASPRemote) doNodeRequest(ctx context.Context, graphID *transact
 			if resp.StatusCode != http.StatusOK {
 				return nil, &util.HTTPError{
 					StatusCode: resp.StatusCode,
-					Err:        err,
+					Err:        errors.New("requesting GASP node failed"),
 				}
 			}
 			result := &gasp.Node{}
