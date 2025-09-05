@@ -88,6 +88,7 @@ func NewDefaultRequestSyncResponseBody() openapi.RequestSyncResponseBody {
 	return openapi.RequestSyncResponseBody{
 		Version: DefaultVersion,
 		Since:   DefaultSince,
+		Limit:   0,
 	}
 }
 

@@ -36,6 +36,7 @@ func (h *RequestSyncResponseHandler) Handle(c *fiber.Ctx, params openapi.Request
 		app.NewTopic(params.XBSVTopic),
 		app.Version(body.Version),
 		app.Since(body.Since),
+		body.Limit,
 	)
 	if err != nil {
 		return err

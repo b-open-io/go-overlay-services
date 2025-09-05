@@ -22,7 +22,7 @@ import (
 	"github.com/bsv-blockchain/go-sdk/transaction/chaintracker"
 )
 
-const DEFAULT_GASP_SYNC_LIMIT = 10000
+const DEFAULT_GASP_SYNC_LIMIT = 1000
 
 var TRUE = true
 var FALSE = false
@@ -41,6 +41,20 @@ const (
 	SyncConfigurationSHIP
 	SyncConfigurationNone
 )
+
+// String returns the string representation of SyncConfigurationType
+func (s SyncConfigurationType) String() string {
+	switch s {
+	case SyncConfigurationPeers:
+		return "Peers"
+	case SyncConfigurationSHIP:
+		return "SHIP"
+	case SyncConfigurationNone:
+		return "None"
+	default:
+		return "Unknown"
+	}
+}
 
 type SyncConfiguration struct {
 	Type        SyncConfigurationType
@@ -149,7 +163,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		slog.Error("invalid BEEF in Submit - tx is nil", "error", ErrInvalidBeef)
 		return nil, ErrInvalidBeef
 	}
-	if valid, err := spv.Verify(tx, e.ChainTracker, nil); err != nil {
+	if valid, err := spv.Verify(ctx, tx, e.ChainTracker, nil); err != nil {
 		slog.Error("SPV verification failed in Submit", "txid", txid, "error", err)
 		return nil, err
 	} else if !valid {
@@ -207,7 +221,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				if len(admit.AncillaryTxids) > 0 {
 					ancillaryBeef := transaction.Beef{
 						Version:      transaction.BEEF_V2,
-						Transactions: make(map[string]*transaction.BeefTx, len(admit.AncillaryTxids)),
+						Transactions: make(map[chainhash.Hash]*transaction.BeefTx, len(admit.AncillaryTxids)),
 					}
 					for _, txid := range admit.AncillaryTxids {
 						if tx := beef.FindTransaction(txid.String()); tx == nil {
@@ -238,17 +252,25 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		if _, ok := dupeTopics[topic]; ok {
 			continue
 		}
-		if err := e.Storage.MarkUTXOsAsSpent(ctx, inpoints, topic, txid); err != nil {
-			slog.Error("failed to mark UTXOs as spent", "topic", topic, "txid", txid, "error", err)
-			return nil, err
+		// Build list of inputs that actually exist in this topic's storage
+		if len(topicInputs[topic]) > 0 {
+			topicInpoints := make([]*transaction.Outpoint, 0, len(topicInputs[topic]))
+			for _, output := range topicInputs[topic] {
+				topicInpoints = append(topicInpoints, &output.Outpoint)
+			}
+			if err := e.Storage.MarkUTXOsAsSpent(ctx, topicInpoints, topic, txid); err != nil {
+				slog.Error("failed to mark UTXOs as spent", "topic", topic, "txid", txid, "error", err)
+				return nil, err
+			}
 		}
-		for vin, outpoint := range inpoints {
+		// Notify lookup services about spent outputs
+		for vin, output := range topicInputs[topic] {
 			for _, l := range e.LookupServices {
 				if err := l.OutputSpent(ctx, &OutputSpent{
-					Outpoint:           outpoint,
+					Outpoint:           &output.Outpoint,
 					Topic:              topic,
 					SpendingTxid:       txid,
-					InputIndex:         uint32(vin),
+					InputIndex:         vin,
 					UnlockingScript:    tx.Inputs[vin].UnlockingScript,
 					SequenceNumber:     tx.Inputs[vin].SequenceNumber,
 					SpendingAtomicBEEF: taggedBEEF.Beef,
@@ -353,12 +375,15 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 		slog.Debug("consumed by references updated", "duration", time.Since(start))
 		start = time.Now()
-		if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
-			Txid:  txid,
-			Topic: topic,
-		}); err != nil {
-			slog.Error("failed to insert applied transaction", "topic", topic, "txid", txid, "error", err)
-			return nil, err
+		// Insert applied transaction if any changes were made
+		if len(admit.OutputsToAdmit) > 0 || len(admit.CoinsRemoved) > 0 || len(admit.CoinsToRetain) > 0 || len(admit.AncillaryTxids) > 0 {
+			if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
+				Txid:  txid,
+				Topic: topic,
+			}); err != nil {
+				slog.Error("failed to insert applied transaction", "topic", topic, "txid", txid, "error", err)
+				return nil, err
+			}
 		}
 		slog.Debug("transaction applied", "duration", time.Since(start))
 	}
@@ -580,8 +605,20 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 			continue
 		}
 
+		slog.Info(fmt.Sprintf("[GASP SYNC] Processing topic \"%s\" with sync type \"%s\"", topic, syncEndpoints.Type))
+
 		if syncEndpoints.Type == SyncConfigurationSHIP {
+			slog.Info(fmt.Sprintf("[GASP SYNC] Discovering peers for topic \"%s\" using SHIP lookup", topic))
+			slog.Info(fmt.Sprintf("[GASP SYNC] Setting SLAP trackers for topic \"%s\", count: %d", topic, len(e.SLAPTrackers)))
+			if len(e.SLAPTrackers) > 0 {
+				for i, tracker := range e.SLAPTrackers {
+					slog.Info(fmt.Sprintf("[GASP SYNC] SLAP tracker %d: %s", i, tracker))
+				}
+			} else {
+				slog.Warn(fmt.Sprintf("[GASP SYNC] No SLAP trackers configured for topic \"%s\"", topic))
+			}
 			e.LookupResolver.SetSLAPTrackers(e.SLAPTrackers)
+			slog.Debug(fmt.Sprintf("[GASP SYNC] Current SLAP trackers after setting: %v", e.LookupResolver.SLAPTrackers()))
 
 			query, err := json.Marshal(map[string]any{"topics": []string{topic}})
 			if err != nil {
@@ -589,31 +626,98 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				return err
 			}
 
-			timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			slog.Info(fmt.Sprintf("[GASP SYNC] Querying lookup resolver for topic \"%s\" with service \"ls_ship\"", topic))
+			slog.Debug(fmt.Sprintf("[GASP SYNC] Query payload: %s", string(query)))
+
+			timeoutCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			defer cancel()
+
+			slog.Debug(fmt.Sprintf("[GASP SYNC] About to call LookupResolver.Query for topic \"%s\"", topic))
 			lookupAnswer, err := e.LookupResolver.Query(timeoutCtx, &lookup.LookupQuestion{Service: "ls_ship", Query: query})
+			slog.Debug(fmt.Sprintf("[GASP SYNC] LookupResolver.Query returned for topic \"%s\", err: %v", topic, err))
+
 			if err != nil {
 				slog.Error("failed to query lookup resolver for GASP sync", "topic", topic, "error", err)
 				return err
 			}
 
+			slog.Info(fmt.Sprintf("[GASP SYNC] Lookup query completed for topic \"%s\", answer type: %s, outputs count: %d", topic, lookupAnswer.Type, len(lookupAnswer.Outputs)))
+
 			if lookupAnswer.Type == lookup.AnswerTypeOutputList {
 				endpointSet := make(map[string]struct{}, len(lookupAnswer.Outputs))
 				for _, output := range lookupAnswer.Outputs {
-					tx, err := transaction.NewTransactionFromBEEF(output.Beef)
+					beef, err := transaction.NewBeefFromBytes(output.Beef)
 					if err != nil {
 						slog.Error("failed to parse advertisement output BEEF", "topic", topic, "error", err)
 						continue
 					}
+					slog.Info(fmt.Sprintf("[GASP SYNC] Successfully parsed BEEF for topic \"%s\", transaction count: %d", topic, len(beef.Transactions)))
 
+					// Find the transaction that contains the output at the specified index
+					var tx *transaction.Transaction
+					for _, beefTx := range beef.Transactions {
+						if beefTx.Transaction != nil && beefTx.Transaction.Outputs != nil && len(beefTx.Transaction.Outputs) > int(output.OutputIndex) {
+							tx = beefTx.Transaction
+							break
+						}
+					}
+					if tx == nil {
+						slog.Error("failed to find transaction with output index in BEEF", "topic", topic, "outputIndex", output.OutputIndex)
+						continue
+					}
+
+					// Additional safety check before accessing the output
+					if tx.Outputs == nil || len(tx.Outputs) <= int(output.OutputIndex) {
+						slog.Error("transaction outputs is nil or output index out of bounds", "topic", topic, "outputIndex", output.OutputIndex, "outputsLength", len(tx.Outputs))
+						continue
+					}
+
+					if tx.Outputs[output.OutputIndex] == nil {
+						slog.Error("output at index is nil", "topic", topic, "outputIndex", output.OutputIndex)
+						continue
+					}
+
+					if tx.Outputs[output.OutputIndex].LockingScript == nil {
+						slog.Error("locking script is nil", "topic", topic, "outputIndex", output.OutputIndex)
+						continue
+					}
+
+					if e.Advertiser == nil {
+						slog.Warn("advertiser is nil, skipping advertisement parsing", "topic", topic)
+						continue
+					}
+
+					slog.Debug("parsing advertisement from locking script", "topic", topic, "outputIndex", output.OutputIndex)
 					advertisement, err := e.Advertiser.ParseAdvertisement(tx.Outputs[output.OutputIndex].LockingScript)
 					if err != nil {
 						slog.Error("failed to parse advertisement from locking script", "topic", topic, "error", err)
 						continue
 					}
 
-					if advertisement != nil && advertisement.Protocol == "SHIP" {
+					if advertisement == nil {
+						slog.Debug("advertisement parsed as nil", "topic", topic)
+						continue
+					}
+
+					slog.Debug("successfully parsed advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
+
+					// Determine expected protocol based on topic
+					var expectedProtocol overlay.Protocol
+					if topic == "tm_ship" {
+						expectedProtocol = overlay.ProtocolSHIP
+					} else if topic == "tm_slap" {
+						expectedProtocol = overlay.ProtocolSLAP
+					} else {
+						// For unknown topics, log a warning but continue
+						slog.Warn("unknown topic, cannot determine expected protocol", "topic", topic)
+						continue
+					}
+
+					if advertisement.Protocol == expectedProtocol {
+						slog.Debug("found matching advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
 						endpointSet[advertisement.Domain] = struct{}{}
+					} else {
+						slog.Debug("skipping advertisement with mismatched protocol", "topic", topic, "expected", expectedProtocol, "actual", advertisement.Protocol, "domain", advertisement.Domain)
 					}
 				}
 
@@ -623,21 +727,59 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 						syncEndpoints.Peers = append(syncEndpoints.Peers, endpoint)
 					}
 				}
+				// Determine protocol name for logging
+				protocolName := "UNKNOWN"
+				if topic == "tm_ship" {
+					protocolName = "SHIP"
+				} else if topic == "tm_slap" {
+					protocolName = "SLAP"
+				}
+				slog.Info(fmt.Sprintf("[GASP SYNC] Discovered %d unique %s peer endpoint(s) for topic \"%s\"", len(syncEndpoints.Peers), protocolName, topic))
+			} else {
+				slog.Warn(fmt.Sprintf("[GASP SYNC] Unexpected answer type \"%s\" for topic \"%s\", expected \"%s\"", lookupAnswer.Type, topic, lookup.AnswerTypeOutputList))
 			}
+		} else {
+			slog.Info(fmt.Sprintf("[GASP SYNC] Skipping topic \"%s\" - sync type is not SHIP (type: \"%s\")", topic, syncEndpoints.Type))
 		}
 
 		if len(syncEndpoints.Peers) > 0 {
-			peers := make([]string, 0, len(syncEndpoints.Peers))
-			for _, peer := range syncEndpoints.Peers {
-				if peer != e.HostingURL {
-					peers = append(peers, peer)
-				}
+			// Log the number of peers we will attempt to sync with
+			plural := ""
+			if len(syncEndpoints.Peers) != 1 {
+				plural = "s"
+			}
+			slog.Info(fmt.Sprintf("[GASP SYNC] Will attempt to sync with %d peer%s", len(syncEndpoints.Peers), plural), "topic", topic)
+		} else {
+			slog.Info(fmt.Sprintf("[GASP SYNC] No peers found for topic \"%s\", skipping sync", topic))
+			continue
+		}
+
+		for _, peer := range syncEndpoints.Peers {
+			logPrefix := "[GASP Sync of " + topic + " with " + peer + "]"
+
+			slog.Info(fmt.Sprintf("[GASP SYNC] Starting sync for topic \"%s\" with peer \"%s\"", topic, peer))
+
+			// Read the last interaction score from storage
+			lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
+			if err != nil {
+				slog.Error("Failed to get last interaction", "topic", topic, "peer", peer, "error", err)
+				return err
 			}
 
-			for _, peer := range peers {
-				logPrefix := "[GASP Sync of " + topic + " with " + peer + "]"
+			// Create a new GASP provider for each peer to avoid state conflicts
+			gaspProvider := gasp.NewGASP(gasp.GASPParams{
+				Storage:         NewOverlayGASPStorage(topic, e, nil),
+				Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 0),
+				LastInteraction: lastInteraction,
+				LogPrefix:       &logPrefix,
+				Unidirectional:  true,
+				Concurrency:     syncEndpoints.Concurrency,
+			})
 
-				slog.Info("GASP sync starting", "topic", topic, "peer", peer)
+			if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
+				slog.Error(fmt.Sprintf("[GASP SYNC] Sync failed for topic \"%s\" with peer \"%s\"", topic, peer), "error", err)
+			} else {
+				slog.Info(fmt.Sprintf("[GASP SYNC] Sync successful for topic \"%s\" with peer \"%s\"", topic, peer))
 
 				// Read the last interaction score from storage
 				lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
@@ -646,14 +788,10 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					return err
 				}
 
-				// Create a new GASP provider for each peer to avoid state conflicts
+				// Create a new GASP provider for each peer
 				gaspProvider := gasp.NewGASP(gasp.GASPParams{
-					Storage: NewOverlayGASPStorage(topic, e, nil),
-					Remote: &OverlayGASPRemote{
-						EndpointUrl: peer,
-						Topic:       topic,
-						HttpClient:  http.DefaultClient,
-					},
+					Storage:         NewOverlayGASPStorage(topic, e, nil),
+					Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),
 					LastInteraction: lastInteraction,
 					LogPrefix:       &logPrefix,
 					Unidirectional:  true,
@@ -734,8 +872,8 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		}
 
 	}
-	if output, err := e.Storage.FindOutput(ctx, graphId, &topic, nil, true); err != nil {
-		slog.Error("failed to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "topic", topic, "error", err)
+	if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true); err != nil {
+		slog.Error("failed to find output in ProvideForeignGASPNode", "outpoint", outpoint.String(), "topic", topic, "error", err)
 		return nil, err
 	} else if output == nil {
 		return nil, ErrMissingOutput
@@ -850,7 +988,7 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 		if len(output.AncillaryTxids) > 0 {
 			ancillaryBeef := transaction.Beef{
 				Version:      transaction.BEEF_V2,
-				Transactions: make(map[string]*transaction.BeefTx, len(output.AncillaryTxids)),
+				Transactions: make(map[chainhash.Hash]*transaction.BeefTx, len(output.AncillaryTxids)),
 			}
 			for _, dep := range output.AncillaryTxids {
 				if depTx := beef.FindTransaction(dep.String()); depTx == nil {

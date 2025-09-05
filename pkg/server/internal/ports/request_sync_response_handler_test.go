@@ -56,6 +56,7 @@ func TestRequestSyncResponseHandler_InvalidCases(t *testing.T) {
 				InitialRequest: &gasp.InitialRequest{
 					Version: testabilities.DefaultVersion,
 					Since:   testabilities.DefaultSince,
+					Limit:   0,
 				},
 				Topic: testabilities.DefaultTopic,
 			},
@@ -97,6 +98,7 @@ func TestRequestSyncResponseHandler_ValidCase(t *testing.T) {
 		InitialRequest: &gasp.InitialRequest{
 			Version: testabilities.DefaultVersion,
 			Since:   testabilities.DefaultSince,
+			Limit:   0,
 		},
 		Topic: testabilities.DefaultTopic,
 		Response: &gasp.InitialResponse{

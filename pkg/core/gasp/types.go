@@ -59,7 +59,7 @@ type NodeResponseData struct {
 }
 
 type NodeResponse struct {
-	RequestedInputs map[string]*NodeResponseData `json:"requestedInputs"`
+	RequestedInputs map[transaction.Outpoint]*NodeResponseData `json:"requestedInputs"`
 }
 
 type VersionMismatchError struct {

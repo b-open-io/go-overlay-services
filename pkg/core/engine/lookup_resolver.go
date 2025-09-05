@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
 )
 
@@ -15,12 +16,24 @@ type LookupResolver struct {
 
 // NewLookupResolver creates and initializes a LookupResolver with a default HTTPS facilitator.
 func NewLookupResolver() *LookupResolver {
-	return &LookupResolver{
-		resolver: &lookup.LookupResolver{
-			Facilitator: &lookup.HTTPSOverlayLookupFacilitator{
-				Client: http.DefaultClient,
-			},
+	return NewLookupResolverWithNetwork(overlay.NetworkMainnet)
+}
+
+// NewLookupResolverWithNetwork creates and initializes a LookupResolver with a default HTTPS facilitator
+// and appropriate SLAP trackers for the specified network.
+func NewLookupResolverWithNetwork(network overlay.Network) *LookupResolver {
+	cfg := &lookup.LookupResolver{
+		Facilitator: &lookup.HTTPSOverlayLookupFacilitator{
+			Client: http.DefaultClient,
 		},
+		NetworkPreset: network,
+	}
+
+	// Use NewLookupResolver from the go-sdk to get proper network defaults
+	resolver := lookup.NewLookupResolver(cfg)
+
+	return &LookupResolver{
+		resolver: resolver,
 	}
 }
 

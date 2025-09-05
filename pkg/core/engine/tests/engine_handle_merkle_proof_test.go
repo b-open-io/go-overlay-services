@@ -214,9 +214,9 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// Create BEEF for tx2 that includes tx1 as input
 		beef := &transaction.Beef{
 			Version: transaction.BEEF_V2,
-			Transactions: map[string]*transaction.BeefTx{
-				txid1.String(): {Transaction: tx1},
-				txid2.String(): {Transaction: tx2},
+			Transactions: map[chainhash.Hash]*transaction.BeefTx{
+				*txid1: {Transaction: tx1},
+				*txid2: {Transaction: tx2},
 			},
 		}
 		beef2Bytes, err := beef.AtomicBytes(txid2)
