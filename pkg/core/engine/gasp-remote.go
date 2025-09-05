@@ -85,7 +85,6 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transactio
 		return req.result, req.err
 	} else {
 		req := inflight.(*inflightNodeRequest)
-		slog.Info("Requesting GASP node", "outpoint", outpointStr, "metadata", metadata, "topic", r.topic)
 		req.result, req.err = r.doNodeRequest(ctx, graphID, outpoint, metadata)
 
 		// Clean up inflight map

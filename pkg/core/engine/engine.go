@@ -22,7 +22,7 @@ import (
 	"github.com/bsv-blockchain/go-sdk/transaction/chaintracker"
 )
 
-const DEFAULT_GASP_SYNC_LIMIT = 10000
+const DEFAULT_GASP_SYNC_LIMIT = 1000
 
 var TRUE = true
 var FALSE = false
@@ -657,7 +657,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					return err
 				}
 
-				// Create a new GASP provider for each peer to avoid state conflicts
+				// Create a new GASP provider for each peer
 				gaspProvider := gasp.NewGASP(gasp.GASPParams{
 					Storage:         NewOverlayGASPStorage(topic, e, nil),
 					Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),

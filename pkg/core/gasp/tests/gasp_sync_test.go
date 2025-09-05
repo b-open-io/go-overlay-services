@@ -129,7 +129,7 @@ func (m *mockGASPStorage) FindNeededInputs(ctx context.Context, tx *gasp.Node) (
 
 	// Default: no inputs needed
 	return &gasp.NodeResponse{
-		RequestedInputs: make(map[string]*gasp.NodeResponseData),
+		RequestedInputs: make(map[transaction.Outpoint]*gasp.NodeResponseData),
 	}, nil
 }
 
@@ -244,7 +244,7 @@ func (m *mockGASPRemote) SubmitNode(ctx context.Context, node *gasp.Node) (*gasp
 
 	// Default implementation
 	return &gasp.NodeResponse{
-		RequestedInputs: make(map[string]*gasp.NodeResponseData),
+		RequestedInputs: make(map[transaction.Outpoint]*gasp.NodeResponseData),
 	}, nil
 }
 
