@@ -13,6 +13,12 @@ import (
 
 const MAX_CONCURRENCY = 16
 
+// utxoProcessingState tracks the state of a UTXO processing operation with result sharing
+type utxoProcessingState struct {
+	wg  sync.WaitGroup
+	err error
+}
+
 type NodeRequest struct {
 	GraphID     *transaction.Outpoint `json:"graphID"`
 	Txid        *chainhash.Hash       `json:"txid"`
@@ -41,8 +47,8 @@ type GASP struct {
 	LogLevel        slog.Level
 	limiter         chan struct{} // Concurrency limiter controlled by Concurrency config
 
-	// Global deduplication cache for processed nodes across all UTXOs
-	processedNodes sync.Map // map[transaction.Outpoint]struct{} - prevents duplicate processing
+	// Unified UTXO processing with result sharing
+	utxoProcessingMap sync.Map // map[transaction.Outpoint]*utxoProcessingState
 }
 
 func NewGASP(params GASPParams) *GASP {
@@ -74,7 +80,7 @@ func NewGASP(params GASPParams) *GASP {
 }
 
 func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
-	slog.Info(fmt.Sprintf("%sStarting sync process. Last interaction timestamp: %f", g.LogPrefix, g.LastInteraction))
+	slog.Info(fmt.Sprintf("%s Starting sync process. Last interaction timestamp: %f", g.LogPrefix, g.LastInteraction))
 
 	localUTXOs, err := g.Storage.FindKnownUTXOs(ctx, 0, 0)
 	if err != nil {
@@ -82,10 +88,10 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 	}
 
 	// Find which UTXOs we already have
-	knownOutpoints := make(map[string]struct{})
+	knownOutpoints := make(map[transaction.Outpoint]struct{})
 	for _, utxo := range localUTXOs {
-		outpoint := fmt.Sprintf("%s.%d", utxo.Txid, utxo.OutputIndex)
-		knownOutpoints[outpoint] = struct{}{}
+		outpoint := utxo.Outpoint()
+		knownOutpoints[*outpoint] = struct{}{}
 	}
 	var sharedOutpoints sync.Map
 
@@ -106,11 +112,11 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 			if utxo.Score > g.LastInteraction {
 				g.LastInteraction = utxo.Score
 			}
-			outpoint := utxo.OutpointString()
-			if _, exists := knownOutpoints[outpoint]; exists {
-				sharedOutpoints.Store(outpoint, struct{}{})
-				delete(knownOutpoints, outpoint)
-			} else if _, shared := sharedOutpoints.Load(outpoint); !shared {
+			outpoint := utxo.Outpoint()
+			if _, exists := knownOutpoints[*outpoint]; exists {
+				sharedOutpoints.Store(*outpoint, struct{}{})
+				delete(knownOutpoints, *outpoint)
+			} else if _, shared := sharedOutpoints.Load(*outpoint); !shared {
 				ingestQueue = append(ingestQueue, utxo)
 			}
 		}
@@ -123,29 +129,21 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 			wg.Add(1)
 			g.limiter <- struct{}{}
 			go func(utxo *Output) {
+				outpoint := utxo.Outpoint()
 				defer func() {
 					<-g.limiter
 					wg.Done()
 				}()
-				outpoint := utxo.Outpoint()
-				resolvedNode, err := g.Remote.RequestNode(ctx, outpoint, outpoint, true)
-				if err != nil {
-					slog.Warn(fmt.Sprintf("%sError with incoming UTXO %s: %v", g.LogPrefix, outpoint, err))
+				if err := g.processUTXOToCompletion(ctx, outpoint, seenNodes); err != nil {
+					slog.Warn(fmt.Sprintf("%s Error processing UTXO %s: %v", g.LogPrefix, outpoint, err))
 					return
 				}
-				slog.Debug(fmt.Sprintf("%sReceived unspent graph node from remote: %v", g.LogPrefix, resolvedNode))
-				if err = g.processIncomingNode(ctx, resolvedNode, nil, seenNodes); err != nil {
-					slog.Warn(fmt.Sprintf("%sError processing incoming node %s: %v", g.LogPrefix, outpoint, err))
-					return
-				}
-				if err = g.CompleteGraph(ctx, resolvedNode.GraphID); err != nil {
-					slog.Warn(fmt.Sprintf("%sError completing graph for %s: %v", g.LogPrefix, outpoint, err))
-					return
-				}
-				sharedOutpoints.Store(outpoint.String(), struct{}{})
+				sharedOutpoints.Store(*outpoint, struct{}{})
 			}(utxo)
 		}
+		slog.Info(fmt.Sprintf("%s Waiting for %d UTXOs to complete processing...", g.LogPrefix, len(ingestQueue)))
 		wg.Wait()
+		slog.Info(fmt.Sprintf("%s Page completed, processed %d UTXOs", g.LogPrefix, len(ingestQueue)))
 
 		// Check if we have more pages to fetch
 		// If we got fewer items than we requested (or no limit was set), we've reached the end
@@ -158,9 +156,9 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		// Filter localUTXOs for those after initialResponse.since and not in sharedOutpoints
 		var replyUTXOs []*Output
 		for _, utxo := range localUTXOs {
-			outpoint := fmt.Sprintf("%s.%d", utxo.Txid, utxo.OutputIndex)
+			outpoint := utxo.Outpoint()
 			if utxo.Score >= initialResponse.Since {
-				if _, shared := sharedOutpoints.Load(outpoint); !shared {
+				if _, shared := sharedOutpoints.Load(*outpoint); !shared {
 					replyUTXOs = append(replyUTXOs, utxo)
 				}
 			}
@@ -176,20 +174,20 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 						<-g.limiter
 						wg.Done()
 					}()
-					slog.Info(fmt.Sprintf("%sHydrating GASP node for UTXO: %s.%d", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
+					slog.Info(fmt.Sprintf("%s Hydrating GASP node for UTXO: %s.%d", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
 					outpoint := utxo.Outpoint()
 					outgoingNode, err := g.Storage.HydrateGASPNode(ctx, outpoint, outpoint, true)
 					if err != nil {
-						slog.Warn(fmt.Sprintf("%sError hydrating outgoing UTXO %s.%d: %v", g.LogPrefix, utxo.Txid, utxo.OutputIndex, err))
+						slog.Warn(fmt.Sprintf("%s Error hydrating outgoing UTXO %s.%d: %v", g.LogPrefix, utxo.Txid, utxo.OutputIndex, err))
 						return
 					}
 					if outgoingNode == nil {
-						slog.Debug(fmt.Sprintf("%sSkipping outgoing UTXO %s.%d: not found in storage", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
+						slog.Debug(fmt.Sprintf("%s Skipping outgoing UTXO %s.%d: not found in storage", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
 						return
 					}
-					slog.Debug(fmt.Sprintf("%sSending unspent graph node for remote: %v", g.LogPrefix, outgoingNode))
+					slog.Debug(fmt.Sprintf("%s Sending unspent graph node for remote: %v", g.LogPrefix, outgoingNode))
 					if err = g.processOutgoingNode(ctx, outgoingNode, &sync.Map{}); err != nil {
-						slog.Warn(fmt.Sprintf("%sError processing outgoing node %s.%d: %v", g.LogPrefix, utxo.Txid, utxo.OutputIndex, err))
+						slog.Warn(fmt.Sprintf("%s Error processing outgoing node %s.%d: %v", g.LogPrefix, utxo.Txid, utxo.OutputIndex, err))
 					}
 				}(utxo)
 			}
@@ -197,14 +195,14 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		}
 	}
 
-	slog.Info(fmt.Sprintf("%sSync completed!", g.LogPrefix))
+	slog.Info(fmt.Sprintf("%s Sync completed!", g.LogPrefix))
 	return nil
 }
 
 func (g *GASP) GetInitialResponse(ctx context.Context, request *InitialRequest) (resp *InitialResponse, err error) {
-	slog.Info(fmt.Sprintf("%sReceived initial request: %v", g.LogPrefix, request))
+	slog.Info(fmt.Sprintf("%s Received initial request: %v", g.LogPrefix, request))
 	if request.Version != g.Version {
-		slog.Error(fmt.Sprintf("%sGASP version mismatch", g.LogPrefix))
+		slog.Error(fmt.Sprintf("%s GASP version mismatch", g.LogPrefix))
 		return nil, NewVersionMismatchError(
 			g.Version,
 			request.Version,
@@ -219,18 +217,18 @@ func (g *GASP) GetInitialResponse(ctx context.Context, request *InitialRequest) 
 		Since:    g.LastInteraction,
 		UTXOList: utxos,
 	}
-	slog.Debug(fmt.Sprintf("%sBuilt initial response: %v", g.LogPrefix, resp))
+	slog.Debug(fmt.Sprintf("%s Built initial response: %v", g.LogPrefix, resp))
 	return resp, nil
 }
 
 func (g *GASP) GetInitialReply(ctx context.Context, response *InitialResponse) (resp *InitialReply, err error) {
-	slog.Info(fmt.Sprintf("%sReceived initial response: %v", g.LogPrefix, response))
+	slog.Info(fmt.Sprintf("%s Received initial response: %v", g.LogPrefix, response))
 	knownUtxos, err := g.Storage.FindKnownUTXOs(ctx, response.Since, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	slog.Info(fmt.Sprintf("%sFound %d known UTXOs since %f", g.LogPrefix, len(knownUtxos), response.Since))
+	slog.Info(fmt.Sprintf("%s Found %d known UTXOs since %f", g.LogPrefix, len(knownUtxos), response.Since))
 	resp = &InitialReply{
 		UTXOList: make([]*Output, 0),
 	}
@@ -242,27 +240,27 @@ func (g *GASP) GetInitialReply(ctx context.Context, response *InitialResponse) (
 			resp.UTXOList = append(resp.UTXOList, knownUtxo)
 		}
 	}
-	slog.Info(fmt.Sprintf("%sBuilt initial reply: %v", g.LogPrefix, resp))
+	slog.Info(fmt.Sprintf("%s Built initial reply: %v", g.LogPrefix, resp))
 	return resp, nil
 }
 
 func (g *GASP) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (node *Node, err error) {
-	slog.Info(fmt.Sprintf("%sRemote is requesting node with graphID: %s, txid: %s, outputIndex: %d, metadata: %v", g.LogPrefix, graphID.String(), outpoint.Txid.String(), outpoint.Index, metadata))
+	slog.Info(fmt.Sprintf("%s Remote is requesting node with graphID: %s, txid: %s, outputIndex: %d, metadata: %v", g.LogPrefix, graphID.String(), outpoint.Txid.String(), outpoint.Index, metadata))
 	if node, err = g.Storage.HydrateGASPNode(ctx, graphID, outpoint, metadata); err != nil {
 		return nil, err
 	}
-	slog.Debug(fmt.Sprintf("%sReturning node: %v", g.LogPrefix, node))
+	slog.Debug(fmt.Sprintf("%s Returning node: %v", g.LogPrefix, node))
 	return node, nil
 }
 
 func (g *GASP) SubmitNode(ctx context.Context, node *Node) (requestedInputs *NodeResponse, err error) {
-	slog.Info(fmt.Sprintf("%sRemote is submitting node: %v", g.LogPrefix, node))
+	slog.Info(fmt.Sprintf("%s Remote is submitting node: %v", g.LogPrefix, node))
 	if err = g.Storage.AppendToGraph(ctx, node, nil); err != nil {
 		return nil, err
 	} else if requestedInputs, err = g.Storage.FindNeededInputs(ctx, node); err != nil {
 		return nil, err
 	} else if requestedInputs != nil {
-		slog.Debug(fmt.Sprintf("%sRequested inputs: %v", g.LogPrefix, requestedInputs))
+		slog.Debug(fmt.Sprintf("%s Requested inputs: %v", g.LogPrefix, requestedInputs))
 		if err := g.CompleteGraph(ctx, node.GraphID); err != nil {
 			return nil, err
 		}
@@ -271,15 +269,16 @@ func (g *GASP) SubmitNode(ctx context.Context, node *Node) (requestedInputs *Nod
 }
 
 func (g *GASP) CompleteGraph(ctx context.Context, graphID *transaction.Outpoint) (err error) {
-	slog.Info(fmt.Sprintf("%sCompleting newly-synced graph: %s", g.LogPrefix, graphID.String()))
+	slog.Info(fmt.Sprintf("%s Completing newly-synced graph: %s", g.LogPrefix, graphID.String()))
+
 	if err = g.Storage.ValidateGraphAnchor(ctx, graphID); err == nil {
-		slog.Debug(fmt.Sprintf("%sGraph validated for node: %s", g.LogPrefix, graphID.String()))
+		slog.Debug(fmt.Sprintf("%s Graph validated for node: %s", g.LogPrefix, graphID.String()))
 		if err := g.Storage.FinalizeGraph(ctx, graphID); err == nil {
+			slog.Info(fmt.Sprintf("%s Graph finalized for node: %s", g.LogPrefix, graphID.String()))
 			return nil
 		}
-		slog.Info(fmt.Sprintf("%sGraph finalized for node: %s", g.LogPrefix, graphID.String()))
 	}
-	slog.Warn(fmt.Sprintf("%sError completing graph %s: %v", g.LogPrefix, graphID.String(), err))
+	slog.Warn(fmt.Sprintf("%s Error completing graph %s: %v", g.LogPrefix, graphID.String(), err))
 	return g.Storage.DiscardGraph(ctx, graphID)
 }
 
@@ -293,17 +292,11 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 		}
 		nodeId := nodeOutpoint.String()
 
-		slog.Debug(fmt.Sprintf("%sProcessing incoming node: %v, spentBy: %v", g.LogPrefix, node, spentBy))
-
-		// Global deduplication check
-		if _, exists := g.processedNodes.LoadOrStore(*nodeOutpoint, struct{}{}); exists {
-			slog.Debug(fmt.Sprintf("%sNode %s already processed globally, skipping", g.LogPrefix, nodeId))
-			return nil
-		}
+		slog.Debug(fmt.Sprintf("%s Processing incoming node: %v, spentBy: %v", g.LogPrefix, node, spentBy))
 
 		// Per-graph cycle detection
 		if _, ok := seenNodes.Load(nodeId); ok {
-			slog.Debug(fmt.Sprintf("%sNode %s already seen in this graph, skipping.", g.LogPrefix, nodeId))
+			slog.Debug(fmt.Sprintf("%s Node %s already seen in this graph, skipping.", g.LogPrefix, nodeId))
 			return nil
 		}
 		seenNodes.Store(nodeId, struct{}{})
@@ -313,39 +306,10 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 		} else if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
 			return err
 		} else if neededInputs != nil {
-			slog.Debug(fmt.Sprintf("%sNeeded inputs for node %s: %v", g.LogPrefix, nodeId, neededInputs))
-			var wg sync.WaitGroup
-			errors := make(chan error)
-			for outpointStr, data := range neededInputs.RequestedInputs {
-				wg.Add(1)
-				go func(outpointStr string, data *NodeResponseData) {
-					defer wg.Done()
-
-					slog.Info(fmt.Sprintf("%sRequesting new node for outpoint: %s, metadata: %v", g.LogPrefix, outpointStr, data.Metadata))
-					if outpoint, err := transaction.OutpointFromString(outpointStr); err != nil {
-						errors <- err
-					} else if newNode, err := g.Remote.RequestNode(ctx, nodeOutpoint, outpoint, data.Metadata); err != nil {
-						errors <- err
-					} else {
-
-						slog.Debug(fmt.Sprintf("%sReceived new node: %v", g.LogPrefix, newNode))
-						// Create outpoint for the current node that is spending this input
-						spendingOutpoint := &transaction.Outpoint{
-							Txid:  *txid,
-							Index: node.OutputIndex,
-						}
-						if err := g.processIncomingNode(ctx, newNode, spendingOutpoint, seenNodes); err != nil {
-							errors <- err
-						}
-					}
-				}(outpointStr, data)
-			}
-			go func() {
-				wg.Wait()
-				close(errors)
-			}()
-			for err := range errors {
-				if err != nil {
+			slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeId, neededInputs))
+			for outpoint, data := range neededInputs.RequestedInputs {
+				slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
+				if err := g.processUTXOToCompletion(ctx, &outpoint, seenNodes); err != nil {
 					return err
 				}
 			}
@@ -356,7 +320,7 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 
 func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *sync.Map) error {
 	if g.Unidirectional {
-		slog.Debug(fmt.Sprintf("%sSkipping outgoing node processing in unidirectional mode.", g.LogPrefix))
+		slog.Debug(fmt.Sprintf("%s Skipping outgoing node processing in unidirectional mode.", g.LogPrefix))
 		return nil
 	}
 	if node == nil {
@@ -369,9 +333,9 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 			Txid:  *txid,
 			Index: node.OutputIndex,
 		}).String()
-		slog.Debug(fmt.Sprintf("%sProcessing outgoing node: %v", g.LogPrefix, node))
+		slog.Debug(fmt.Sprintf("%s Processing outgoing node: %v", g.LogPrefix, node))
 		if _, ok := seenNodes.Load(nodeId); ok {
-			slog.Debug(fmt.Sprintf("%sNode %s already processed, skipping.", g.LogPrefix, nodeId))
+			slog.Debug(fmt.Sprintf("%s Node %s already processed, skipping.", g.LogPrefix, nodeId))
 			return nil
 		}
 		seenNodes.Store(nodeId, struct{}{})
@@ -379,29 +343,69 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 			return err
 		} else if response != nil {
 			var wg sync.WaitGroup
-			for outpointStr, data := range response.RequestedInputs {
+			for outpoint, data := range response.RequestedInputs {
 				wg.Add(1)
-				go func(outpointStr string, data *NodeResponseData) {
+				go func(outpoint transaction.Outpoint, data *NodeResponseData) {
 					defer wg.Done()
-					var outpoint *transaction.Outpoint
+					var hydratedNode *Node
 					var err error
-					if outpoint, err = transaction.OutpointFromString(outpointStr); err == nil {
-						var hydratedNode *Node
-						slog.Info(fmt.Sprintf("%sHydrating node for outpoint: %s, metadata: %v", g.LogPrefix, outpoint, data.Metadata))
-						if hydratedNode, err = g.Storage.HydrateGASPNode(ctx, node.GraphID, outpoint, data.Metadata); err == nil {
-							slog.Debug(fmt.Sprintf("%sSending hydrated node: %v", g.LogPrefix, hydratedNode))
-							if err = g.processOutgoingNode(ctx, hydratedNode, seenNodes); err == nil {
-								return
-							}
+					slog.Info(fmt.Sprintf("%s Hydrating node for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
+					if hydratedNode, err = g.Storage.HydrateGASPNode(ctx, node.GraphID, &outpoint, data.Metadata); err == nil {
+						slog.Debug(fmt.Sprintf("%s Sending hydrated node: %v", g.LogPrefix, hydratedNode))
+						if err = g.processOutgoingNode(ctx, hydratedNode, seenNodes); err == nil {
+							return
 						}
 					}
-					slog.Error(fmt.Sprintf("%sError hydrating node: %v", g.LogPrefix, err))
-				}(outpointStr, data)
+					if err != nil {
+						slog.Error(fmt.Sprintf("%s Error hydrating node: %v", g.LogPrefix, err))
+					}
+				}(outpoint, data)
 			}
 			wg.Wait()
 		}
 	}
 	return nil
+}
+
+// processUTXOToCompletion handles the complete UTXO processing pipeline with result sharing deduplication
+func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transaction.Outpoint, seenNodes *sync.Map) error {
+	// Pre-initialize the processing state to avoid race conditions
+	newState := &utxoProcessingState{}
+	newState.wg.Add(1)
+
+	// Check if there's already an in-flight operation for this outpoint
+	if inflight, loaded := g.utxoProcessingMap.LoadOrStore(*outpoint, newState); loaded {
+		state := inflight.(*utxoProcessingState)
+		state.wg.Wait()
+		return state.err
+	} else {
+		state := newState
+		defer state.wg.Done() // Signal completion when we're done
+
+		// We're the first to process this outpoint, do the complete processing
+
+		// Request node from remote
+		resolvedNode, err := g.Remote.RequestNode(ctx, outpoint, outpoint, true)
+		if err != nil {
+			state.err = fmt.Errorf("error with incoming UTXO %s: %w", outpoint, err)
+			return state.err
+		}
+
+		// Process dependencies
+		if err = g.processIncomingNode(ctx, resolvedNode, nil, seenNodes); err != nil {
+			state.err = fmt.Errorf("error processing incoming node %s: %w", outpoint, err)
+			return state.err
+		}
+
+		// Complete the graph (submit to engine)
+		if err = g.CompleteGraph(ctx, resolvedNode.GraphID); err != nil {
+			state.err = fmt.Errorf("error completing graph for %s: %w", outpoint, err)
+			return state.err
+		}
+
+		// Success - don't clean up immediately, handle externally
+		return nil
+	}
 }
 
 func (g *GASP) computeTxID(rawtx string) (*chainhash.Hash, error) {
