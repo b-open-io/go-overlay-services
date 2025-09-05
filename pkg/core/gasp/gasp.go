@@ -315,7 +315,7 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 					slog.Info(fmt.Sprintf("%sRequesting new node for outpoint: %s, metadata: %v", g.LogPrefix, outpointStr, data.Metadata))
 					if outpoint, err := transaction.OutpointFromString(outpointStr); err != nil {
 						errors <- err
-					} else if newNode, err := g.Remote.RequestNode(ctx, outpoint, outpoint, data.Metadata); err != nil {
+					} else if newNode, err := g.Remote.RequestNode(ctx, nodeOutpoint, outpoint, data.Metadata); err != nil {
 						errors <- err
 					} else {
 

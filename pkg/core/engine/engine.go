@@ -629,7 +629,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 			slog.Info(fmt.Sprintf("[GASP SYNC] Querying lookup resolver for topic \"%s\" with service \"ls_ship\"", topic))
 			slog.Debug(fmt.Sprintf("[GASP SYNC] Query payload: %s", string(query)))
 
-			timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			timeoutCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			defer cancel()
 
 			slog.Debug(fmt.Sprintf("[GASP SYNC] About to call LookupResolver.Query for topic \"%s\"", topic))
