@@ -638,8 +638,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 
 			if err != nil {
 				slog.Error("failed to query lookup resolver for GASP sync", "topic", topic, "error", err)
-				// Continue with other topics instead of returning - matches TypeScript behavior
-				continue
+				return err
 			}
 
 			slog.Info(fmt.Sprintf("[GASP SYNC] Lookup query completed for topic \"%s\", answer type: %s, outputs count: %d", topic, lookupAnswer.Type, len(lookupAnswer.Outputs)))

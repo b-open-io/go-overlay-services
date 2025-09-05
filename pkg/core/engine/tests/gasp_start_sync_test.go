@@ -114,7 +114,7 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 	err := sut.StartGASPSync(context.Background())
 
 	// then:
-	require.NoError(t, err) // The method should continue with other topics even if one fails
+	require.ErrorIs(t, err, expectedQueryCallErr)
 
 	resolver.AssertCalled(t)
 }
