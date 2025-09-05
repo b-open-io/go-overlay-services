@@ -26,7 +26,7 @@ type mockUTXO struct {
 
 type mockGASPStorage struct {
 	knownStore     []*mockUTXO
-	tempGraphStore map[string]*mockUTXO
+	tempGraphStore map[transaction.Outpoint]*mockUTXO
 	mu             sync.Mutex
 	updateCallback func()
 
@@ -43,7 +43,7 @@ type mockGASPStorage struct {
 func newMockGASPStorage(knownStore []*mockUTXO) *mockGASPStorage {
 	return &mockGASPStorage{
 		knownStore:     knownStore,
-		tempGraphStore: make(map[string]*mockUTXO),
+		tempGraphStore: make(map[transaction.Outpoint]*mockUTXO),
 		updateCallback: func() {},
 	}
 }
@@ -110,7 +110,7 @@ func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transact
 	}
 
 	// Check in temp store
-	if tempUTXO, exists := m.tempGraphStore[outpoint.String()]; exists {
+	if tempUTXO, exists := m.tempGraphStore[*outpoint]; exists {
 		return &gasp.Node{
 			GraphID:     graphID,
 			RawTx:       tempUTXO.RawTx,
@@ -147,7 +147,7 @@ func (m *mockGASPStorage) AppendToGraph(ctx context.Context, tx *gasp.Node, spen
 	if parsedTx != nil {
 		hash = parsedTx.TxID()
 	}
-	m.tempGraphStore[tx.GraphID.String()] = &mockUTXO{
+	m.tempGraphStore[*tx.GraphID] = &mockUTXO{
 		GraphID:     tx.GraphID,
 		RawTx:       tx.RawTx,
 		OutputIndex: tx.OutputIndex,
@@ -175,7 +175,7 @@ func (m *mockGASPStorage) DiscardGraph(ctx context.Context, graphID *transaction
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.tempGraphStore, graphID.String())
+	delete(m.tempGraphStore, *graphID)
 	return nil
 }
 
@@ -187,10 +187,10 @@ func (m *mockGASPStorage) FinalizeGraph(ctx context.Context, graphID *transactio
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if tempGraph, exists := m.tempGraphStore[graphID.String()]; exists {
+	if tempGraph, exists := m.tempGraphStore[*graphID]; exists {
 		m.knownStore = append(m.knownStore, tempGraph)
 		m.updateCallback()
-		delete(m.tempGraphStore, graphID.String())
+		delete(m.tempGraphStore, *graphID)
 	}
 	return nil
 }
@@ -254,6 +254,13 @@ func createMockUTXO(txHex string, outputIndex uint32, time uint32) *mockUTXO {
 	tx.AddOutput(&transaction.TransactionOutput{
 		Satoshis:      1000,
 		LockingScript: &script.Script{},
+	})
+	opReturn := &script.Script{}
+	opReturn.AppendOpcodes(script.OpFALSE, script.OpRETURN)
+	opReturn.AppendPushData([]byte(txHex))
+	tx.AddOutput(&transaction.TransactionOutput{
+		Satoshis:      0,
+		LockingScript: opReturn,
 	})
 
 	// Use the actual transaction hex instead of the provided string

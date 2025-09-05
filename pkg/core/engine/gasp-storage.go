@@ -291,20 +291,21 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 
 func (s *OverlayGASPStorage) DiscardGraph(_ context.Context, graphID *transaction.Outpoint) error {
 	// Find and delete all nodes that belong to this graph
-	nodesToDelete := make([]string, 0)
+	nodesToDelete := make([]*transaction.Outpoint, 0)
 
 	// First pass: collect all node IDs that belong to this graph
 	s.tempGraphNodeRefs.Range(func(nodeId, graphRef any) bool {
 		node := graphRef.(*GraphNode)
 		if node.GraphID.Equal(graphID) {
-			nodesToDelete = append(nodesToDelete, nodeId.(string))
+			outpoint := nodeId.(transaction.Outpoint)
+			nodesToDelete = append(nodesToDelete, &outpoint)
 		}
 		return true
 	})
 
 	// Delete all collected nodes
 	for _, nodeId := range nodesToDelete {
-		s.tempGraphNodeRefs.Delete(nodeId)
+		s.tempGraphNodeRefs.Delete(*nodeId)
 		s.tempGraphNodeCount--
 	}
 

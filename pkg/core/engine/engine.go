@@ -727,7 +727,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			return nil, err
 		} else {
 			node := &gasp.Node{
-				GraphID:       outpoint,
+				GraphID:       graphId,
 				RawTx:         tx.Hex(),
 				OutputIndex:   outpoint.Index,
 				AncillaryBeef: output.AncillaryBeef,
