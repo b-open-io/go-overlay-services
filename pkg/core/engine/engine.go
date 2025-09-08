@@ -739,7 +739,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				slog.Warn(fmt.Sprintf("[GASP SYNC] Unexpected answer type \"%s\" for topic \"%s\", expected \"%s\"", lookupAnswer.Type, topic, lookup.AnswerTypeOutputList))
 			}
 		} else {
-			slog.Info(fmt.Sprintf("[GASP SYNC] Skipping topic \"%s\" - sync type is not SHIP (type: \"%s\")", topic, syncEndpoints.Type))
+			slog.Info(fmt.Sprintf("[GASP SYNC] Skipping topic peer discovery \"%s\" - sync type is not SHIP (type: \"%s\")", topic, syncEndpoints.Type))
 		}
 
 		if len(syncEndpoints.Peers) > 0 {

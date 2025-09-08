@@ -155,7 +155,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 			return nil, err
 		} else if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
 			if _, ok := s.Engine.Managers[s.Topic]; !ok {
-				return nil, errors.New("no manager for topic: " + s.Topic)
+				return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
 			} else if neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes); err != nil {
 				return nil, err
 			} else {
@@ -174,7 +174,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 
 func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
 	if _, ok := s.Engine.Managers[s.Topic]; !ok {
-		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic: " + s.Topic)
+		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic (identify admissible outputs): " + s.Topic)
 	}
 	return s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
 }
