@@ -156,7 +156,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		slog.Error("invalid transaction in Submit", "txid", txid, "error", ErrInvalidTransaction)
 		return nil, ErrInvalidTransaction
 	}
-	slog.Debug("transaction validated", "duration", time.Since(start))
+	// slog.Debug("transaction validated", "duration", time.Since(start))
 	start = time.Now()
 	steak := make(overlay.Steak, len(taggedBEEF.Topics))
 	topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
@@ -202,7 +202,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				slog.Error("failed to identify admissible outputs", "topic", topic, "error", err)
 				return nil, err
 			} else {
-				slog.Debug("admissible outputs identified", "duration", time.Since(start))
+				// slog.Debug("admissible outputs identified", "duration", time.Since(start))
 				start = time.Now()
 				if len(admit.AncillaryTxids) > 0 {
 					ancillaryBeef := transaction.Beef{
@@ -267,7 +267,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 		}
 	}
-	slog.Debug("UTXOs marked as spent", "duration", time.Since(start))
+	// slog.Debug("UTXOs marked as spent", "duration", time.Since(start))
 	start = time.Now()
 	if mode != SubmitModeHistorical && e.Broadcaster != nil {
 		if _, failure := e.Broadcaster.Broadcast(tx); failure != nil {
@@ -349,7 +349,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				}
 			}
 		}
-		slog.Debug("outputs added", "duration", time.Since(start))
+		// slog.Debug("outputs added", "duration", time.Since(start))
 		start = time.Now()
 		for _, output := range outputsConsumed {
 			output.ConsumedBy = append(output.ConsumedBy, newOutpoints...)
@@ -359,7 +359,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				return nil, err
 			}
 		}
-		slog.Debug("consumed by references updated", "duration", time.Since(start))
+		// slog.Debug("consumed by references updated", "duration", time.Since(start))
 		start = time.Now()
 		// Insert applied transaction if any changes were made
 		if len(admit.OutputsToAdmit) > 0 || len(admit.CoinsRemoved) > 0 || len(admit.CoinsToRetain) > 0 || len(admit.AncillaryTxids) > 0 {
@@ -371,7 +371,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				return nil, err
 			}
 		}
-		slog.Debug("transaction applied", "duration", time.Since(start))
+		// slog.Debug("transaction applied", "duration", time.Since(start))
 	}
 	if e.Advertiser == nil || mode == SubmitModeHistorical {
 		return steak, nil
