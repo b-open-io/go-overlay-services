@@ -49,7 +49,7 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gas
 		slog.Error("failed to encode GASP initial request", "endpoint", r.endpointUrl, "topic", r.topic, "error", err)
 		return nil, err
 	}
-	
+
 	if req, err := http.NewRequest("POST", r.endpointUrl+"/requestSyncResponse", bytes.NewReader(requestJSON)); err != nil {
 		slog.Error("failed to create HTTP request for GASP initial response", "endpoint", r.endpointUrl, "topic", r.topic, "error", err)
 		return nil, err
