@@ -44,11 +44,13 @@ func NewOverlayGASPRemote(endpointUrl, topic string, httpClient util.HTTPClient,
 }
 
 func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error) {
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(request); err != nil {
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
 		slog.Error("failed to encode GASP initial request", "endpoint", r.endpointUrl, "topic", r.topic, "error", err)
 		return nil, err
-	} else if req, err := http.NewRequest("POST", r.endpointUrl+"/requestSyncResponse", io.NopCloser(&buf)); err != nil {
+	}
+	
+	if req, err := http.NewRequest("POST", r.endpointUrl+"/requestSyncResponse", bytes.NewReader(requestJSON)); err != nil {
 		slog.Error("failed to create HTTP request for GASP initial response", "endpoint", r.endpointUrl, "topic", r.topic, "error", err)
 		return nil, err
 	} else {
