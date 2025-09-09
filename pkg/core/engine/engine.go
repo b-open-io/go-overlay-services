@@ -350,15 +350,12 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				return nil, err
 			}
 		}
-		// Insert applied transaction if any changes were made
-		if len(admit.OutputsToAdmit) > 0 || len(admit.CoinsRemoved) > 0 || len(admit.CoinsToRetain) > 0 || len(admit.AncillaryTxids) > 0 {
-			if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
-				Txid:  txid,
-				Topic: topic,
-			}); err != nil {
-				slog.Error("failed to insert applied transaction", "topic", topic, "txid", txid, "error", err)
-				return nil, err
-			}
+		if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
+			Txid:  txid,
+			Topic: topic,
+		}); err != nil {
+			slog.Error("failed to insert applied transaction", "topic", topic, "txid", txid, "error", err)
+			return nil, err
 		}
 	}
 	if e.Advertiser == nil || mode == SubmitModeHistorical {
