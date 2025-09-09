@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -58,9 +59,17 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gas
 		} else {
 			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
+				// Read error message from response body
+				body, readErr := io.ReadAll(resp.Body)
+				if readErr != nil {
+					return nil, &util.HTTPError{
+						StatusCode: resp.StatusCode,
+						Err:        readErr,
+					}
+				}
 				return nil, &util.HTTPError{
 					StatusCode: resp.StatusCode,
-					Err:        err,
+					Err:        fmt.Errorf("server error: %s", string(body)),
 				}
 			}
 			result := &gasp.InitialResponse{}
@@ -118,9 +127,17 @@ func (r *OverlayGASPRemote) doNodeRequest(ctx context.Context, graphID *transact
 		} else {
 			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
+				// Read error message from response body
+				body, readErr := io.ReadAll(resp.Body)
+				if readErr != nil {
+					return nil, &util.HTTPError{
+						StatusCode: resp.StatusCode,
+						Err:        readErr,
+					}
+				}
 				return nil, &util.HTTPError{
 					StatusCode: resp.StatusCode,
-					Err:        err,
+					Err:        fmt.Errorf("server error: %s", string(body)),
 				}
 			}
 			result := &gasp.Node{}
