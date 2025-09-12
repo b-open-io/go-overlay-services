@@ -128,7 +128,6 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 			}
 		}
 
-
 		// Process all UTXOs from this batch with shared deduplication
 		var wg sync.WaitGroup
 		seenNodes := &sync.Map{} // Shared across all UTXOs in this batch
