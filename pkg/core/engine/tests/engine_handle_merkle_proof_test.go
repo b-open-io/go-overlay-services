@@ -341,6 +341,10 @@ func (m *mockHandleMerkleProofStorage) FindOutputs(ctx context.Context, outpoint
 	return nil, nil
 }
 
+func (m *mockHandleMerkleProofStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) (map[transaction.Outpoint]bool, error) {
+	return nil, nil
+}
+
 func (m *mockHandleMerkleProofStorage) InsertOutput(ctx context.Context, utxo *engine.Output) error {
 	return nil
 }

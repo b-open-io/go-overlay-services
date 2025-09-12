@@ -650,6 +650,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					LogPrefix:       &logPrefix,
 					Unidirectional:  true,
 					Concurrency:     syncEndpoints.Concurrency,
+					Topic:           topic,
 				})
 
 				if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {

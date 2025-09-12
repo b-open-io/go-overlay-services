@@ -35,6 +35,7 @@ type GASPParams struct {
 	Unidirectional  bool
 	LogLevel        slog.Level
 	Concurrency     int
+	Topic           string
 }
 
 type GASP struct {
@@ -45,6 +46,7 @@ type GASP struct {
 	LogPrefix       string
 	Unidirectional  bool
 	LogLevel        slog.Level
+	Topic           string
 	limiter         chan struct{} // Concurrency limiter controlled by Concurrency config
 
 	// Unified UTXO processing with result sharing
@@ -57,6 +59,7 @@ func NewGASP(params GASPParams) *GASP {
 		Remote:          params.Remote,
 		LastInteraction: params.LastInteraction,
 		Unidirectional:  params.Unidirectional,
+		Topic:           params.Topic,
 		// Sequential:      params.Sequential,
 	}
 	// Concurrency limiter controlled by Concurrency config
@@ -82,17 +85,6 @@ func NewGASP(params GASPParams) *GASP {
 func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 	slog.Info(fmt.Sprintf("%s Starting sync process. Last interaction timestamp: %f", g.LogPrefix, g.LastInteraction))
 
-	localUTXOs, err := g.Storage.FindKnownUTXOs(ctx, 0, 0)
-	if err != nil {
-		return err
-	}
-
-	// Find which UTXOs we already have
-	knownOutpoints := make(map[transaction.Outpoint]struct{})
-	for _, utxo := range localUTXOs {
-		outpoint := utxo.Outpoint()
-		knownOutpoints[*outpoint] = struct{}{}
-	}
 	var sharedOutpoints sync.Map
 
 	var initialResponse *InitialResponse
@@ -102,7 +94,23 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 			Since:   g.LastInteraction,
 			Limit:   limit,
 		}
-		initialResponse, err = g.Remote.GetInitialResponse(ctx, initialRequest)
+		initialResponse, err := g.Remote.GetInitialResponse(ctx, initialRequest)
+		if err != nil {
+			return err
+		}
+
+		if len(initialResponse.UTXOList) == 0 {
+			break // No more UTXOs to process
+		}
+
+		// Extract outpoints from current page for efficient batch lookup
+		pageOutpoints := make([]*transaction.Outpoint, len(initialResponse.UTXOList))
+		for i, utxo := range initialResponse.UTXOList {
+			pageOutpoints[i] = utxo.Outpoint()
+		}
+
+		// Check which outpoints we already have using efficient page-based lookup
+		knownInPage, err := g.Storage.HasOutputs(ctx, pageOutpoints, g.Topic)
 		if err != nil {
 			return err
 		}
@@ -113,13 +121,13 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 				g.LastInteraction = utxo.Score
 			}
 			outpoint := utxo.Outpoint()
-			if _, exists := knownOutpoints[*outpoint]; exists {
+			if exists := knownInPage[*outpoint]; exists {
 				sharedOutpoints.Store(*outpoint, struct{}{})
-				delete(knownOutpoints, *outpoint)
 			} else if _, shared := sharedOutpoints.Load(*outpoint); !shared {
 				ingestQueue = append(ingestQueue, utxo)
 			}
 		}
+
 
 		// Process all UTXOs from this batch with shared deduplication
 		var wg sync.WaitGroup
@@ -153,14 +161,18 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 	}
 	// 2. Only do the "reply" half if unidirectional is disabled
 	if !g.Unidirectional && initialResponse != nil {
-		// Filter localUTXOs for those after initialResponse.since and not in sharedOutpoints
+		// Load local UTXOs only newer than what the peer already knows about
+		localUTXOs, err := g.Storage.FindKnownUTXOs(ctx, initialResponse.Since, 0)
+		if err != nil {
+			return err
+		}
+
+		// Filter localUTXOs for those not in sharedOutpoints
 		var replyUTXOs []*Output
 		for _, utxo := range localUTXOs {
 			outpoint := utxo.Outpoint()
-			if utxo.Score >= initialResponse.Since {
-				if _, shared := sharedOutpoints.Load(*outpoint); !shared {
-					replyUTXOs = append(replyUTXOs, utxo)
-				}
+			if _, shared := sharedOutpoints.Load(*outpoint); !shared {
+				replyUTXOs = append(replyUTXOs, utxo)
 			}
 		}
 

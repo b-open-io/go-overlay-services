@@ -20,6 +20,9 @@ type Storage interface {
 
 	FindOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*Output, error)
 
+	// Checks which outputs exist in storage, returns map of outpoint to existence
+	HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) (map[transaction.Outpoint]bool, error)
+
 	// Finds outputs with a matching transaction ID from storage
 	FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*Output, error)
 

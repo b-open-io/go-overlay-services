@@ -67,6 +67,10 @@ func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since float64, 
 	}
 }
 
+func (s *OverlayGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) (map[transaction.Outpoint]bool, error) {
+	return s.Engine.Storage.HasOutputs(ctx, outpoints, s.Topic)
+}
+
 func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
 	if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, nil, nil, true); err != nil {
 		return nil, err
