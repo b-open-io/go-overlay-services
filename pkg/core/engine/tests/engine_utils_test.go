@@ -77,10 +77,6 @@ func (f fakeStorage) FindOutputs(ctx context.Context, outpoints []*transaction.O
 	panic("func not defined")
 }
 
-func (f fakeStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) (map[transaction.Outpoint]bool, error) {
-	panic("not implemented")
-}
-
 func (f fakeStorage) FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error) {
 	if f.findOutputsForTransaction != nil {
 		return f.findOutputsForTransaction(ctx, txid, includeBEEF)

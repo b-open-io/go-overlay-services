@@ -506,7 +506,11 @@ func (m *mockStorage) FindOutputs(ctx context.Context, outpoints []*transaction.
 	return nil, nil
 }
 
-func (m *mockStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) (map[transaction.Outpoint]bool, error) {
+func (m *mockStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) ([]*bool, error) {
+	panic("not implemented")
+}
+
+func (m *mockStorage) UpdateProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
 	panic("not implemented")
 }
 

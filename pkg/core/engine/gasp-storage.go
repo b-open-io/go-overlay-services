@@ -18,6 +18,11 @@ import (
 
 var ErrGraphFull = errors.New("graph is full")
 
+var (
+	knownValid   = true
+	knownInvalid = false
+)
+
 // submissionState tracks the state of a transaction submission
 type submissionState struct {
 	wg  sync.WaitGroup
@@ -67,8 +72,56 @@ func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since float64, 
 	}
 }
 
-func (s *OverlayGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) (map[transaction.Outpoint]bool, error) {
-	return s.Engine.Storage.HasOutputs(ctx, outpoints, s.Topic)
+func (s *OverlayGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) ([]*bool, error) {
+	// Use FindOutputs with includeBEEF=true to get BEEF data for validation
+	existingOutputs, err := s.Engine.Storage.FindOutputs(ctx, outpoints, s.Topic, nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create result slice with same length as input outpoints
+	result := make([]*bool, len(outpoints))
+
+	// Check each found output and validate its merkle proof
+	for i, output := range existingOutputs {
+		if output != nil {
+			// Parse BEEF to get transaction and merkle path (outputs always have BEEF)
+			_, tx, _, err := transaction.ParseBeef(output.Beef)
+			if err != nil {
+				// Invalid BEEF data, known invalid
+				result[i] = &knownInvalid
+				continue
+			}
+			
+			if tx == nil || tx.MerklePath == nil {
+				// No transaction or no merkle path, known invalid
+				result[i] = &knownInvalid
+				continue
+			}
+			
+			// Validate the merkle proof
+			valid, err := spv.Verify(ctx, tx, s.Engine.ChainTracker, nil)
+			if err != nil {
+				// System error during validation, return the error
+				return nil, err
+			}
+			
+			if valid {
+				// Valid merkle proof, known valid
+				result[i] = &knownValid
+			} else {
+				// Invalid merkle proof, known invalid
+				result[i] = &knownInvalid
+			}
+		}
+		// If output is nil, result[i] remains nil (unknown)
+	}
+
+	return result, nil
+}
+
+func (s *OverlayGASPStorage) UpdateProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
+	return s.Engine.HandleNewMerkleProof(ctx, txid, proof)
 }
 
 func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {

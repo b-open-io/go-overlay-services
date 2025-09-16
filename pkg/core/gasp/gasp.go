@@ -9,6 +9,7 @@ import (
 
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/transaction"
+	"golang.org/x/sync/errgroup"
 )
 
 const MAX_CONCURRENCY = 16
@@ -60,7 +61,6 @@ func NewGASP(params GASPParams) *GASP {
 		LastInteraction: params.LastInteraction,
 		Unidirectional:  params.Unidirectional,
 		Topic:           params.Topic,
-		// Sequential:      params.Sequential,
 	}
 	// Concurrency limiter controlled by Concurrency config
 	if params.Concurrency > 1 {
@@ -109,47 +109,90 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 			pageOutpoints[i] = utxo.Outpoint()
 		}
 
-		// Check which outpoints we already have using efficient page-based lookup
-		knownInPage, err := g.Storage.HasOutputs(ctx, pageOutpoints, g.Topic)
+		// Check which outpoints we already have and their validation state
+		outputStates, err := g.Storage.HasOutputs(ctx, pageOutpoints, g.Topic)
 		if err != nil {
 			return err
 		}
 
 		var ingestQueue []*Output
-		for _, utxo := range initialResponse.UTXOList {
+		var merkleProofUpdateQueue sync.Map // map[transaction.Outpoint]struct{}
+		for i, utxo := range initialResponse.UTXOList {
 			if utxo.Score > g.LastInteraction {
 				g.LastInteraction = utxo.Score
 			}
 			outpoint := utxo.Outpoint()
-			if exists := knownInPage[*outpoint]; exists {
+
+			// Check the state of this output
+			state := outputStates[i]
+			if state == nil {
+				// Unknown - need to ingest
+				if _, shared := sharedOutpoints.Load(*outpoint); !shared {
+					ingestQueue = append(ingestQueue, utxo)
+				}
+			} else {
 				sharedOutpoints.Store(*outpoint, struct{}{})
-			} else if _, shared := sharedOutpoints.Load(*outpoint); !shared {
-				ingestQueue = append(ingestQueue, utxo)
+				if !*state {
+					// Known invalid - add to both queues
+					ingestQueue = append(ingestQueue, utxo)
+					merkleProofUpdateQueue.Store(*outpoint, struct{}{})
+				}
 			}
 		}
 
 		// Process all UTXOs from this batch with shared deduplication
-		var wg sync.WaitGroup
+		processingGroup, processingCtx := errgroup.WithContext(ctx)
 		seenNodes := &sync.Map{} // Shared across all UTXOs in this batch
 
 		for _, utxo := range ingestQueue {
-			wg.Add(1)
 			g.limiter <- struct{}{}
-			go func(utxo *Output) {
+			utxo := utxo // capture loop variable
+			processingGroup.Go(func() error {
 				outpoint := utxo.Outpoint()
 				defer func() {
 					<-g.limiter
-					wg.Done()
 				}()
-				if err := g.processUTXOToCompletion(ctx, outpoint, seenNodes); err != nil {
-					slog.Warn(fmt.Sprintf("%s Error processing UTXO %s: %v", g.LogPrefix, outpoint, err))
-					return
+
+				// Check if this UTXO needs only a merkle proof update or full processing
+				if _, needsMerkleProofUpdate := merkleProofUpdateQueue.Load(*outpoint); needsMerkleProofUpdate {
+					slog.Debug(fmt.Sprintf("%s UTXO %s needs merkle proof update", g.LogPrefix, outpoint))
+
+					// Request node from remote to get the updated merkle proof
+					resolvedNode, err := g.Remote.RequestNode(processingCtx, outpoint, outpoint, true)
+					if err != nil {
+						return fmt.Errorf("error requesting node for merkle proof update %s: %w", outpoint, err)
+					}
+
+					// Extract merkle proof and validate before updating
+					if resolvedNode.Proof != nil {
+						merklePath, err := transaction.NewMerklePathFromHex(*resolvedNode.Proof)
+						if err != nil {
+							return fmt.Errorf("error parsing merkle proof for %s: %w", outpoint, err)
+						}
+
+						if err := g.Storage.UpdateProof(processingCtx, &outpoint.Txid, merklePath); err != nil {
+							return fmt.Errorf("error updating merkle proof for %s: %w", outpoint, err)
+						}
+
+						slog.Debug(fmt.Sprintf("%s Successfully updated merkle proof for %s", g.LogPrefix, outpoint))
+						return nil
+					} else {
+						// No proof available yet, but this isn't an error
+						return nil
+					}
+				}
+
+				if err := g.processUTXOToCompletion(processingCtx, outpoint, seenNodes); err != nil {
+					return fmt.Errorf("error processing UTXO %s: %w", outpoint, err)
 				}
 				sharedOutpoints.Store(*outpoint, struct{}{})
-			}(utxo)
+				return nil
+			})
 		}
 		slog.Info(fmt.Sprintf("%s Waiting for %d UTXOs to complete processing...", g.LogPrefix, len(ingestQueue)))
-		wg.Wait()
+		if err := processingGroup.Wait(); err != nil {
+			return err
+		}
 		slog.Info(fmt.Sprintf("%s Page completed, processed %d UTXOs", g.LogPrefix, len(ingestQueue)))
 
 		// Check if we have more pages to fetch

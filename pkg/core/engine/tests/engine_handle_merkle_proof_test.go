@@ -83,6 +83,11 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		sut := &engine.Engine{
 			Storage:        mockStorage,
 			LookupServices: map[string]engine.LookupService{"test-service": mockLookupService},
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
+					return true, nil
+				},
+			},
 		}
 
 		// when
@@ -130,6 +135,11 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 
 		sut := &engine.Engine{
 			Storage: mockStorage,
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
+					return true, nil
+				},
+			},
 		}
 
 		// when
@@ -144,7 +154,15 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// given
 		ctx := context.Background()
 		txid := &chainhash.Hash{1, 2, 3}
-		merklePath := &transaction.MerklePath{}
+		merklePath := &transaction.MerklePath{
+			BlockHeight: 814435,
+			Path: [][]*transaction.PathElement{{
+				{
+					Hash:   txid,
+					Offset: 123,
+				},
+			}},
+		}
 
 		mockStorage := &mockHandleMerkleProofStorage{
 			findOutputsForTransactionFunc: func(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error) {
@@ -154,6 +172,11 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 
 		sut := &engine.Engine{
 			Storage: mockStorage,
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
+					return true, nil
+				},
+			},
 		}
 
 		// when
@@ -167,7 +190,15 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// given
 		ctx := context.Background()
 		txid := &chainhash.Hash{1, 2, 3}
-		merklePath := &transaction.MerklePath{}
+		merklePath := &transaction.MerklePath{
+			BlockHeight: 814435,
+			Path: [][]*transaction.PathElement{{
+				{
+					Hash:   txid,
+					Offset: 123,
+				},
+			}},
+		}
 		expectedErr := errors.New("storage error")
 
 		mockStorage := &mockHandleMerkleProofStorage{
@@ -178,6 +209,11 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 
 		sut := &engine.Engine{
 			Storage: mockStorage,
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
+					return true, nil
+				},
+			},
 		}
 
 		// when
@@ -276,6 +312,11 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		sut := &engine.Engine{
 			Storage:        mockStorage,
 			LookupServices: map[string]engine.LookupService{},
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
+					return true, nil
+				},
+			},
 		}
 
 		// when
@@ -338,10 +379,6 @@ func (m *mockHandleMerkleProofStorage) FindUTXOsForTopic(ctx context.Context, to
 	return nil, nil
 }
 func (m *mockHandleMerkleProofStorage) FindOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
-	return nil, nil
-}
-
-func (m *mockHandleMerkleProofStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) (map[transaction.Outpoint]bool, error) {
 	return nil, nil
 }
 

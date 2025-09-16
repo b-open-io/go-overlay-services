@@ -195,30 +195,41 @@ func (m *mockGASPStorage) FinalizeGraph(ctx context.Context, graphID *transactio
 	return nil
 }
 
-func (m *mockGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) (map[transaction.Outpoint]bool, error) {
+func (m *mockGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) ([]*bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	result := make(map[transaction.Outpoint]bool)
-	for _, outpoint := range outpoints {
-		result[*outpoint] = false
+	result := make([]*bool, len(outpoints))
+	for i, outpoint := range outpoints {
+		found := false
 
 		// Check in known store
 		for _, utxo := range m.knownStore {
 			if utxo.Txid.Equal(outpoint.Txid) && utxo.OutputIndex == outpoint.Index {
-				result[*outpoint] = true
+				found = true
 				break
 			}
 		}
 
 		// Check in temp store if not found
-		if !result[*outpoint] {
+		if !found {
 			if _, exists := m.tempGraphStore[*outpoint]; exists {
-				result[*outpoint] = true
+				found = true
 			}
+		}
+
+		if found {
+			result[i] = &[]bool{true}[0] // &true - output exists and is valid
+		} else {
+			result[i] = nil // nil - output is unknown (doesn't exist)
 		}
 	}
 	return result, nil
+}
+
+func (m *mockGASPStorage) UpdateProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
+	// Mock implementation - not used in these tests
+	return nil
 }
 
 type mockGASPRemote struct {

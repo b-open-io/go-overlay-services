@@ -896,6 +896,19 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 }
 
 func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
+	// Validate the merkle proof before processing
+	if merkleRoot, err := proof.ComputeRoot(txid); err != nil {
+		slog.Error("failed to compute merkle root from proof", "txid", txid, "error", err)
+		return err
+	} else if valid, err := e.ChainTracker.IsValidRootForHeight(ctx, merkleRoot, proof.BlockHeight); err != nil {
+		slog.Error("error validating merkle root for height", "txid", txid, "blockHeight", proof.BlockHeight, "error", err)
+		return err
+	} else if !valid {
+		err := fmt.Errorf("invalid merkle proof for transaction %s at block height %d", txid, proof.BlockHeight)
+		slog.Error("merkle proof validation failed", "txid", txid, "blockHeight", proof.BlockHeight, "error", err)
+		return err
+	}
+
 	if outputs, err := e.Storage.FindOutputsForTransaction(ctx, txid, true); err != nil {
 		slog.Error("failed to find outputs for transaction in HandleNewMerkleProof", "txid", txid, "error", err)
 		return err
