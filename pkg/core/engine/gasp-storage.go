@@ -92,20 +92,20 @@ func (s *OverlayGASPStorage) HasOutputs(ctx context.Context, outpoints []*transa
 				result[i] = &knownInvalid
 				continue
 			}
-			
+
 			if tx == nil || tx.MerklePath == nil {
 				// No transaction or no merkle path, known invalid
 				result[i] = &knownInvalid
 				continue
 			}
-			
+
 			// Validate the merkle proof
 			valid, err := spv.Verify(ctx, tx, s.Engine.ChainTracker, nil)
 			if err != nil {
 				// System error during validation, return the error
 				return nil, err
 			}
-			
+
 			if valid {
 				// Valid merkle proof, known valid
 				result[i] = &knownValid
