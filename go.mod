@@ -65,5 +65,3 @@ require (
 )
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
-
-replace github.com/bsv-blockchain/go-sdk => github.com/bsv-blockchain/go-sdk v1.2.10-0.20250908171148-1297e13e7558
