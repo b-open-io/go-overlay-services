@@ -133,7 +133,6 @@ func (f fakeStorage) GetLastInteraction(ctx context.Context, host string, topic 
 	panic("func not defined")
 }
 
-
 func (f fakeStorage) FindOutpointsByMerkleState(ctx context.Context, topic string, state engine.MerkleState, limit uint32) ([]*transaction.Outpoint, error) {
 	return nil, nil
 }

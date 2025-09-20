@@ -410,7 +410,6 @@ func (m *mockHandleMerkleProofStorage) GetLastInteraction(ctx context.Context, h
 	return 0, nil
 }
 
-
 func (m *mockHandleMerkleProofStorage) FindOutpointsByMerkleState(ctx context.Context, topic string, state engine.MerkleState, limit uint32) ([]*transaction.Outpoint, error) {
 	return nil, nil
 }

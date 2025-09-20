@@ -506,7 +506,6 @@ func (m *mockStorage) FindOutputs(ctx context.Context, outpoints []*transaction.
 	return nil, nil
 }
 
-
 // Implement remaining Storage interface methods with empty implementations
 func (m *mockStorage) SetIncoming(ctx context.Context, txs []*transaction.Transaction) error {
 	return nil
