@@ -506,13 +506,6 @@ func (m *mockStorage) FindOutputs(ctx context.Context, outpoints []*transaction.
 	return nil, nil
 }
 
-func (m *mockStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) ([]*bool, error) {
-	panic("not implemented")
-}
-
-func (m *mockStorage) UpdateProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
-	panic("not implemented")
-}
 
 // Implement remaining Storage interface methods with empty implementations
 func (m *mockStorage) SetIncoming(ctx context.Context, txs []*transaction.Transaction) error {
@@ -568,4 +561,12 @@ func (m *mockStorage) UpdateLastInteraction(ctx context.Context, host string, to
 
 func (m *mockStorage) GetLastInteraction(ctx context.Context, host string, topic string) (float64, error) {
 	return 0, nil
+}
+
+func (m *mockStorage) FindOutpointsByMerkleState(ctx context.Context, topic string, state engine.MerkleState, limit uint32) ([]*transaction.Outpoint, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) ReconcileMerkleRoot(ctx context.Context, topic string, blockHeight uint32, merkleRoot *chainhash.Hash) error {
+	return nil
 }

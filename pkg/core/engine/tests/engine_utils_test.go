@@ -133,6 +133,15 @@ func (f fakeStorage) GetLastInteraction(ctx context.Context, host string, topic 
 	panic("func not defined")
 }
 
+
+func (f fakeStorage) FindOutpointsByMerkleState(ctx context.Context, topic string, state engine.MerkleState, limit uint32) ([]*transaction.Outpoint, error) {
+	return nil, nil
+}
+
+func (f fakeStorage) ReconcileMerkleRoot(ctx context.Context, topic string, blockHeight uint32, merkleRoot *chainhash.Hash) error {
+	return nil
+}
+
 type fakeManager struct {
 	identifyAdmissibleOutputsFunc func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error)
 	identifyNeededInputsFunc      func(ctx context.Context, beef []byte) ([]*transaction.Outpoint, error)

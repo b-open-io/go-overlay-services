@@ -19,11 +19,7 @@ func (f fakeGASPStorage) FindKnownUTXOs(ctx context.Context, since float64, limi
 	return f.findKnownUTXOsFunc(ctx, since, limit)
 }
 
-func (f fakeGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) ([]*bool, error) {
-	panic("not implemented")
-}
-
-func (f fakeGASPStorage) UpdateProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
+func (f fakeGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint) ([]bool, error) {
 	panic("not implemented")
 }
 

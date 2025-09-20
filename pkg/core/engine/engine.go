@@ -671,6 +671,91 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 	return nil
 }
 
+// SyncInvalidatedOutputs finds outputs with invalidated merkle proofs and syncs them with remote peers
+func (e *Engine) SyncInvalidatedOutputs(ctx context.Context, topic string) error {
+	// Find outpoints with invalidated merkle proofs
+	invalidatedOutpoints, err := e.Storage.FindOutpointsByMerkleState(ctx, topic, MerkleStateInvalidated, 1000)
+	if err != nil {
+		slog.Error("Failed to find invalidated outputs", "topic", topic, "error", err)
+		return err
+	}
+
+	if len(invalidatedOutpoints) == 0 {
+		slog.Debug("No invalidated outpoints found", "topic", topic)
+		return nil
+	}
+
+	slog.Info("Found invalidated outpoints to sync", "topic", topic, "count", len(invalidatedOutpoints))
+
+	// Get sync configuration for this topic
+	syncConfig, ok := e.SyncConfiguration[topic]
+	if !ok || len(syncConfig.Peers) == 0 {
+		slog.Warn("No peers configured for topic", "topic", topic)
+		return nil
+	}
+
+	// Group outpoints by transaction ID to avoid duplicate merkle proof requests
+	txidsToUpdate := make(map[chainhash.Hash]*transaction.Outpoint)
+	for _, outpoint := range invalidatedOutpoints {
+		if _, exists := txidsToUpdate[outpoint.Txid]; !exists {
+			// Use the first outpoint for this txid as representative
+			txidsToUpdate[outpoint.Txid] = outpoint
+		}
+	}
+
+	slog.Info("Unique transactions to update", "topic", topic, "count", len(txidsToUpdate))
+
+	// Try to get updated merkle proofs from peers
+	var successCount int
+
+	// For each transaction that needs updating
+	for txid, outpoint := range txidsToUpdate {
+		// Try each peer until we get a valid merkle proof for this transaction
+		for _, peer := range syncConfig.Peers {
+			if peer == e.HostingURL {
+				continue // Skip self
+			}
+
+			// Create a remote client for this peer
+			remote := NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8)
+
+			// Request node with metadata to get merkle proof
+			node, err := remote.RequestNode(ctx, outpoint, outpoint, true)
+			if err != nil {
+				slog.Debug("Failed to get node from peer", "peer", peer, "txid", txid, "error", err)
+				continue // Try next peer
+			}
+
+			// If we got a merkle proof, update it for the transaction
+			if node.Proof != nil {
+				merklePath, err := transaction.NewMerklePathFromHex(*node.Proof)
+				if err != nil {
+					slog.Error("Failed to parse merkle proof", "txid", txid, "error", err)
+					continue // Try next peer
+				}
+
+				// Update the merkle proof using the existing handler (updates all outputs for this transaction)
+				if err := e.HandleNewMerkleProof(ctx, &txid, merklePath); err != nil {
+					slog.Error("Failed to update merkle proof", "txid", txid, "error", err)
+					continue // Try next peer
+				}
+
+				successCount++
+				slog.Debug("Updated merkle proof for transaction", "txid", txid, "peer", peer)
+				break // Got valid proof, move to next transaction
+			}
+		}
+	}
+
+	if successCount > 0 {
+		slog.Info("Completed syncing invalidated outpoints", "topic", topic, "updated_transactions", successCount, "total_outpoints", len(invalidatedOutpoints))
+	} else if len(txidsToUpdate) > 0 {
+		slog.Warn("Could not update all invalidated outputs", "topic", topic, "remaining", len(txidsToUpdate))
+	}
+
+	return nil
+}
+
 func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
 	if utxos, err := e.Storage.FindUTXOsForTopic(ctx, topic, initialRequest.Since, initialRequest.Limit, false); err != nil {
 		slog.Error("failed to find UTXOs for topic in ProvideForeignSyncResponse", "topic", topic, "error", err)

@@ -410,6 +410,15 @@ func (m *mockHandleMerkleProofStorage) GetLastInteraction(ctx context.Context, h
 	return 0, nil
 }
 
+
+func (m *mockHandleMerkleProofStorage) FindOutpointsByMerkleState(ctx context.Context, topic string, state engine.MerkleState, limit uint32) ([]*transaction.Outpoint, error) {
+	return nil, nil
+}
+
+func (m *mockHandleMerkleProofStorage) ReconcileMerkleRoot(ctx context.Context, topic string, blockHeight uint32, merkleRoot *chainhash.Hash) error {
+	return nil
+}
+
 // Mock lookup service
 type mockLookupService struct {
 	outputBlockHeightUpdatedFunc func(ctx context.Context, txid *chainhash.Hash, blockHeight uint32, blockIdx uint64) error

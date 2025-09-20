@@ -195,11 +195,11 @@ func (m *mockGASPStorage) FinalizeGraph(ctx context.Context, graphID *transactio
 	return nil
 }
 
-func (m *mockGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint, topic string) ([]*bool, error) {
+func (m *mockGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint) ([]bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	result := make([]*bool, len(outpoints))
+	result := make([]bool, len(outpoints))
 	for i, outpoint := range outpoints {
 		found := false
 
@@ -218,18 +218,9 @@ func (m *mockGASPStorage) HasOutputs(ctx context.Context, outpoints []*transacti
 			}
 		}
 
-		if found {
-			result[i] = &[]bool{true}[0] // &true - output exists and is valid
-		} else {
-			result[i] = nil // nil - output is unknown (doesn't exist)
-		}
+		result[i] = found
 	}
 	return result, nil
-}
-
-func (m *mockGASPStorage) UpdateProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
-	// Mock implementation - not used in these tests
-	return nil
 }
 
 type mockGASPRemote struct {
