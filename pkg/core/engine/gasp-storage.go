@@ -18,7 +18,6 @@ import (
 
 var ErrGraphFull = errors.New("graph is full")
 
-
 // submissionState tracks the state of a transaction submission
 type submissionState struct {
 	wg  sync.WaitGroup
