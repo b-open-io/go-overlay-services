@@ -633,8 +633,6 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 			for _, peer := range peers {
 				logPrefix := "[GASP Sync of " + topic + " with " + peer + "]"
 
-				slog.Info("GASP sync starting", "topic", topic, "peer", peer)
-
 				// Read the last interaction score from storage
 				lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
 				if err != nil {
@@ -656,12 +654,10 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
 					slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
 				} else {
-					slog.Info("GASP sync successful", "topic", topic, "peer", peer)
-
 					// Save the updated last interaction score
 					if gaspProvider.LastInteraction > lastInteraction {
-						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err == nil {
-							slog.Info("Updated last interaction score", "topic", topic, "peer", peer, "score", gaspProvider.LastInteraction)
+						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err != nil {
+							slog.Error("Failed to update last interaction", "topic", topic, "peer", peer, "error", err)
 						}
 					}
 				}
@@ -681,11 +677,8 @@ func (e *Engine) SyncInvalidatedOutputs(ctx context.Context, topic string) error
 	}
 
 	if len(invalidatedOutpoints) == 0 {
-		slog.Debug("No invalidated outpoints found", "topic", topic)
 		return nil
 	}
-
-	slog.Info("Found invalidated outpoints to sync", "topic", topic, "count", len(invalidatedOutpoints))
 
 	// Get sync configuration for this topic
 	syncConfig, ok := e.SyncConfiguration[topic]
@@ -703,13 +696,13 @@ func (e *Engine) SyncInvalidatedOutputs(ctx context.Context, topic string) error
 		}
 	}
 
-	slog.Info("Unique transactions to update", "topic", topic, "count", len(txidsToUpdate))
-
 	// Try to get updated merkle proofs from peers
 	var successCount int
 
 	// For each transaction that needs updating
 	for txid, outpoint := range txidsToUpdate {
+		var syncSuccess bool
+
 		// Try each peer until we get a valid merkle proof for this transaction
 		for _, peer := range syncConfig.Peers {
 			if peer == e.HostingURL {
@@ -722,34 +715,36 @@ func (e *Engine) SyncInvalidatedOutputs(ctx context.Context, topic string) error
 			// Request node with metadata to get merkle proof
 			node, err := remote.RequestNode(ctx, outpoint, outpoint, true)
 			if err != nil {
-				slog.Debug("Failed to get node from peer", "peer", peer, "txid", txid, "error", err)
 				continue // Try next peer
 			}
 
 			// If we got a merkle proof, update it for the transaction
 			if node.Proof != nil {
+
 				merklePath, err := transaction.NewMerklePathFromHex(*node.Proof)
 				if err != nil {
-					slog.Error("Failed to parse merkle proof", "txid", txid, "error", err)
+					slog.Error("Failed to parse merkle proof", "txid", txid.String(), "error", err)
 					continue // Try next peer
 				}
 
 				// Update the merkle proof using the existing handler (updates all outputs for this transaction)
 				if err := e.HandleNewMerkleProof(ctx, &txid, merklePath); err != nil {
-					slog.Error("Failed to update merkle proof", "txid", txid, "error", err)
+					slog.Error("Failed to update merkle proof", "txid", txid.String(), "error", err)
 					continue // Try next peer
 				}
 
 				successCount++
-				slog.Debug("Updated merkle proof for transaction", "txid", txid, "peer", peer)
+				syncSuccess = true
 				break // Got valid proof, move to next transaction
 			}
 		}
+
+		if !syncSuccess {
+			slog.Warn("Failed to sync transaction from any peer", "txid", txid.String(), "peers_tried", len(syncConfig.Peers))
+		}
 	}
 
-	if successCount > 0 {
-		slog.Info("Completed syncing invalidated outpoints", "topic", topic, "updated_transactions", successCount, "total_outpoints", len(invalidatedOutpoints))
-	} else if len(txidsToUpdate) > 0 {
+	if successCount == 0 && len(txidsToUpdate) > 0 {
 		slog.Warn("Could not update all invalidated outputs", "topic", topic, "remaining", len(txidsToUpdate))
 	}
 
@@ -968,6 +963,14 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 				return err
 			} else {
 				for _, consuming := range consumingOutputs {
+					// Check if consuming transaction has its own merkle path
+					// If it does, it's mined and doesn't include parent transactions anymore
+					if len(consuming.Beef) > 0 {
+						if _, consumingTx, _, err := transaction.ParseBeef(consuming.Beef); err == nil && consumingTx != nil && consumingTx.MerklePath != nil {
+							continue
+						}
+					}
+
 					if err := e.updateMerkleProof(ctx, consuming, txid, proof); err != nil {
 						slog.Error("failed to update merkle proof for consuming output", "consumingTxid", consuming.Outpoint.Txid, "error", err)
 						return err
