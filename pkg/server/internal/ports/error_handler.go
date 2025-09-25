@@ -22,6 +22,7 @@ func ErrorHandler() fiber.ErrorHandler {
 		app.ErrorTypeProviderFailure:      fiber.StatusInternalServerError,
 		app.ErrorTypeRawDataProcessing:    fiber.StatusInternalServerError,
 		app.ErrorTypeUnsupportedOperation: fiber.StatusNotFound,
+		app.ErrorTypeNotFound:             fiber.StatusNotFound,
 	}
 
 	return func(c *fiber.Ctx, err error) error {

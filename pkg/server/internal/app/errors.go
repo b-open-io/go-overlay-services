@@ -17,6 +17,7 @@ var (
 	ErrorTypeOperationTimeout     = ErrorType{"operation-timeout"}
 	ErrorTypeRawDataProcessing    = ErrorType{"raw-data-processing"}
 	ErrorTypeUnsupportedOperation = ErrorType{"unsupported-operation"}
+	ErrorTypeNotFound             = ErrorType{"not-found"}
 )
 
 // Error defines a generic application-layer error that should be translated
@@ -69,6 +70,16 @@ func NewProviderFailureError(err, slug string) Error {
 		slug:      slug,
 		err:       err,
 		errorType: ErrorTypeProviderFailure,
+	}
+}
+
+// NewNotFoundError returns an error that handles resource not found failures,
+// such as when a requested output, transaction, or other resource doesn't exist.
+func NewNotFoundError(err, slug string) Error {
+	return Error{
+		slug:      slug,
+		err:       err,
+		errorType: ErrorTypeNotFound,
 	}
 }
 
