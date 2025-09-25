@@ -793,14 +793,29 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			return nil, err
 		} else {
 			node := &gasp.Node{
-				GraphID:       graphId,
-				RawTx:         tx.Hex(),
-				OutputIndex:   outpoint.Index,
-				AncillaryBeef: output.AncillaryBeef,
+				GraphID:     graphId,
+				RawTx:       tx.Hex(),
+				OutputIndex: outpoint.Index,
 			}
 			if tx.MerklePath != nil {
 				proof := tx.MerklePath.Hex()
 				node.Proof = &proof
+				node.AncillaryBeef = output.AncillaryBeef
+			} else {
+				// For unmined transactions, provide full BEEF as ancillary
+				// Default to output.Beef, but try to merge with ancillary if it exists
+				node.AncillaryBeef = output.Beef
+
+				if len(output.AncillaryBeef) > 0 {
+					// Try to merge ancillary BEEF into the main BEEF
+					if beef, err := transaction.NewBeefFromBytes(output.Beef); err == nil {
+						if err := beef.MergeBeefBytes(output.AncillaryBeef); err == nil {
+							if mergedBytes, err := beef.Bytes(); err == nil {
+								node.AncillaryBeef = mergedBytes
+							}
+						}
+					}
+				}
 			}
 			return node, nil
 
