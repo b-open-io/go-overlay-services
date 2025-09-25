@@ -83,88 +83,77 @@ func NewGASP(params GASPParams) *GASP {
 }
 
 func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
-	slog.Info(fmt.Sprintf("%s Starting sync process. Last interaction timestamp: %f", g.LogPrefix, g.LastInteraction))
-
 	var sharedOutpoints sync.Map
 
-	var initialResponse *InitialResponse
-	for {
-		initialRequest := &InitialRequest{
-			Version: g.Version,
-			Since:   g.LastInteraction,
-			Limit:   limit,
-		}
-		initialResponse, err := g.Remote.GetInitialResponse(ctx, initialRequest)
-		if err != nil {
-			return err
-		}
+	initialRequest := &InitialRequest{
+		Version: g.Version,
+		Since:   g.LastInteraction,
+		Limit:   limit,
+	}
+	initialResponse, err := g.Remote.GetInitialResponse(ctx, initialRequest)
+	if err != nil {
+		return err
+	}
 
-		if len(initialResponse.UTXOList) == 0 {
-			break // No more UTXOs to process
-		}
+	if len(initialResponse.UTXOList) == 0 {
+		// No more UTXOs to process
+		return nil
+	}
 
-		// Extract outpoints from current page for efficient batch lookup
-		pageOutpoints := make([]*transaction.Outpoint, len(initialResponse.UTXOList))
-		for i, utxo := range initialResponse.UTXOList {
-			pageOutpoints[i] = utxo.Outpoint()
-		}
+	// Extract outpoints from current page for efficient batch lookup
+	pageOutpoints := make([]*transaction.Outpoint, len(initialResponse.UTXOList))
+	for i, utxo := range initialResponse.UTXOList {
+		pageOutpoints[i] = utxo.Outpoint()
+	}
 
-		// Check which outpoints we already have
-		hasOutputs, err := g.Storage.HasOutputs(ctx, pageOutpoints)
-		if err != nil {
-			return err
-		}
+	// Check which outpoints we already have
+	hasOutputs, err := g.Storage.HasOutputs(ctx, pageOutpoints)
+	if err != nil {
+		return err
+	}
 
-		var ingestQueue []*Output
-		for i, utxo := range initialResponse.UTXOList {
-			if utxo.Score > g.LastInteraction {
-				g.LastInteraction = utxo.Score
+	var ingestQueue []*Output
+	for i, utxo := range initialResponse.UTXOList {
+		if utxo.Score > g.LastInteraction {
+			g.LastInteraction = utxo.Score
+		}
+		outpoint := utxo.Outpoint()
+
+		// Check if we already have this output using the same index
+		if hasOutputs[i] {
+			// Already have it, mark as shared to avoid re-processing
+			sharedOutpoints.Store(*outpoint, struct{}{})
+		} else {
+			// Don't have it - need to ingest
+			if _, shared := sharedOutpoints.Load(*outpoint); !shared {
+				ingestQueue = append(ingestQueue, utxo)
 			}
+		}
+	}
+
+	// Process all UTXOs from this batch with shared deduplication
+	processingGroup, processingCtx := errgroup.WithContext(ctx)
+	seenNodes := &sync.Map{} // Shared across all UTXOs in this batch
+
+	for _, utxo := range ingestQueue {
+		g.limiter <- struct{}{}
+		utxo := utxo // capture loop variable
+		processingGroup.Go(func() error {
 			outpoint := utxo.Outpoint()
+			defer func() {
+				<-g.limiter
+			}()
 
-			// Check if we already have this output using the same index
-			if hasOutputs[i] {
-				// Already have it, mark as shared to avoid re-processing
-				sharedOutpoints.Store(*outpoint, struct{}{})
-			} else {
-				// Don't have it - need to ingest
-				if _, shared := sharedOutpoints.Load(*outpoint); !shared {
-					ingestQueue = append(ingestQueue, utxo)
-				}
+			if err := g.processUTXOToCompletion(processingCtx, outpoint, seenNodes); err != nil {
+				return fmt.Errorf("error processing UTXO %s: %w", outpoint, err)
 			}
-		}
-
-		// Process all UTXOs from this batch with shared deduplication
-		processingGroup, processingCtx := errgroup.WithContext(ctx)
-		seenNodes := &sync.Map{} // Shared across all UTXOs in this batch
-
-		for _, utxo := range ingestQueue {
-			g.limiter <- struct{}{}
-			utxo := utxo // capture loop variable
-			processingGroup.Go(func() error {
-				outpoint := utxo.Outpoint()
-				defer func() {
-					<-g.limiter
-				}()
-
-				if err := g.processUTXOToCompletion(processingCtx, outpoint, seenNodes); err != nil {
-					return fmt.Errorf("error processing UTXO %s: %w", outpoint, err)
-				}
-				sharedOutpoints.Store(*outpoint, struct{}{})
-				return nil
-			})
-		}
-		slog.Info(fmt.Sprintf("%s Waiting for %d UTXOs to complete processing...", g.LogPrefix, len(ingestQueue)))
-		if err := processingGroup.Wait(); err != nil {
-			return err
-		}
-		slog.Info(fmt.Sprintf("%s Page completed, processed %d UTXOs", g.LogPrefix, len(ingestQueue)))
-
-		// Check if we have more pages to fetch
-		// If we got fewer items than we requested (or no limit was set), we've reached the end
-		if limit == 0 || uint32(len(initialResponse.UTXOList)) < limit {
-			break
-		}
+			sharedOutpoints.Store(*outpoint, struct{}{})
+			return nil
+		})
+	}
+	slog.Info(fmt.Sprintf("%s Processing GASP page: %d UTXOs (since: %.0f)", g.LogPrefix, len(ingestQueue), initialRequest.Since))
+	if err := processingGroup.Wait(); err != nil {
+		return err
 	}
 	// 2. Only do the "reply" half if unidirectional is disabled
 	if !g.Unidirectional && initialResponse != nil {
@@ -214,7 +203,6 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 		}
 	}
 
-	slog.Info(fmt.Sprintf("%s Sync completed!", g.LogPrefix))
 	return nil
 }
 

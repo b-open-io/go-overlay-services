@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"runtime"
 	"slices"
 	"sync"
@@ -120,7 +121,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	if err != nil {
 		return nil, err
 	}
-	if gaspTx.Proof == nil {
+	if gaspTx.Proof == nil || *gaspTx.Proof == "" {
 		for _, input := range tx.Inputs {
 			outpoint := &transaction.Outpoint{
 				Txid:  *input.SourceTXID,
@@ -211,8 +212,9 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *gasp.Nod
 		return err
 	} else {
 		txid := tx.TxID()
-		if gaspTx.Proof != nil {
+		if gaspTx.Proof != nil && *gaspTx.Proof != "" {
 			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
+				slog.Error("Failed to parse merkle path", "error", err, "proofLength", len(*gaspTx.Proof))
 				return err
 			}
 		}
@@ -421,6 +423,14 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 	if node == nil {
 		panic(fmt.Sprintf("GASP DEBUG: getBEEFForNode called with nil node. Total goroutines: %d", runtime.NumGoroutine()))
 	}
+
+	// For unmined transactions (no proof), if ancillaryBeef is provided, use it directly
+	// as it contains the complete BEEF for the unmined transaction
+	if (node.Proof == nil || *node.Proof == "") && len(node.AncillaryBeef) > 0 {
+		// slog.Info("Using ancillaryBeef directly for unmined transaction", "beefSize", len(node.AncillaryBeef))
+		return node.AncillaryBeef, nil
+	}
+
 	var hydrator func(node *GraphNode) (*transaction.Transaction, error)
 	hydrator = func(node *GraphNode) (*transaction.Transaction, error) {
 		if node == nil {
@@ -428,7 +438,7 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 		}
 		if tx, err := transaction.NewTransactionFromHex(node.RawTx); err != nil {
 			return nil, err
-		} else if node.Proof != nil {
+		} else if node.Proof != nil && *node.Proof != "" {
 			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*node.Proof); err != nil {
 				return nil, err
 			}

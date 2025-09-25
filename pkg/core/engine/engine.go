@@ -196,7 +196,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 
 			if admit, err := e.Managers[topic].IdentifyAdmissibleOutputs(ctx, taggedBEEF.Beef, previousCoins); err != nil {
-				slog.Error("failed to identify admissible outputs", "topic", topic, "error", err)
+				slog.Error("failed to identify admissible outputs", "txid", txid.String(), "topic", topic, "mode", string(mode), "error", err)
 				return nil, err
 			} else {
 				if len(admit.AncillaryTxids) > 0 {
@@ -264,7 +264,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	}
 	if mode != SubmitModeHistorical && e.Broadcaster != nil {
 		if _, failure := e.Broadcaster.Broadcast(tx); failure != nil {
-			slog.Error("failed to broadcast transaction", "txid", txid, "error", failure)
+			slog.Error("failed to broadcast transaction", "txid", txid, "mode", string(mode), "error", failure)
 			return nil, failure
 		}
 	}
@@ -640,7 +640,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					return err
 				}
 
-				// Create a new GASP provider for each peer
+				// Create a GASP provider for this peer
 				gaspProvider := gasp.NewGASP(gasp.GASPParams{
 					Storage:         NewOverlayGASPStorage(topic, e, nil),
 					Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),
@@ -651,14 +651,25 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					Topic:           topic,
 				})
 
-				if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
-					slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
-				} else {
-					// Save the updated last interaction score
-					if gaspProvider.LastInteraction > lastInteraction {
+				// Paginate through GASP sync, saving progress after each successful page
+				for {
+					previousLastInteraction := gaspProvider.LastInteraction
+
+					// Sync one page
+					if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
+						slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
+						break // Exit loop on error
+					}
+
+					// Save progress after successful page
+					if gaspProvider.LastInteraction > previousLastInteraction {
 						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err != nil {
 							slog.Error("Failed to update last interaction", "topic", topic, "peer", peer, "error", err)
+							// Continue anyway - we don't want to lose progress
 						}
+					} else {
+						// No progress made, we're done syncing
+						break
 					}
 				}
 			}
