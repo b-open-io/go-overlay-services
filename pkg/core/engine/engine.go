@@ -826,7 +826,8 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 					// Try to merge ancillary BEEF into the main BEEF
 					if beef, _, _, err := transaction.ParseBeef(output.Beef); err == nil {
 						if err := beef.MergeBeefBytes(output.AncillaryBeef); err == nil {
-							if mergedBytes, err := beef.Bytes(); err == nil {
+							// Use AtomicBytes to ensure client can parse with NewTransactionFromBEEF
+							if mergedBytes, err := beef.AtomicBytes(&outpoint.Txid); err == nil {
 								node.AncillaryBeef = mergedBytes
 							}
 						}
