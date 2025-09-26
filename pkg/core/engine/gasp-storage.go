@@ -397,6 +397,7 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 				if state.err != nil {
 					return state.err
 				}
+				slog.Info(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
 			}
 		}
 		return nil

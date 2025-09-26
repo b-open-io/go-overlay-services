@@ -276,8 +276,6 @@ func (g *GASP) SubmitNode(ctx context.Context, node *Node) (requestedInputs *Nod
 }
 
 func (g *GASP) CompleteGraph(ctx context.Context, graphID *transaction.Outpoint) (err error) {
-	slog.Info(fmt.Sprintf("%s Completing newly-synced graph: %s", g.LogPrefix, graphID.String()))
-
 	if err = g.Storage.ValidateGraphAnchor(ctx, graphID); err == nil {
 		slog.Debug(fmt.Sprintf("%s Graph validated for node: %s", g.LogPrefix, graphID.String()))
 		if err := g.Storage.FinalizeGraph(ctx, graphID); err == nil {
