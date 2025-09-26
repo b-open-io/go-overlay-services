@@ -785,6 +785,11 @@ func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest 
 }
 
 func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transaction.Outpoint, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error) {
+	slog.Debug("ProvideForeignGASPNode called",
+		"graphID", graphId.String(),
+		"outpoint", outpoint.String(),
+		"topic", topic)
+
 	var hydrator func(ctx context.Context, output *Output) (*gasp.Node, error)
 	hydrator = func(ctx context.Context, output *Output) (*gasp.Node, error) {
 		if output.Beef == nil {
@@ -834,9 +839,17 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 
 	}
 	if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true); err != nil {
-		slog.Error("failed to find output in ProvideForeignGASPNode", "outpoint", outpoint.String(), "topic", topic, "error", err)
+		slog.Error("failed to find output in ProvideForeignGASPNode",
+			"graphID", graphId.String(),
+			"outpoint", outpoint.String(),
+			"topic", topic,
+			"error", err)
 		return nil, err
 	} else if output == nil {
+		slog.Warn("Output not found in storage",
+			"graphID", graphId.String(),
+			"outpoint", outpoint.String(),
+			"topic", topic)
 		return nil, ErrMissingOutput
 	} else {
 		return hydrator(ctx, output)

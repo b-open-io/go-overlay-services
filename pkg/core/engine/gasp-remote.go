@@ -137,11 +137,13 @@ func (r *OverlayGASPRemote) doNodeRequest(ctx context.Context, graphID *transact
 						Err:        readErr,
 					}
 				}
-				// Log the actual response we're getting
+				// Log the full request and response details on failure
 				slog.Error("RequestNode failed",
 					"status", resp.StatusCode,
 					"body", string(body),
+					"graphID", graphID.String(),
 					"outpoint", outpoint.String(),
+					"metadata", metadata,
 					"endpoint", r.endpointUrl,
 					"topic", r.topic)
 				return nil, &util.HTTPError{
