@@ -669,6 +669,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 						}
 					} else {
 						// No progress made, we're done syncing
+						slog.Info(logPrefix + " Sync completed")
 						break
 					}
 				}
