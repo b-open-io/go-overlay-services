@@ -824,13 +824,23 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 
 				if len(output.AncillaryBeef) > 0 {
 					// Try to merge ancillary BEEF into the main BEEF
-					if beef, err := transaction.NewBeefFromBytes(output.Beef); err == nil {
+					if beef, _, _, err := transaction.ParseBeef(output.Beef); err == nil {
 						if err := beef.MergeBeefBytes(output.AncillaryBeef); err == nil {
 							if mergedBytes, err := beef.Bytes(); err == nil {
 								node.AncillaryBeef = mergedBytes
 							}
 						}
 					}
+				}
+
+				// Validate the ancillary BEEF before sending it
+				if _, _, _, err := transaction.ParseBeef(node.AncillaryBeef); err != nil {
+					slog.Error("Invalid ancillary BEEF for unmined transaction",
+						"graphID", graphId.String(),
+						"outpoint", outpoint.String(),
+						"topic", topic,
+						"error", err)
+					return nil, fmt.Errorf("invalid ancillary BEEF: %w", err)
 				}
 			}
 			return node, nil

@@ -121,29 +121,50 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	if err != nil {
 		return nil, err
 	}
-	if gaspTx.Proof == nil || *gaspTx.Proof == "" {
-		for _, input := range tx.Inputs {
-			outpoint := &transaction.Outpoint{
-				Txid:  *input.SourceTXID,
-				Index: input.SourceTxOutIndex,
-			}
-			response.RequestedInputs[*outpoint] = &gasp.NodeResponseData{
-				Metadata: false,
-			}
-		}
+	// Commented out: This was requesting ALL inputs for unmined transactions
+	// but should use IdentifyNeededInputs to get only relevant inputs
+	// if gaspTx.Proof == nil || *gaspTx.Proof == "" {
+	// 	for _, input := range tx.Inputs {
+	// 		outpoint := &transaction.Outpoint{
+	// 			Txid:  *input.SourceTXID,
+	// 			Index: input.SourceTxOutIndex,
+	// 		}
+	// 		response.RequestedInputs[*outpoint] = &gasp.NodeResponseData{
+	// 			Metadata: false,
+	// 		}
+	// 	}
 
-		return s.stripAlreadyKnowInputs(ctx, response)
-	} else if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
-		return nil, err
-	}
-	if beef, err := transaction.NewBeefFromTransaction(tx); err != nil {
-		return nil, err
-	} else {
-		if len(gaspTx.AncillaryBeef) > 0 {
-			if err := beef.MergeBeefBytes(gaspTx.AncillaryBeef); err != nil {
-				return nil, err
-			}
+	// 	return s.stripAlreadyKnowInputs(ctx, response)
+	// }
+
+	// Process merkle proof if present
+	if gaspTx.Proof != nil && *gaspTx.Proof != "" {
+		if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
+			return nil, err
 		}
+	}
+
+	var beef *transaction.Beef
+	if len(gaspTx.AncillaryBeef) > 0 {
+		// If we have ancillary BEEF, use it as the base (contains full transaction graph)
+		if beef, _, _, err = transaction.ParseBeef(gaspTx.AncillaryBeef); err != nil {
+			return nil, err
+		}
+		// Merge in the transaction we just received
+		if _, err = beef.MergeTransaction(tx); err != nil {
+			return nil, err
+		}
+	} else if tx.MerklePath != nil {
+		// If we have a merkle path but no ancillary BEEF, create BEEF from transaction
+		if beef, err = transaction.NewBeefFromTransaction(tx); err != nil {
+			return nil, err
+		}
+	} else {
+		// Unmined transaction without ancillary BEEF is an error
+		return nil, fmt.Errorf("unmined transaction without ancillary BEEF")
+	}
+
+	if beef != nil {
 		inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
 		for vin, input := range tx.Inputs {
 			inpoints[vin] = &transaction.Outpoint{
