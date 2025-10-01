@@ -146,7 +146,6 @@ var ErrMissingOutput = errors.New("missing-output")
 var ErrInputSpent = errors.New("input-spent")
 
 func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady OnSteakReady) (overlay.Steak, error) {
-	start := time.Now()
 	for _, topic := range taggedBEEF.Topics {
 		if _, ok := e.Managers[topic]; !ok {
 			slog.Error("unknown topic in Submit", "topic", topic, "error", ErrUnknownTopic)
@@ -170,8 +169,6 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		slog.Error("invalid transaction in Submit", "txid", txid, "error", ErrInvalidTransaction)
 		return nil, ErrInvalidTransaction
 	}
-	slog.Debug("transaction validated", "duration", time.Since(start))
-	start = time.Now()
 	steak := make(overlay.Steak, len(taggedBEEF.Topics))
 	topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
 	inpoints := make([]*transaction.Outpoint, 0, len(tx.Inputs))
@@ -213,11 +210,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 
 			if admit, err := e.Managers[topic].IdentifyAdmissibleOutputs(ctx, taggedBEEF.Beef, previousCoins); err != nil {
-				slog.Error("failed to identify admissible outputs", "topic", topic, "error", err)
+				slog.Error("failed to identify admissible outputs", "txid", txid.String(), "topic", topic, "mode", string(mode), "error", err)
 				return nil, err
 			} else {
-				slog.Debug("admissible outputs identified", "duration", time.Since(start))
-				start = time.Now()
 				if len(admit.AncillaryTxids) > 0 {
 					ancillaryBeef := transaction.Beef{
 						Version:      transaction.BEEF_V2,
@@ -281,11 +276,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 		}
 	}
-	slog.Debug("UTXOs marked as spent", "duration", time.Since(start))
-	start = time.Now()
 	if mode != SubmitModeHistorical && e.Broadcaster != nil {
 		if _, failure := e.Broadcaster.Broadcast(tx); failure != nil {
-			slog.Error("failed to broadcast transaction", "txid", txid, "error", failure)
+			slog.Error("failed to broadcast transaction", "txid", txid, "mode", string(mode), "error", failure)
 			return nil, failure
 		}
 	}
@@ -363,8 +356,6 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				}
 			}
 		}
-		slog.Debug("outputs added", "duration", time.Since(start))
-		start = time.Now()
 		for _, output := range outputsConsumed {
 			output.ConsumedBy = append(output.ConsumedBy, newOutpoints...)
 
@@ -373,19 +364,13 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				return nil, err
 			}
 		}
-		slog.Debug("consumed by references updated", "duration", time.Since(start))
-		start = time.Now()
-		// Insert applied transaction if any changes were made
-		if len(admit.OutputsToAdmit) > 0 || len(admit.CoinsRemoved) > 0 || len(admit.CoinsToRetain) > 0 || len(admit.AncillaryTxids) > 0 {
-			if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
-				Txid:  txid,
-				Topic: topic,
-			}); err != nil {
-				slog.Error("failed to insert applied transaction", "topic", topic, "txid", txid, "error", err)
-				return nil, err
-			}
+		if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
+			Txid:  txid,
+			Topic: topic,
+		}); err != nil {
+			slog.Error("failed to insert applied transaction", "topic", topic, "txid", txid, "error", err)
+			return nil, err
 		}
-		slog.Debug("transaction applied", "duration", time.Since(start))
 	}
 	if e.Advertiser == nil || mode == SubmitModeHistorical {
 		return steak, nil
@@ -788,7 +773,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					return err
 				}
 
-				// Create a new GASP provider for each peer
+				// Create a GASP provider for this peer
 				gaspProvider := gasp.NewGASP(gasp.GASPParams{
 					Storage:         NewOverlayGASPStorage(topic, e, nil),
 					Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),
@@ -796,23 +781,118 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					LogPrefix:       &logPrefix,
 					Unidirectional:  true,
 					Concurrency:     syncEndpoints.Concurrency,
+					Topic:           topic,
 				})
 
-				if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
-					slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
-				} else {
-					slog.Info("GASP sync successful", "topic", topic, "peer", peer)
+				// Paginate through GASP sync, saving progress after each successful page
+				for {
+					previousLastInteraction := gaspProvider.LastInteraction
 
-					// Save the updated last interaction score
-					if gaspProvider.LastInteraction > lastInteraction {
-						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err == nil {
-							slog.Info("Updated last interaction score", "topic", topic, "peer", peer, "score", gaspProvider.LastInteraction)
+					// Sync one page
+					if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
+						slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
+						break // Exit loop on error
+					}
+
+					// Save progress after successful page
+					if gaspProvider.LastInteraction > previousLastInteraction {
+						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err != nil {
+							slog.Error("Failed to update last interaction", "topic", topic, "peer", peer, "error", err)
+							// Continue anyway - we don't want to lose progress
 						}
+					} else {
+						// No progress made, we're done syncing
+						slog.Info(logPrefix + " Sync completed")
+						break
 					}
 				}
 			}
 		}
 	}
+	return nil
+}
+
+// SyncInvalidatedOutputs finds outputs with invalidated merkle proofs and syncs them with remote peers
+func (e *Engine) SyncInvalidatedOutputs(ctx context.Context, topic string) error {
+	// Find outpoints with invalidated merkle proofs
+	invalidatedOutpoints, err := e.Storage.FindOutpointsByMerkleState(ctx, topic, MerkleStateInvalidated, 1000)
+	if err != nil {
+		slog.Error("Failed to find invalidated outputs", "topic", topic, "error", err)
+		return err
+	}
+
+	if len(invalidatedOutpoints) == 0 {
+		return nil
+	}
+
+	// Get sync configuration for this topic
+	syncConfig, ok := e.SyncConfiguration[topic]
+	if !ok || len(syncConfig.Peers) == 0 {
+		slog.Warn("No peers configured for topic", "topic", topic)
+		return nil
+	}
+
+	// Group outpoints by transaction ID to avoid duplicate merkle proof requests
+	txidsToUpdate := make(map[chainhash.Hash]*transaction.Outpoint)
+	for _, outpoint := range invalidatedOutpoints {
+		if _, exists := txidsToUpdate[outpoint.Txid]; !exists {
+			// Use the first outpoint for this txid as representative
+			txidsToUpdate[outpoint.Txid] = outpoint
+		}
+	}
+
+	// Try to get updated merkle proofs from peers
+	var successCount int
+
+	// For each transaction that needs updating
+	for txid, outpoint := range txidsToUpdate {
+		var syncSuccess bool
+
+		// Try each peer until we get a valid merkle proof for this transaction
+		for _, peer := range syncConfig.Peers {
+			if peer == e.HostingURL {
+				continue // Skip self
+			}
+
+			// Create a remote client for this peer
+			remote := NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8)
+
+			// Request node with metadata to get merkle proof
+			node, err := remote.RequestNode(ctx, outpoint, outpoint, true)
+			if err != nil {
+				continue // Try next peer
+			}
+
+			// If we got a merkle proof, update it for the transaction
+			if node.Proof != nil {
+
+				merklePath, err := transaction.NewMerklePathFromHex(*node.Proof)
+				if err != nil {
+					slog.Error("Failed to parse merkle proof", "txid", txid.String(), "error", err)
+					continue // Try next peer
+				}
+
+				// Update the merkle proof using the existing handler (updates all outputs for this transaction)
+				if err := e.HandleNewMerkleProof(ctx, &txid, merklePath); err != nil {
+					slog.Error("Failed to update merkle proof", "txid", txid.String(), "error", err)
+					continue // Try next peer
+				}
+
+				successCount++
+				syncSuccess = true
+				break // Got valid proof, move to next transaction
+			}
+		}
+
+		if !syncSuccess {
+			slog.Warn("Failed to sync transaction from any peer", "txid", txid.String(), "peers_tried", len(syncConfig.Peers))
+		}
+	}
+
+	if successCount == 0 && len(txidsToUpdate) > 0 {
+		slog.Warn("Could not update all invalidated outputs", "topic", topic, "remaining", len(txidsToUpdate))
+	}
+
 	return nil
 }
 
@@ -839,6 +919,11 @@ func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest 
 }
 
 func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transaction.Outpoint, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error) {
+	slog.Debug("ProvideForeignGASPNode called",
+		"graphID", graphId.String(),
+		"outpoint", outpoint.String(),
+		"topic", topic)
+
 	var hydrator func(ctx context.Context, output *Output) (*gasp.Node, error)
 	hydrator = func(ctx context.Context, output *Output) (*gasp.Node, error) {
 		if output.Beef == nil {
@@ -858,14 +943,40 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			return nil, err
 		} else {
 			node := &gasp.Node{
-				GraphID:       graphId,
-				RawTx:         tx.Hex(),
-				OutputIndex:   outpoint.Index,
-				AncillaryBeef: output.AncillaryBeef,
+				GraphID:     graphId,
+				RawTx:       tx.Hex(),
+				OutputIndex: outpoint.Index,
 			}
 			if tx.MerklePath != nil {
 				proof := tx.MerklePath.Hex()
 				node.Proof = &proof
+				node.AncillaryBeef = output.AncillaryBeef
+			} else {
+				// For unmined transactions, provide full BEEF as ancillary
+				// Default to output.Beef, but try to merge with ancillary if it exists
+				node.AncillaryBeef = output.Beef
+
+				if len(output.AncillaryBeef) > 0 {
+					// Try to merge ancillary BEEF into the main BEEF
+					if beef, _, _, err := transaction.ParseBeef(output.Beef); err == nil {
+						if err := beef.MergeBeefBytes(output.AncillaryBeef); err == nil {
+							// Use AtomicBytes to ensure client can parse with NewTransactionFromBEEF
+							if mergedBytes, err := beef.AtomicBytes(&outpoint.Txid); err == nil {
+								node.AncillaryBeef = mergedBytes
+							}
+						}
+					}
+				}
+
+				// Validate the ancillary BEEF before sending it
+				if _, _, _, err := transaction.ParseBeef(node.AncillaryBeef); err != nil {
+					slog.Error("Invalid ancillary BEEF for unmined transaction",
+						"graphID", graphId.String(),
+						"outpoint", outpoint.String(),
+						"topic", topic,
+						"error", err)
+					return nil, fmt.Errorf("invalid ancillary BEEF: %w", err)
+				}
 			}
 			return node, nil
 
@@ -873,9 +984,17 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 
 	}
 	if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true); err != nil {
-		slog.Error("failed to find output in ProvideForeignGASPNode", "outpoint", outpoint.String(), "topic", topic, "error", err)
+		slog.Error("failed to find output in ProvideForeignGASPNode",
+			"graphID", graphId.String(),
+			"outpoint", outpoint.String(),
+			"topic", topic,
+			"error", err)
 		return nil, err
 	} else if output == nil {
+		slog.Warn("Output not found in storage",
+			"graphID", graphId.String(),
+			"outpoint", outpoint.String(),
+			"topic", topic)
 		return nil, ErrMissingOutput
 	} else {
 		return hydrator(ctx, output)
@@ -1028,6 +1147,14 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 				return err
 			} else {
 				for _, consuming := range consumingOutputs {
+					// Check if consuming transaction has its own merkle path
+					// If it does, it's mined and doesn't include parent transactions anymore
+					if len(consuming.Beef) > 0 {
+						if _, consumingTx, _, err := transaction.ParseBeef(consuming.Beef); err == nil && consumingTx != nil && consumingTx.MerklePath != nil {
+							continue
+						}
+					}
+
 					if err := e.updateMerkleProof(ctx, consuming, txid, proof); err != nil {
 						slog.Error("failed to update merkle proof for consuming output", "consumingTxid", consuming.Outpoint.Txid, "error", err)
 						return err
@@ -1041,6 +1168,19 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 }
 
 func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
+	// Validate the merkle proof before processing
+	if merkleRoot, err := proof.ComputeRoot(txid); err != nil {
+		slog.Error("failed to compute merkle root from proof", "txid", txid, "error", err)
+		return err
+	} else if valid, err := e.ChainTracker.IsValidRootForHeight(ctx, merkleRoot, proof.BlockHeight); err != nil {
+		slog.Error("error validating merkle root for height", "txid", txid, "blockHeight", proof.BlockHeight, "error", err)
+		return err
+	} else if !valid {
+		err := fmt.Errorf("invalid merkle proof for transaction %s at block height %d", txid, proof.BlockHeight)
+		slog.Error("merkle proof validation failed", "txid", txid, "blockHeight", proof.BlockHeight, "error", err)
+		return err
+	}
+
 	if outputs, err := e.Storage.FindOutputsForTransaction(ctx, txid, true); err != nil {
 		slog.Error("failed to find outputs for transaction in HandleNewMerkleProof", "txid", txid, "error", err)
 		return err

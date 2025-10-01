@@ -15,22 +15,33 @@ import (
 type BasicMiddlewareGroupConfig struct {
 	OctetStreamLimit int64 // Max allowed body size for octet-stream requests.
 	EnableStackTrace bool  // Enable stack traces in panic recovery middleware.
+	IncludeLogger    bool  // Include request logger middleware. Default is false to avoid duplicate logging.
 }
 
 // BasicMiddlewareGroup returns a list of preconfigured middleware for the HTTP server.
-// It includes logging, CORS, request ID generation, panic recovery, PProf, request size limiting, health check.
+// It includes CORS, request ID generation, panic recovery, PProf, request size limiting, health check.
+// Optionally includes logging based on configuration.
 func BasicMiddlewareGroup(cfg BasicMiddlewareGroupConfig) []fiber.Handler {
-	return []fiber.Handler{
+	handlers := []fiber.Handler{
 		requestid.New(),
 		idempotency.New(),
 		cors.New(),
 		recover.New(recover.Config{EnableStackTrace: cfg.EnableStackTrace}),
-		logger.New(logger.Config{
+	}
+
+	// Only include logger if explicitly requested
+	if cfg.IncludeLogger {
+		handlers = append(handlers, logger.New(logger.Config{
 			Format:     "date=${time} request_id=${locals:requestid} status=${status} method=${method} path=${path} err=${error}\n",
 			TimeFormat: "02-Jan-2006 15:04:05",
-		}),
+		}))
+	}
+
+	handlers = append(handlers,
 		healthcheck.New(),
 		pprof.New(pprof.Config{Prefix: "/api/v1"}),
 		LimitOctetStreamBodyMiddleware(cfg.OctetStreamLimit),
-	}
+	)
+
+	return handlers
 }

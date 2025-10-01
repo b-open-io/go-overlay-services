@@ -11,6 +11,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// GetErrorHandler returns the error handler that translates application-level errors
+// into appropriate HTTP status codes and JSON responses.
+// Use this in your fiber.Config when creating the app if you want proper error handling.
+func GetErrorHandler() fiber.ErrorHandler {
+	return ports.ErrorHandler()
+}
+
 // DefaultRegisterRoutesConfig provides a default configuration with reasonable values for local development.
 var DefaultRegisterRoutesConfig = RegisterRoutesConfig{
 	ARCAPIKey:        "",
@@ -38,6 +45,11 @@ type RegisterRoutesConfig struct {
 	// OctetStreamLimit defines the maximum size (in bytes) for reading applicaction/octet-stream
 	// request bodies. By default, it is set to 1GB to protect against excessively large payloads.
 	OctetStreamLimit int64
+
+	// IncludeLogger determines whether to include the built-in request logger middleware.
+	// When false (default), the app owner should provide their own logger.
+	// When true, includes a logger with request_id, status, method, path, and error logging.
+	IncludeLogger bool
 }
 
 // RegisterRoutesWithErrorHandler wraps RegisterRoutes by injecting a predefined error handler
@@ -86,6 +98,7 @@ func RegisterRoutes(app *fiber.App, cfg *RegisterRoutesConfig) *fiber.App {
 		GlobalMiddleware: middleware.BasicMiddlewareGroup(middleware.BasicMiddlewareGroupConfig{
 			EnableStackTrace: true,
 			OctetStreamLimit: cfg.OctetStreamLimit,
+			IncludeLogger:    cfg.IncludeLogger,
 		}),
 	})
 

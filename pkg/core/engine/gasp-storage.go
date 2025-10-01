@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"runtime"
 	"slices"
 	"sync"
@@ -67,6 +68,21 @@ func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since float64, 
 	}
 }
 
+func (s *OverlayGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint) ([]bool, error) {
+	// Use FindOutputs to check existence - don't need BEEF for existence check
+	outputs, err := s.Engine.Storage.FindOutputs(ctx, outpoints, s.Topic, nil, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to boolean array - true if output exists, false if nil
+	result := make([]bool, len(outputs))
+	for i, output := range outputs {
+		result[i] = output != nil
+	}
+	return result, nil
+}
+
 func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
 	if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, nil, nil, true); err != nil {
 		return nil, err
@@ -105,29 +121,50 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	if err != nil {
 		return nil, err
 	}
-	if gaspTx.Proof == nil {
-		for _, input := range tx.Inputs {
-			outpoint := &transaction.Outpoint{
-				Txid:  *input.SourceTXID,
-				Index: input.SourceTxOutIndex,
-			}
-			response.RequestedInputs[*outpoint] = &gasp.NodeResponseData{
-				Metadata: false,
-			}
-		}
+	// Commented out: This was requesting ALL inputs for unmined transactions
+	// but should use IdentifyNeededInputs to get only relevant inputs
+	// if gaspTx.Proof == nil || *gaspTx.Proof == "" {
+	// 	for _, input := range tx.Inputs {
+	// 		outpoint := &transaction.Outpoint{
+	// 			Txid:  *input.SourceTXID,
+	// 			Index: input.SourceTxOutIndex,
+	// 		}
+	// 		response.RequestedInputs[*outpoint] = &gasp.NodeResponseData{
+	// 			Metadata: false,
+	// 		}
+	// 	}
 
-		return s.stripAlreadyKnowInputs(ctx, response)
-	} else if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
-		return nil, err
-	}
-	if beef, err := transaction.NewBeefFromTransaction(tx); err != nil {
-		return nil, err
-	} else {
-		if len(gaspTx.AncillaryBeef) > 0 {
-			if err := beef.MergeBeefBytes(gaspTx.AncillaryBeef); err != nil {
-				return nil, err
-			}
+	// 	return s.stripAlreadyKnowInputs(ctx, response)
+	// }
+
+	// Process merkle proof if present
+	if gaspTx.Proof != nil && *gaspTx.Proof != "" {
+		if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
+			return nil, err
 		}
+	}
+
+	var beef *transaction.Beef
+	if len(gaspTx.AncillaryBeef) > 0 {
+		// If we have ancillary BEEF, use it as the base (contains full transaction graph)
+		if beef, _, _, err = transaction.ParseBeef(gaspTx.AncillaryBeef); err != nil {
+			return nil, err
+		}
+		// Merge in the transaction we just received
+		if _, err = beef.MergeTransaction(tx); err != nil {
+			return nil, err
+		}
+	} else if tx.MerklePath != nil {
+		// If we have a merkle path but no ancillary BEEF, create BEEF from transaction
+		if beef, err = transaction.NewBeefFromTransaction(tx); err != nil {
+			return nil, err
+		}
+	} else {
+		// Unmined transaction without ancillary BEEF is an error
+		return nil, fmt.Errorf("unmined transaction without ancillary BEEF")
+	}
+
+	if beef != nil {
 		inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
 		for vin, input := range tx.Inputs {
 			inpoints[vin] = &transaction.Outpoint{
@@ -205,8 +242,9 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *gasp.Nod
 		return err
 	} else {
 		txid := tx.TxID()
-		if gaspTx.Proof != nil {
+		if gaspTx.Proof != nil && *gaspTx.Proof != "" {
 			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
+				slog.Error("Failed to parse merkle path", "error", err, "proofLength", len(*gaspTx.Proof))
 				return err
 			}
 		}
@@ -368,6 +406,7 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 				if state.err != nil {
 					return state.err
 				}
+				slog.Info(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
 			}
 		}
 		return nil
@@ -415,6 +454,14 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 	if node == nil {
 		panic(fmt.Sprintf("GASP DEBUG: getBEEFForNode called with nil node. Total goroutines: %d", runtime.NumGoroutine()))
 	}
+
+	// For unmined transactions (no proof), if ancillaryBeef is provided, use it directly
+	// as it contains the complete BEEF for the unmined transaction
+	if (node.Proof == nil || *node.Proof == "") && len(node.AncillaryBeef) > 0 {
+		// slog.Info("Using ancillaryBeef directly for unmined transaction", "beefSize", len(node.AncillaryBeef))
+		return node.AncillaryBeef, nil
+	}
+
 	var hydrator func(node *GraphNode) (*transaction.Transaction, error)
 	hydrator = func(node *GraphNode) (*transaction.Transaction, error) {
 		if node == nil {
@@ -422,7 +469,7 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 		}
 		if tx, err := transaction.NewTransactionFromHex(node.RawTx); err != nil {
 			return nil, err
-		} else if node.Proof != nil {
+		} else if node.Proof != nil && *node.Proof != "" {
 			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*node.Proof); err != nil {
 				return nil, err
 			}

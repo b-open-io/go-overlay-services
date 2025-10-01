@@ -53,4 +53,15 @@ type Storage interface {
 	// Retrieves the last interaction score for a given host and topic
 	// Returns 0 if no record exists
 	GetLastInteraction(ctx context.Context, host string, topic string) (float64, error)
+
+	// Finds outpoints with a specific merkle validation state
+	// Returns only the outpoints (not full output data) for efficiency
+	FindOutpointsByMerkleState(ctx context.Context, topic string, state MerkleState, limit uint32) ([]*transaction.Outpoint, error)
+
+	// Reconciles validation state for all outputs at a given block height
+	// Compares outputs' merkle roots with the authoritative root and updates states:
+	// - Matching roots become Validated (or Immutable if old enough)
+	// - Non-matching roots become Invalidated
+	// - Null roots remain Unmined
+	ReconcileMerkleRoot(ctx context.Context, topic string, blockHeight uint32, merkleRoot *chainhash.Hash) error
 }

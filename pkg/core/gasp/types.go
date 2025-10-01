@@ -47,11 +47,11 @@ type Node struct {
 	GraphID        *transaction.Outpoint `json:"graphID"`
 	RawTx          string                `json:"rawTx"`
 	OutputIndex    uint32                `json:"outputIndex"`
-	Proof          *string               `json:"proof"`
-	TxMetadata     string                `json:"txMetadata"`
-	OutputMetadata string                `json:"outputMetadata"`
-	Inputs         map[string]*Input     `json:"inputs"`
-	AncillaryBeef  []byte                `json:"ancillaryBeef"`
+	Proof          *string               `json:"proof,omitempty"`
+	TxMetadata     string                `json:"txMetadata,omitempty"`
+	OutputMetadata string                `json:"outputMetadata,omitempty"`
+	Inputs         map[string]*Input     `json:"inputs,omitempty"`
+	AncillaryBeef  []byte                `json:"ancillaryBeef,omitempty"`
 }
 
 type NodeResponseData struct {

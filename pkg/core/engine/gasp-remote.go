@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -43,11 +44,13 @@ func NewOverlayGASPRemote(endpointUrl, topic string, httpClient util.HTTPClient,
 }
 
 func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error) {
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(request); err != nil {
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
 		slog.Error("failed to encode GASP initial request", "endpoint", r.endpointUrl, "topic", r.topic, "error", err)
 		return nil, err
-	} else if req, err := http.NewRequest("POST", r.endpointUrl+"/requestSyncResponse", io.NopCloser(&buf)); err != nil {
+	}
+
+	if req, err := http.NewRequest("POST", r.endpointUrl+"/requestSyncResponse", bytes.NewReader(requestJSON)); err != nil {
 		slog.Error("failed to create HTTP request for GASP initial response", "endpoint", r.endpointUrl, "topic", r.topic, "error", err)
 		return nil, err
 	} else {
@@ -58,9 +61,17 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gas
 		} else {
 			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
+				// Read error message from response body
+				body, readErr := io.ReadAll(resp.Body)
+				if readErr != nil {
+					return nil, &util.HTTPError{
+						StatusCode: resp.StatusCode,
+						Err:        readErr,
+					}
+				}
 				return nil, &util.HTTPError{
 					StatusCode: resp.StatusCode,
-					Err:        err,
+					Err:        fmt.Errorf("server error: %s", string(body)),
 				}
 			}
 			result := &gasp.InitialResponse{}
@@ -118,9 +129,26 @@ func (r *OverlayGASPRemote) doNodeRequest(ctx context.Context, graphID *transact
 		} else {
 			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
+				// Read error message from response body
+				body, readErr := io.ReadAll(resp.Body)
+				if readErr != nil {
+					return nil, &util.HTTPError{
+						StatusCode: resp.StatusCode,
+						Err:        readErr,
+					}
+				}
+				// Log the full request and response details on failure
+				slog.Error("RequestNode failed",
+					"status", resp.StatusCode,
+					"body", string(body),
+					"graphID", graphID.String(),
+					"outpoint", outpoint.String(),
+					"metadata", metadata,
+					"endpoint", r.endpointUrl,
+					"topic", r.topic)
 				return nil, &util.HTTPError{
 					StatusCode: resp.StatusCode,
-					Err:        errors.New("requesting GASP node failed"),
+					Err:        fmt.Errorf("server error: %s", string(body)),
 				}
 			}
 			result := &gasp.Node{}

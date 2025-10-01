@@ -195,6 +195,34 @@ func (m *mockGASPStorage) FinalizeGraph(ctx context.Context, graphID *transactio
 	return nil
 }
 
+func (m *mockGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint) ([]bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	result := make([]bool, len(outpoints))
+	for i, outpoint := range outpoints {
+		found := false
+
+		// Check in known store
+		for _, utxo := range m.knownStore {
+			if utxo.Txid.Equal(outpoint.Txid) && utxo.OutputIndex == outpoint.Index {
+				found = true
+				break
+			}
+		}
+
+		// Check in temp store if not found
+		if !found {
+			if _, exists := m.tempGraphStore[*outpoint]; exists {
+				found = true
+			}
+		}
+
+		result[i] = found
+	}
+	return result, nil
+}
+
 type mockGASPRemote struct {
 	targetGASP          *gasp.GASP
 	initialResponseFunc func(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error)

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/transaction"
@@ -51,6 +52,13 @@ func (s *RequestForeignGASPNodeService) RequestForeignGASPNode(ctx context.Conte
 		Txid:  *txID,
 	}, dto.Topic)
 	if err != nil {
+		// Check if the error is due to missing output
+		if err == engine.ErrMissingOutput {
+			return nil, NewNotFoundError(
+				err.Error(),
+				"The requested output does not exist or is not available in this overlay.",
+			)
+		}
 		return nil, NewForeignGASPNodeProviderError(err)
 	}
 	return node, nil
