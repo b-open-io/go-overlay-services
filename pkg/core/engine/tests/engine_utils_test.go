@@ -170,7 +170,8 @@ func (f fakeManager) GetDocumentation() string {
 
 type fakeChainTracker struct {
 	verifyFunc             func(tx *transaction.Transaction, options ...any) (bool, error)
-	isValidRootForHeight   func(root *chainhash.Hash, height uint32) (bool, error)
+	isValidRootForHeight   func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error)
+	currentHeightFunc      func(ctx context.Context) (uint32, error)
 	findHeaderFunc         func(height uint32) ([]byte, error)
 	findPreviousHeaderFunc func(tx *transaction.Transaction) ([]byte, error)
 }
@@ -182,9 +183,9 @@ func (f fakeChainTracker) Verify(tx *transaction.Transaction, options ...any) (b
 	panic("func not defined")
 }
 
-func (f fakeChainTracker) IsValidRootForHeight(root *chainhash.Hash, height uint32) (bool, error) {
+func (f fakeChainTracker) IsValidRootForHeight(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
 	if f.isValidRootForHeight != nil {
-		return f.isValidRootForHeight(root, height)
+		return f.isValidRootForHeight(ctx, root, height)
 	}
 	panic("func not defined")
 }
@@ -203,13 +204,20 @@ func (f fakeChainTracker) FindPreviousHeader(tx *transaction.Transaction) ([]byt
 	panic("func not defined")
 }
 
+func (f fakeChainTracker) CurrentHeight(ctx context.Context) (uint32, error) {
+	if f.currentHeightFunc != nil {
+		return f.currentHeightFunc(ctx)
+	}
+	return 0, nil
+}
+
 type fakeChainTrackerSPVFail struct{}
 
 func (f fakeChainTrackerSPVFail) Verify(tx *transaction.Transaction, options ...any) (bool, error) {
 	panic("func not defined")
 }
 
-func (f fakeChainTrackerSPVFail) IsValidRootForHeight(root *chainhash.Hash, height uint32) (bool, error) {
+func (f fakeChainTrackerSPVFail) IsValidRootForHeight(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
 	panic("func not defined")
 }
 
@@ -219,6 +227,10 @@ func (f fakeChainTrackerSPVFail) FindHeader(height uint32) ([]byte, error) {
 
 func (f fakeChainTrackerSPVFail) FindPreviousHeader(tx *transaction.Transaction) ([]byte, error) {
 	panic("func not defined")
+}
+
+func (f fakeChainTrackerSPVFail) CurrentHeight(ctx context.Context) (uint32, error) {
+	return 0, nil
 }
 
 type fakeBroadcasterFail struct {
@@ -378,9 +390,9 @@ func createDummyValidTaggedBEEF(t *testing.T) (overlay.TaggedBEEF, *chainhash.Ha
 
 	beef := &transaction.Beef{
 		Version: transaction.BEEF_V2,
-		Transactions: map[string]*transaction.BeefTx{
-			prevTxID.String():    {Transaction: prevTx},
-			currentTxID.String(): {Transaction: currentTx},
+		Transactions: map[chainhash.Hash]*transaction.BeefTx{
+			*prevTxID:    {Transaction: prevTx},
+			*currentTxID: {Transaction: currentTx},
 		},
 	}
 	beefBytes, err := beef.AtomicBytes(currentTxID)
@@ -429,9 +441,9 @@ func createDummyBeefWithInputs(t *testing.T) []byte {
 
 	beef := &transaction.Beef{
 		Version: transaction.BEEF_V2,
-		Transactions: map[string]*transaction.BeefTx{
-			prevTx.TxID().String():    {Transaction: prevTx},
-			currentTx.TxID().String(): {Transaction: currentTx},
+		Transactions: map[chainhash.Hash]*transaction.BeefTx{
+			*prevTx.TxID():    {Transaction: prevTx},
+			*currentTx.TxID(): {Transaction: currentTx},
 		},
 	}
 

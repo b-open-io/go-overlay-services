@@ -51,7 +51,7 @@ func TestEngine_Submit_Success(t *testing.T) {
 			},
 		},
 		ChainTracker: fakeChainTracker{
-			isValidRootForHeight: func(root *chainhash.Hash, height uint32) (bool, error) {
+			isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
 				return true, nil
 			},
 		},
@@ -169,7 +169,7 @@ func TestEngine_Submit_DuplicateTransaction_ShouldReturnEmptySteak(t *testing.T)
 			},
 		},
 		ChainTracker: fakeChainTracker{
-			isValidRootForHeight: func(root *chainhash.Hash, height uint32) (bool, error) {
+			isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
 				return true, nil
 			},
 		},
@@ -245,7 +245,7 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 			verifyFunc: func(tx *transaction.Transaction, options ...any) (bool, error) {
 				return true, nil
 			},
-			isValidRootForHeight: func(root *chainhash.Hash, height uint32) (bool, error) {
+			isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
 				return true, nil
 			},
 		},
