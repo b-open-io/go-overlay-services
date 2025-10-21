@@ -1,5 +1,5 @@
 # 🌐 Overlay Services
-> This standalone HTTP server provides a customizable interface for interacting with [**Overlay Services**](https://docs.google.com/document/d/1zxGol7X4Zdb599oTg8zIK-lQOiZQgQadOIXvkSDKEfc/edit?pli=1&tab=t.0) built on top of the Bitcoin SV blockchain.
+> Custom HTTP server for interacting with [**Overlay Services**](https://docs.google.com/document/d/1zxGol7X4Zdb599oTg8zIK-lQOiZQgQadOIXvkSDKEfc/edit?pli=1&tab=t.0) on the Bitcoin SV blockchain.
 
 <table>
   <thead>
