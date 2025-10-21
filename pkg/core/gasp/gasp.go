@@ -456,7 +456,7 @@ func (g *GASP) runProcessingWorker() {
 			}()
 
 			ctx := context.Background()
-			if err := g.processUTXOToCompletion(ctx, op, seenNodes); err != nil {
+			if err := g.processUTXOToCompletion(ctx, op, nil, seenNodes); err != nil {
 				slog.Error(fmt.Sprintf("%s Error processing UTXO %s: %v", g.LogPrefix, op, err))
 			}
 
