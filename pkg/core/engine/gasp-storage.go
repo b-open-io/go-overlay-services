@@ -123,19 +123,19 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	}
 	// Commented out: This was requesting ALL inputs for unmined transactions
 	// but should use IdentifyNeededInputs to get only relevant inputs
-	// if gaspTx.Proof == nil || *gaspTx.Proof == "" {
-	// 	for _, input := range tx.Inputs {
-	// 		outpoint := &transaction.Outpoint{
-	// 			Txid:  *input.SourceTXID,
-	// 			Index: input.SourceTxOutIndex,
-	// 		}
-	// 		response.RequestedInputs[*outpoint] = &gasp.NodeResponseData{
-	// 			Metadata: false,
-	// 		}
-	// 	}
+	if gaspTx.Proof == nil || *gaspTx.Proof == "" {
+		for _, input := range tx.Inputs {
+			outpoint := &transaction.Outpoint{
+				Txid:  *input.SourceTXID,
+				Index: input.SourceTxOutIndex,
+			}
+			response.RequestedInputs[*outpoint] = &gasp.NodeResponseData{
+				Metadata: false,
+			}
+		}
 
-	// 	return s.stripAlreadyKnowInputs(ctx, response)
-	// }
+		return s.stripAlreadyKnowInputs(ctx, response)
+	}
 
 	// Process merkle proof if present
 	if gaspTx.Proof != nil && *gaspTx.Proof != "" {
@@ -159,10 +159,10 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 		if beef, err = transaction.NewBeefFromTransaction(tx); err != nil {
 			return nil, err
 		}
-	} else {
+	} /* else {
 		// Unmined transaction without ancillary BEEF is an error
 		return nil, fmt.Errorf("unmined transaction without ancillary BEEF")
-	}
+	}*/
 
 	if beef != nil {
 		inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
@@ -188,10 +188,12 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 
 		if beefBytes, err := beef.AtomicBytes(tx.TxID()); err != nil {
 			return nil, err
-		} else if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+		} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
 			return nil, err
 		} else if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
-			if neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes); err != nil {
+			if _, ok := s.Engine.Managers[s.Topic]; !ok {
+				return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
+			} else if neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes); err != nil {
 				return nil, err
 			} else {
 				for _, outpoint := range neededInputs {
@@ -205,6 +207,13 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	}
 
 	return response, nil
+}
+
+func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+	if _, ok := s.Engine.Managers[s.Topic]; !ok {
+		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic (identify admissible outputs): " + s.Topic)
+	}
+	return s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
 }
 
 func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {
@@ -307,7 +316,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 						}
 					}
 				}
-				if admit, err := s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+				if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
 					return err
 				} else {
 					for _, vout := range admit.OutputsToAdmit {

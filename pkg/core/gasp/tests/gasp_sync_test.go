@@ -423,7 +423,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		// given
 		ctx := context.Background()
 		utxo1 := createMockUTXO("mock_sender1_rawtx1", 0, 111)
-		utxo2 := createMockUTXO("mock_sender2_rawtx1", 0, 222)
+		utxo2 := createMockUTXO("mock_sender2_rawtx1", 1, 222)
 
 		storage1 := newMockGASPStorage([]*mockUTXO{utxo1, utxo2})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
@@ -440,8 +440,10 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		// then
 		require.NoError(t, err)
 
-		result1, _ := storage1.FindKnownUTXOs(ctx, 0, 0)
-		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
+		result1, err := storage1.FindKnownUTXOs(ctx, 0, 0)
+		require.NoError(t, err)
+		result2, err := storage2.FindKnownUTXOs(ctx, 0, 0)
+		require.NoError(t, err)
 
 		require.Len(t, result2, 2)
 		require.Equal(t, len(result1), len(result2))
