@@ -93,44 +93,44 @@
 - **Standalone HTTP Server**
   Operates as a self-contained server with customizable configuration and overlay engine layers.
 
-- **📖 OpenAPI Integration**
+- **OpenAPI Integration**
   Supports OpenAPI specifications with an interactive Swagger UI for exploring and testing endpoints.
 
-- **🗂️ Flexible Configuration Formats**
+- **Flexible Configuration Formats**
   Allows importing and exporting configuration using common formats such as `.env`, `.yaml`, and `.json`.
 
-- **📊 Real-Time Observability**
+- **Real-Time Observability**
   Provides basic real-time observability and performance monitoring out of the box.
 
 <br>
 
 ### Middleware & Built-in Components
 
-- **🔎 Request Tracing**
+- **Request Tracing**
   Attaches a unique `request ID` to every incoming request for consistent traceability across logs and systems.
 
-- **🔄 Idempotency Support**
+- **Idempotency Support**
   Enables safe request retries by ensuring idempotent behavior for designated endpoints.
 
-- **🌐 CORS Handling**
+- **CORS Handling**
   Manages cross-origin resource sharing (CORS) to support web applications securely.
 
-- **🚨 Panic Recovery**
+- **Panic Recovery**
   Catches and logs panics during request handling, with optional stack trace support.
 
-- **📝 Structured Request Logging**
+- **Structured Request Logging**
   Logs HTTP requests using a customizable format, including method, path, status, and errors.
 
-- **❤️ Health Check Endpoint**
+- **Health Check Endpoint**
   Exposes an endpoint for health and readiness checks, suitable for orchestration tools.
 
-- **📈 Performance Profiling**
+- **Performance Profiling**
   Integrates `pprof` profiling tools under the `/api/v1` path for runtime diagnostics.
 
-- **📦 Request Body Limits**
+- **Request Body Limits**
   Enforces size limits on `application/octet-stream` payloads to protect against abuse.
 
-- **🔐 Bearer Token Authorization**
+- **Bearer Token Authorization**
   Validates Bearer tokens found in the `Authorization` header of incoming HTTP requests and enforces authorization based on OpenAPI security scopes.
 
 <br>
