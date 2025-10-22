@@ -388,11 +388,11 @@ This project uses a dedicated **Taskfile.yml** powered by the [`task`](https://t
 
 Formalizing these processes ensures:
 
-- ✅ **Consistency** across developer environments
-- ⚙️ **Automation** of chained commands and validations
-- ⏱️ **Efficiency** by reducing manual complexity
-- 🔁 **Reproducibility** in CI/CD and local setups
-- 🧹 **Maintainability** with centralized workflow updates
+- **Consistency** across developer environments
+- **Automation** of chained commands and validations
+- **Efficiency** by reducing manual complexity
+- **Reproducibility** in CI/CD and local setups
+- **Maintainability** with centralized workflow updates
 
 ### Available Tasks
 
