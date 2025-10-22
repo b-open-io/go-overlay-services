@@ -246,6 +246,62 @@ The HTTP server supports flexible setup via functional options (`ServerOption`),
 <br/>
 
 <details>
+<summary><strong><code>Development Build Commands</code></strong></summary>
+<br/>
+
+Get the [MAGE-X](https://github.com/mrz1836/mage-x) build tool for development:
+```shell script
+go install github.com/mrz1836/mage-x/cmd/magex@latest
+```
+
+View all build commands
+
+```bash script
+magex help
+```
+
+</details>
+
+<details>
+<summary><strong><code>Development Task Automation</code></strong></summary>
+<br/>
+
+This project uses a dedicated **Taskfile.yml** powered by the [`task`](https://taskfile.dev/) CLI to automate common workflows. This centralizes critical operations such as testing, code generation, API documentation bundling, and code linting into a single, easy-to-use interface.
+
+Formalizing these processes ensures:
+
+- **Consistency** across developer environments
+- **Automation** of chained commands and validations
+- **Efficiency** by reducing manual complexity
+- **Reproducibility** in CI/CD and local setups
+- **Maintainability** with centralized workflow updates
+
+### Available Tasks
+
+- **`execute-unit-tests`**
+  Runs all unit tests with fail-fast, vet checks, and disables caching for fresh results.
+
+- **`oapi-codegen`**
+  Generates HTTP server code and models from the OpenAPI spec to keep the API and code in sync.
+
+- **`swagger-doc-gen`**
+  Bundles the OpenAPI spec into a single YAML file, ready for validation and documentation tools.
+
+- **`swagger-ui-up`**
+  Bundles, validates, and starts Swagger UI with Docker Compose for interactive API exploration.
+
+- **`swagger-ui-down`**
+  Stops Swagger UI services and cleans up containers.
+
+- **`swagger-cleanup`**
+  Removes generated Swagger files and stops any running Swagger UI containers.
+
+- **`execute-linters`**
+  Runs Go linters and applies automatic fixes to maintain code quality.
+
+</details>
+
+<details>
 <summary><strong><code>Repository Features</code></strong></summary>
 <br/>
 
@@ -360,62 +416,6 @@ magex deps:update
 ```
 
 This command ensures all dependencies are brought up to date in a single step, including Go modules and any tools managed by [MAGE-X](https://github.com/mrz1836/mage-x). It is the recommended way to keep your development environment and CI in sync with the latest versions.
-
-</details>
-
-<details>
-<summary><strong><code>Build Commands</code></strong></summary>
-<br/>
-
-Get the [MAGE-X](https://github.com/mrz1836/mage-x) build tool for development:
-```shell script
-go install github.com/mrz1836/mage-x/cmd/magex@latest
-```
-
-View all build commands
-
-```bash script
-magex help
-```
-
-</details>
-
-<details>
-<summary><strong><code>Development Task Automation</code></strong></summary>
-<br/>
-
-This project uses a dedicated **Taskfile.yml** powered by the [`task`](https://taskfile.dev/) CLI to automate common workflows. This centralizes critical operations such as testing, code generation, API documentation bundling, and code linting into a single, easy-to-use interface.
-
-Formalizing these processes ensures:
-
-- **Consistency** across developer environments
-- **Automation** of chained commands and validations
-- **Efficiency** by reducing manual complexity
-- **Reproducibility** in CI/CD and local setups
-- **Maintainability** with centralized workflow updates
-
-### Available Tasks
-
-- **`execute-unit-tests`**
-  Runs all unit tests with fail-fast, vet checks, and disables caching for fresh results.
-
-- **`oapi-codegen`**
-  Generates HTTP server code and models from the OpenAPI spec to keep the API and code in sync.
-
-- **`swagger-doc-gen`**
-  Bundles the OpenAPI spec into a single YAML file, ready for validation and documentation tools.
-
-- **`swagger-ui-up`**
-  Bundles, validates, and starts Swagger UI with Docker Compose for interactive API exploration.
-
-- **`swagger-ui-down`**
-  Stops Swagger UI services and cleans up containers.
-
-- **`swagger-cleanup`**
-  Removes generated Swagger files and stops any running Swagger UI containers.
-
-- **`execute-linters`**
-  Runs Go linters and applies automatic fixes to maintain code quality.
 
 </details>
 
