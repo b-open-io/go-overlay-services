@@ -52,6 +52,9 @@ type GASP struct {
 
 	// Unified UTXO processing with result sharing
 	utxoProcessingMap sync.Map // map[transaction.Outpoint]*utxoProcessingState
+
+	// Individual UTXO processing queue (hidden from external callers)
+	utxoQueue chan *transaction.Outpoint
 }
 
 func NewGASP(params GASPParams) *GASP {
@@ -61,6 +64,7 @@ func NewGASP(params GASPParams) *GASP {
 		LastInteraction: params.LastInteraction,
 		Unidirectional:  params.Unidirectional,
 		Topic:           params.Topic,
+		utxoQueue:       make(chan *transaction.Outpoint, 1000),
 	}
 	// Concurrency limiter controlled by Concurrency config
 	if params.Concurrency > 1 {
@@ -79,6 +83,10 @@ func NewGASP(params GASPParams) *GASP {
 		gasp.LogPrefix = "[GASP] "
 	}
 	slog.SetLogLoggerLevel(slog.LevelInfo)
+
+	// Start the always-running worker for individual UTXO processing
+	go gasp.runProcessingWorker()
+
 	return gasp
 }
 
@@ -144,8 +152,9 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 				<-g.limiter
 			}()
 
-			if err := g.processUTXOToCompletion(processingCtx, outpoint, seenNodes); err != nil {
-				return fmt.Errorf("error processing UTXO %s: %w", outpoint, err)
+			if err := g.processUTXOToCompletion(processingCtx, outpoint, nil, seenNodes); err != nil {
+				slog.Error("error processing UTXO", "outpoint", outpoint, "error", err)
+				return nil
 			}
 			sharedOutpoints.Store(*outpoint, struct{}{})
 			return nil
@@ -295,26 +304,29 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 			Txid:  *txid,
 			Index: node.OutputIndex,
 		}
-		nodeId := nodeOutpoint.String()
 
 		slog.Debug(fmt.Sprintf("%s Processing incoming node: %v, spentBy: %v", g.LogPrefix, node, spentBy))
 
 		// Per-graph cycle detection
-		if _, ok := seenNodes.Load(nodeId); ok {
-			slog.Debug(fmt.Sprintf("%s Node %s already seen in this graph, skipping.", g.LogPrefix, nodeId))
+		if _, ok := seenNodes.Load(*nodeOutpoint); ok {
+			slog.Debug(fmt.Sprintf("%s Node %s already seen in this graph, skipping.", g.LogPrefix, nodeOutpoint.String()))
 			return nil
 		}
-		seenNodes.Store(nodeId, struct{}{})
+		seenNodes.Store(*nodeOutpoint, struct{}{})
 
 		if err := g.Storage.AppendToGraph(ctx, node, spentBy); err != nil {
 			return err
 		} else if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
 			return err
 		} else if neededInputs != nil {
-			slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeId, neededInputs))
+			slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), neededInputs))
 			for outpoint, data := range neededInputs.RequestedInputs {
 				slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
-				if err := g.processUTXOToCompletion(ctx, &outpoint, seenNodes); err != nil {
+				childSpentBy := spentBy
+				if childSpentBy == nil {
+					childSpentBy = nodeOutpoint
+				}
+				if err := g.processUTXOToCompletion(ctx, &outpoint, childSpentBy, seenNodes); err != nil {
 					return err
 				}
 			}
@@ -334,13 +346,13 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 	if txid, err := g.computeTxID(node.RawTx); err != nil {
 		return err
 	} else {
-		nodeId := (&transaction.Outpoint{
+		nodeId := transaction.Outpoint{
 			Txid:  *txid,
 			Index: node.OutputIndex,
-		}).String()
+		}
 		slog.Debug(fmt.Sprintf("%s Processing outgoing node: %v", g.LogPrefix, node))
 		if _, ok := seenNodes.Load(nodeId); ok {
-			slog.Debug(fmt.Sprintf("%s Node %s already processed, skipping.", g.LogPrefix, nodeId))
+			slog.Debug(fmt.Sprintf("%s Node %s already processed, skipping.", g.LogPrefix, nodeId.String()))
 			return nil
 		}
 		seenNodes.Store(nodeId, struct{}{})
@@ -373,7 +385,7 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 }
 
 // processUTXOToCompletion handles the complete UTXO processing pipeline with result sharing deduplication
-func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transaction.Outpoint, seenNodes *sync.Map) error {
+func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transaction.Outpoint, spentBy *transaction.Outpoint, seenNodes *sync.Map) error {
 	// Pre-initialize the processing state to avoid race conditions
 	newState := &utxoProcessingState{}
 	newState.wg.Add(1)
@@ -390,14 +402,18 @@ func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transactio
 		// We're the first to process this outpoint, do the complete processing
 
 		// Request node from remote
-		resolvedNode, err := g.Remote.RequestNode(ctx, outpoint, outpoint, true)
+		// Use outpoint as graphID if spentBy is nil (top-level UTXO)
+		graphID := spentBy
+		if graphID == nil {
+			graphID = outpoint
+		}
+		resolvedNode, err := g.Remote.RequestNode(ctx, graphID, outpoint, true)
 		if err != nil {
 			state.err = fmt.Errorf("error with incoming UTXO %s: %w", outpoint, err)
 			return state.err
 		}
-
 		// Process dependencies
-		if err = g.processIncomingNode(ctx, resolvedNode, nil, seenNodes); err != nil {
+		if err = g.processIncomingNode(ctx, resolvedNode, spentBy, seenNodes); err != nil {
 			state.err = fmt.Errorf("error processing incoming node %s: %w", outpoint, err)
 			return state.err
 		}
@@ -418,5 +434,43 @@ func (g *GASP) computeTxID(rawtx string) (*chainhash.Hash, error) {
 		return nil, err
 	} else {
 		return tx.TxID(), nil
+	}
+}
+
+// ProcessUTXO queues a single UTXO for processing outside of the sync workflow.
+// UTXOs are processed with shared deduplication state to ensure each transaction
+// is only submitted once, even if multiple outputs are queued concurrently.
+// This method is non-blocking - if the internal queue is full, the UTXO is dropped.
+// Does NOT update LastInteraction score.
+func (g *GASP) ProcessUTXO(ctx context.Context, outpoint *transaction.Outpoint) error {
+	select {
+	case g.utxoQueue <- outpoint:
+		return nil
+	default:
+		err := fmt.Errorf("UTXO processing queue full, dropping UTXO %s", outpoint.String())
+		slog.Warn(fmt.Sprintf("%s %v", g.LogPrefix, err))
+		return err
+	}
+}
+
+// runProcessingWorker is the always-running worker that processes queued UTXOs
+func (g *GASP) runProcessingWorker() {
+	seenNodes := &sync.Map{}
+
+	for outpoint := range g.utxoQueue {
+		g.limiter <- struct{}{}
+		go func(op *transaction.Outpoint) {
+			defer func() {
+				<-g.limiter
+			}()
+
+			ctx := context.Background()
+			if err := g.processUTXOToCompletion(ctx, op, nil, seenNodes); err != nil {
+				slog.Error(fmt.Sprintf("%s Error processing UTXO %s: %v", g.LogPrefix, op, err))
+			}
+
+			// Cleanup seenNodes after processing completes
+			seenNodes.Delete(*op)
+		}(outpoint)
 	}
 }

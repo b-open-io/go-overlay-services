@@ -88,6 +88,11 @@ func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transact
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// If graphID is nil, use the outpoint as the graphID
+	if graphID == nil {
+		graphID = outpoint
+	}
+
 	// Check in known store
 	for _, utxo := range m.knownStore {
 		if utxo.GraphID.String() == outpoint.String() {
@@ -147,8 +152,24 @@ func (m *mockGASPStorage) AppendToGraph(ctx context.Context, tx *gasp.Node, spen
 	if parsedTx != nil {
 		hash = parsedTx.TxID()
 	}
-	m.tempGraphStore[*tx.GraphID] = &mockUTXO{
-		GraphID:     tx.GraphID,
+
+	// Determine the graph ID - use tx.GraphID if set, otherwise compute from transaction
+	var graphID *transaction.Outpoint
+	if tx.GraphID != nil {
+		graphID = tx.GraphID
+	} else if hash != nil {
+		// When GraphID is nil, create one from the transaction itself
+		graphID = &transaction.Outpoint{
+			Txid:  *hash,
+			Index: tx.OutputIndex,
+		}
+	} else {
+		// If we can't determine a GraphID, skip storage
+		return nil
+	}
+
+	m.tempGraphStore[*graphID] = &mockUTXO{
+		GraphID:     graphID,
 		RawTx:       tx.RawTx,
 		OutputIndex: tx.OutputIndex,
 		Time:        0, // Current time
