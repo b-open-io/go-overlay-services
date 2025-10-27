@@ -322,7 +322,11 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 			slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), neededInputs))
 			for outpoint, data := range neededInputs.RequestedInputs {
 				slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
-				if err := g.processUTXOToCompletion(ctx, &outpoint, nodeOutpoint, seenNodes); err != nil {
+				childSpentBy := spentBy
+				if childSpentBy == nil {
+					childSpentBy = nodeOutpoint
+				}
+				if err := g.processUTXOToCompletion(ctx, &outpoint, childSpentBy, seenNodes); err != nil {
 					return err
 				}
 			}
@@ -398,7 +402,12 @@ func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transactio
 		// We're the first to process this outpoint, do the complete processing
 
 		// Request node from remote
-		resolvedNode, err := g.Remote.RequestNode(ctx, spentBy, outpoint, true)
+		// Use outpoint as graphID if spentBy is nil (top-level UTXO)
+		graphID := spentBy
+		if graphID == nil {
+			graphID = outpoint
+		}
+		resolvedNode, err := g.Remote.RequestNode(ctx, graphID, outpoint, true)
 		if err != nil {
 			state.err = fmt.Errorf("error with incoming UTXO %s: %w", outpoint, err)
 			return state.err
