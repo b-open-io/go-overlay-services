@@ -26,7 +26,7 @@ type mockUTXO struct {
 
 type mockGASPStorage struct {
 	knownStore     []*mockUTXO
-	tempGraphStore map[string]*mockUTXO
+	tempGraphStore map[transaction.Outpoint]*mockUTXO
 	mu             sync.Mutex
 	updateCallback func()
 
@@ -43,7 +43,7 @@ type mockGASPStorage struct {
 func newMockGASPStorage(knownStore []*mockUTXO) *mockGASPStorage {
 	return &mockGASPStorage{
 		knownStore:     knownStore,
-		tempGraphStore: make(map[string]*mockUTXO),
+		tempGraphStore: make(map[transaction.Outpoint]*mockUTXO),
 		updateCallback: func() {},
 	}
 }
@@ -88,6 +88,11 @@ func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transact
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// If graphID is nil, use the outpoint as the graphID
+	if graphID == nil {
+		graphID = outpoint
+	}
+
 	// Check in known store
 	for _, utxo := range m.knownStore {
 		if utxo.GraphID.String() == outpoint.String() {
@@ -110,7 +115,7 @@ func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transact
 	}
 
 	// Check in temp store
-	if tempUTXO, exists := m.tempGraphStore[outpoint.String()]; exists {
+	if tempUTXO, exists := m.tempGraphStore[*outpoint]; exists {
 		return &gasp.Node{
 			GraphID:     graphID,
 			RawTx:       tempUTXO.RawTx,
@@ -129,7 +134,7 @@ func (m *mockGASPStorage) FindNeededInputs(ctx context.Context, tx *gasp.Node) (
 
 	// Default: no inputs needed
 	return &gasp.NodeResponse{
-		RequestedInputs: make(map[string]*gasp.NodeResponseData),
+		RequestedInputs: make(map[transaction.Outpoint]*gasp.NodeResponseData),
 	}, nil
 }
 
@@ -147,8 +152,24 @@ func (m *mockGASPStorage) AppendToGraph(ctx context.Context, tx *gasp.Node, spen
 	if parsedTx != nil {
 		hash = parsedTx.TxID()
 	}
-	m.tempGraphStore[tx.GraphID.String()] = &mockUTXO{
-		GraphID:     tx.GraphID,
+
+	// Determine the graph ID - use tx.GraphID if set, otherwise compute from transaction
+	var graphID *transaction.Outpoint
+	if tx.GraphID != nil {
+		graphID = tx.GraphID
+	} else if hash != nil {
+		// When GraphID is nil, create one from the transaction itself
+		graphID = &transaction.Outpoint{
+			Txid:  *hash,
+			Index: tx.OutputIndex,
+		}
+	} else {
+		// If we can't determine a GraphID, skip storage
+		return nil
+	}
+
+	m.tempGraphStore[*graphID] = &mockUTXO{
+		GraphID:     graphID,
 		RawTx:       tx.RawTx,
 		OutputIndex: tx.OutputIndex,
 		Time:        0, // Current time
@@ -175,7 +196,7 @@ func (m *mockGASPStorage) DiscardGraph(ctx context.Context, graphID *transaction
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.tempGraphStore, graphID.String())
+	delete(m.tempGraphStore, *graphID)
 	return nil
 }
 
@@ -187,12 +208,40 @@ func (m *mockGASPStorage) FinalizeGraph(ctx context.Context, graphID *transactio
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if tempGraph, exists := m.tempGraphStore[graphID.String()]; exists {
+	if tempGraph, exists := m.tempGraphStore[*graphID]; exists {
 		m.knownStore = append(m.knownStore, tempGraph)
 		m.updateCallback()
-		delete(m.tempGraphStore, graphID.String())
+		delete(m.tempGraphStore, *graphID)
 	}
 	return nil
+}
+
+func (m *mockGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint) ([]bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	result := make([]bool, len(outpoints))
+	for i, outpoint := range outpoints {
+		found := false
+
+		// Check in known store
+		for _, utxo := range m.knownStore {
+			if utxo.Txid.Equal(outpoint.Txid) && utxo.OutputIndex == outpoint.Index {
+				found = true
+				break
+			}
+		}
+
+		// Check in temp store if not found
+		if !found {
+			if _, exists := m.tempGraphStore[*outpoint]; exists {
+				found = true
+			}
+		}
+
+		result[i] = found
+	}
+	return result, nil
 }
 
 type mockGASPRemote struct {
@@ -244,7 +293,7 @@ func (m *mockGASPRemote) SubmitNode(ctx context.Context, node *gasp.Node) (*gasp
 
 	// Default implementation
 	return &gasp.NodeResponse{
-		RequestedInputs: make(map[string]*gasp.NodeResponseData),
+		RequestedInputs: make(map[transaction.Outpoint]*gasp.NodeResponseData),
 	}, nil
 }
 
@@ -254,6 +303,13 @@ func createMockUTXO(txHex string, outputIndex uint32, time uint32) *mockUTXO {
 	tx.AddOutput(&transaction.TransactionOutput{
 		Satoshis:      1000,
 		LockingScript: &script.Script{},
+	})
+	opReturn := &script.Script{}
+	opReturn.AppendOpcodes(script.OpFALSE, script.OpRETURN)
+	opReturn.AppendPushData([]byte(txHex))
+	tx.AddOutput(&transaction.TransactionOutput{
+		Satoshis:      0,
+		LockingScript: opReturn,
 	})
 
 	// Use the actual transaction hex instead of the provided string
@@ -388,7 +444,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		// given
 		ctx := context.Background()
 		utxo1 := createMockUTXO("mock_sender1_rawtx1", 0, 111)
-		utxo2 := createMockUTXO("mock_sender2_rawtx1", 0, 222)
+		utxo2 := createMockUTXO("mock_sender2_rawtx1", 1, 222)
 
 		storage1 := newMockGASPStorage([]*mockUTXO{utxo1, utxo2})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
@@ -405,8 +461,10 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		// then
 		require.NoError(t, err)
 
-		result1, _ := storage1.FindKnownUTXOs(ctx, 0, 0)
-		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
+		result1, err := storage1.FindKnownUTXOs(ctx, 0, 0)
+		require.NoError(t, err)
+		result2, err := storage2.FindKnownUTXOs(ctx, 0, 0)
+		require.NoError(t, err)
 
 		require.Len(t, result2, 2)
 		require.Equal(t, len(result1), len(result2))

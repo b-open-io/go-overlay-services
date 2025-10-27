@@ -26,9 +26,15 @@ components:
                 type: number
                 format: double
                 description: 'Timestamp or sequence number from which to start synchronization'
+              limit:
+                type: integer
+                format: uint32
+                default: 0
+                description: 'Maximum number of items to return'
             required:
               - version
               - since
+              - limit
 
     RequestForeignGASPNodeBody:
       content:
@@ -37,14 +43,14 @@ components:
             type: object
             required:
               - graphID
-              - txID
+              - txid
               - outputIndex
             properties:
               graphID:
                 type: string
-                description: The graph ID in the format of "txID.outputIndex"
+                description: The graph ID in the format of "txid.outputIndex"
                 example: "0000000000000000000000000000000000000000000000000000000000000000.1"
-              txID:
+              txid:
                 type: string
                 description: The transaction ID
                 example: "0000000000000000000000000000000000000000000000000000000000000000"

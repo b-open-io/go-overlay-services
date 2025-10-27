@@ -7,6 +7,7 @@ import (
 
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/adapters"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/middleware"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
@@ -175,22 +176,22 @@ func New(opts ...Option) *HTTP {
 		o(srv)
 	}
 
-	srv.app = RegisterRoutesWithErrorHandler(
-		fiber.New(fiber.Config{
-			CaseSensitive: true,
-			StrictRouting: true,
-			ServerHeader:  srv.cfg.ServerHeader,
-			AppName:       srv.cfg.AppName,
-			ReadTimeout:   srv.cfg.ConnectionReadTimeout,
-		}),
-		&RegisterRoutesConfig{
-			ARCAPIKey:        srv.cfg.ARCAPIKey,
-			ARCCallbackToken: srv.cfg.ARCCallbackToken,
-			AdminBearerToken: srv.cfg.AdminBearerToken,
-			Engine:           srv.engine,
-			OctetStreamLimit: srv.cfg.OctetStreamLimit,
-		},
-	)
+	srv.app = fiber.New(fiber.Config{
+		CaseSensitive: true,
+		StrictRouting: true,
+		ServerHeader:  srv.cfg.ServerHeader,
+		AppName:       srv.cfg.AppName,
+		ReadTimeout:   srv.cfg.ConnectionReadTimeout,
+		ErrorHandler:  ports.ErrorHandler(),
+	})
+
+	RegisterRoutes(srv.app, &RegisterRoutesConfig{
+		ARCAPIKey:        srv.cfg.ARCAPIKey,
+		ARCCallbackToken: srv.cfg.ARCCallbackToken,
+		AdminBearerToken: srv.cfg.AdminBearerToken,
+		Engine:           srv.engine,
+		OctetStreamLimit: srv.cfg.OctetStreamLimit,
+	})
 
 	srv.app.Get("/metrics", monitor.New(monitor.Config{Title: "Overlay-services API"}))
 

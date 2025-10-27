@@ -561,3 +561,11 @@ func (m *mockStorage) UpdateLastInteraction(ctx context.Context, host string, to
 func (m *mockStorage) GetLastInteraction(ctx context.Context, host string, topic string) (float64, error) {
 	return 0, nil
 }
+
+func (m *mockStorage) FindOutpointsByMerkleState(ctx context.Context, topic string, state engine.MerkleState, limit uint32) ([]*transaction.Outpoint, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) ReconcileMerkleRoot(ctx context.Context, topic string, blockHeight uint32, merkleRoot *chainhash.Hash) error {
+	return nil
+}

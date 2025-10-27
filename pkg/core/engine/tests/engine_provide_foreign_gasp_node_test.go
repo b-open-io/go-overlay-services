@@ -19,9 +19,10 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 	BEEF := createDummyBEEF(t)
 
 	expectedNode := &gasp.Node{
-		GraphID:     graphID,
-		RawTx:       parseBEEFToTx(t, BEEF).Hex(),
-		OutputIndex: outpoint.Index,
+		GraphID:       graphID,
+		RawTx:         parseBEEFToTx(t, BEEF).Hex(),
+		OutputIndex:   outpoint.Index,
+		AncillaryBeef: BEEF, // Unmined transactions now include BEEF as ancillary
 	}
 
 	sut := &engine.Engine{

@@ -73,7 +73,7 @@ type RequestSyncResponseService struct {
 // It validates the input parameters, constructs the initial request payload,
 // and delegates the operation to the provider. The response is transformed
 // into a DTO suitable for external use.
-func (s *RequestSyncResponseService) RequestSyncResponse(ctx context.Context, topic Topic, version Version, since Since) (*RequestSyncResponseDTO, error) {
+func (s *RequestSyncResponseService) RequestSyncResponse(ctx context.Context, topic Topic, version Version, since Since, limit uint32) (*RequestSyncResponseDTO, error) {
 	if topic.IsEmpty() {
 		return nil, NewIncorrectInputWithFieldError("topic")
 	}
@@ -81,7 +81,7 @@ func (s *RequestSyncResponseService) RequestSyncResponse(ctx context.Context, to
 		return nil, NewIncorrectInputWithFieldError("version")
 	}
 
-	response, err := s.provider.ProvideForeignSyncResponse(ctx, &gasp.InitialRequest{Version: version.Int(), Since: since.Float64()}, topic.String())
+	response, err := s.provider.ProvideForeignSyncResponse(ctx, &gasp.InitialRequest{Version: version.Int(), Since: since.Float64(), Limit: limit}, topic.String())
 	if err != nil {
 		return nil, NewRequestSyncResponseProviderError(err)
 	}

@@ -15,7 +15,7 @@
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
 
 # Go workspace file
 go.work
@@ -38,3 +38,8 @@ go.work.sum
 
 # OSX
 .DS_Store
+
+# AI context
+CLAUDE.md
+AGENT.md
+.claude

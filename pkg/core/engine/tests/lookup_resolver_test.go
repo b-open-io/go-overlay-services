@@ -17,7 +17,7 @@ func TestLookupResolver_NewLookupResolver(t *testing.T) {
 
 		// then
 		require.NotNil(t, resolver)
-		require.Empty(t, resolver.SLAPTrackers())
+		require.Equal(t, resolver.SLAPTrackers(), lookup.DEFAULT_SLAP_TRACKERS)
 	})
 }
 
