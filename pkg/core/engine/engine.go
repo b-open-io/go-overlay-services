@@ -638,22 +638,16 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					}
 					slog.Info(fmt.Sprintf("[GASP SYNC] Successfully parsed BEEF for topic \"%s\", transaction count: %d, txId: %s\n", topic, len(beef.Transactions), txId.String()))
 
-					// Find the transaction that contains the output at the specified index
-					var tx *transaction.Transaction
-					for _, beefTx := range beef.Transactions {
-						if beefTx.Transaction != nil && beefTx.Transaction.Outputs != nil && len(beefTx.Transaction.Outputs) > int(output.OutputIndex) {
-							tx = beefTx.Transaction
-							break
-						}
-					}
+					// Find the transaction that matches the txid
+					tx := beef.FindTransactionByHash(txId)
 					if tx == nil {
-						slog.Error("failed to find transaction with output index in BEEF", "topic", topic, "outputIndex", output.OutputIndex)
+						slog.Error("failed to find transaction with matching txid in BEEF", "topic", topic, "txid", txId.String())
 						continue
 					}
 
-					// Additional safety check before accessing the output
+					// Verify the output index exists
 					if tx.Outputs == nil || len(tx.Outputs) <= int(output.OutputIndex) {
-						slog.Error("transaction outputs is nil or output index out of bounds", "topic", topic, "outputIndex", output.OutputIndex, "outputsLength", len(tx.Outputs))
+						slog.Error("transaction found but output index out of bounds", "topic", topic, "txid", txId.String(), "outputIndex", output.OutputIndex, "outputsLength", len(tx.Outputs))
 						continue
 					}
 
