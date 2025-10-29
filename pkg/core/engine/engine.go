@@ -686,23 +686,12 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 
 					slog.Debug("successfully parsed advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
 
-					// Determine expected protocol based on topic
-					var expectedProtocol overlay.Protocol
-					if topic == "tm_ship" {
-						expectedProtocol = overlay.ProtocolSHIP
-					} else if topic == "tm_slap" {
-						expectedProtocol = overlay.ProtocolSLAP
-					} else {
-						// For unknown topics, log a warning but continue
-						slog.Warn("unknown topic, cannot determine expected protocol", "topic", topic)
-						continue
-					}
-
-					if advertisement.Protocol == expectedProtocol {
-						slog.Debug("found matching advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
+					// All SHIP advertisements should have protocol='SHIP'
+					if advertisement.Protocol == overlay.ProtocolSHIP {
+						slog.Debug("found SHIP advertisement for topic", "topic", topic, "domain", advertisement.Domain)
 						endpointSet[advertisement.Domain] = struct{}{}
 					} else {
-						slog.Debug("skipping advertisement with mismatched protocol", "topic", topic, "expected", expectedProtocol, "actual", advertisement.Protocol, "domain", advertisement.Domain)
+						slog.Debug("skipping non-SHIP advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
 					}
 				}
 
