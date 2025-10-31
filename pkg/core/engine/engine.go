@@ -345,11 +345,12 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			newOutpoints = append(newOutpoints, &output.Outpoint)
 			for _, l := range e.LookupServices {
 				if err := l.OutputAdmittedByTopic(ctx, &OutputAdmittedByTopic{
-					Topic:         topic,
-					Outpoint:      &output.Outpoint,
-					Satoshis:      output.Satoshis,
-					LockingScript: output.Script,
-					AtomicBEEF:    taggedBEEF.Beef,
+					Topic:          topic,
+					Outpoint:       &output.Outpoint,
+					Satoshis:       output.Satoshis,
+					LockingScript:  output.Script,
+					AtomicBEEF:     taggedBEEF.Beef,
+					OffChainValues: taggedBEEF.OffChainValues,
 				}); err != nil {
 					slog.Error("failed to notify lookup service about admitted output", "topic", topic, "outpoint", output.Outpoint.String(), "error", err)
 					return nil, err
