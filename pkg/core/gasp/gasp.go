@@ -19,6 +19,9 @@ const MaxConcurrency = 16
 // ErrNodeNilInProcessOutgoingNode is returned when a nil node is passed to processOutgoingNode.
 var ErrNodeNilInProcessOutgoingNode = errors.New("node is nil in processOutgoingNode")
 
+// ErrTransactionParsingPanic is returned when transaction parsing triggers a panic.
+var ErrTransactionParsingPanic = errors.New("panic during transaction parsing")
+
 // NodeRequest represents a request for a specific node in the GASP graph.
 type NodeRequest struct {
 	GraphID     *transaction.Outpoint `json:"graphID"`
@@ -413,7 +416,15 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 	return nil
 }
 
-func (g *GASP) computeTxID(rawtx string) (*chainhash.Hash, error) {
+func (g *GASP) computeTxID(rawtx string) (txID *chainhash.Hash, err error) {
+	// Recover from panics in transaction parsing (e.g., malformed VarInts in go-sdk)
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%w: %v", ErrTransactionParsingPanic, r)
+			txID = nil
+		}
+	}()
+
 	tx, err := transaction.NewTransactionFromHex(rawtx)
 	if err != nil {
 		return nil, err
