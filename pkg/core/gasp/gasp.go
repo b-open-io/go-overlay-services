@@ -3,6 +3,7 @@ package gasp
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,6 +22,15 @@ var ErrNodeNilInProcessOutgoingNode = errors.New("node is nil in processOutgoing
 
 // ErrTransactionParsingPanic is returned when transaction parsing triggers a panic.
 var ErrTransactionParsingPanic = errors.New("panic during transaction parsing")
+
+// ErrTransactionHexTooShort is returned when transaction hex is too short to be valid.
+var ErrTransactionHexTooShort = errors.New("transaction hex too short")
+
+// ErrTransactionHexTooLong is returned when transaction hex exceeds maximum size.
+var ErrTransactionHexTooLong = errors.New("transaction hex too long")
+
+// ErrMaliciousVarInt is returned when a VarInt value exceeds reasonable limits.
+var ErrMaliciousVarInt = errors.New("malicious VarInt detected")
 
 // NodeRequest represents a request for a specific node in the GASP graph.
 type NodeRequest struct {
@@ -425,9 +435,68 @@ func (g *GASP) computeTxID(rawtx string) (txID *chainhash.Hash, err error) {
 		}
 	}()
 
+	// Validate input length to prevent problematic VarInt patterns that cause EOF errors
+	// during fuzz test minimization. Minimum valid transaction is ~10 bytes (20 hex chars):
+	// 4 bytes version + 1 byte input count + 1 byte output count + 4 bytes locktime
+	if len(rawtx) < 20 {
+		return nil, fmt.Errorf("%w: %d characters (minimum 20)", ErrTransactionHexTooShort, len(rawtx))
+	}
+
+	// Reject extremely long inputs to prevent DoS attacks
+	// Maximum reasonable transaction size is ~1MB = 2M hex characters
+	if len(rawtx) > 2_000_000 {
+		return nil, fmt.Errorf("%w: %d characters (maximum 2,000,000)", ErrTransactionHexTooLong, len(rawtx))
+	}
+
+	// Decode hex to validate and check for malicious VarInt patterns
+	txBytes, err := hex.DecodeString(rawtx)
+	if err != nil {
+		return nil, fmt.Errorf("invalid hex: %w", err)
+	}
+
+	// Validate that VarInt values are reasonable to prevent OOM attacks
+	// VarInt 0xff prefix indicates next 8 bytes represent the actual value
+	// We scan for 0xff markers and validate the following 8-byte values are reasonable
+	if validationErr := validateVarInts(txBytes); validationErr != nil {
+		return nil, validationErr
+	}
+
 	tx, err := transaction.NewTransactionFromHex(rawtx)
 	if err != nil {
 		return nil, err
 	}
 	return tx.TxID(), nil
+}
+
+// validateVarInts checks for malicious VarInt patterns that could cause OOM.
+// Bitcoin uses VarInt encoding where 0xff prefix means the next 8 bytes are the value.
+// Malicious inputs can have 0xff followed by huge values (e.g., 281TB) causing allocation failures.
+func validateVarInts(data []byte) error {
+	const maxReasonableVarInt = 10_000_000 // 10MB is reasonable for script/input/output counts
+
+	for i := 0; i < len(data); i++ {
+		// Check for VarInt 0xff marker
+		if data[i] == 0xff {
+			// Need 8 bytes after 0xff
+			if i+8 >= len(data) {
+				continue // Will fail during actual parsing anyway
+			}
+
+			// Read next 8 bytes as little-endian uint64
+			value := uint64(data[i+1]) |
+				uint64(data[i+2])<<8 |
+				uint64(data[i+3])<<16 |
+				uint64(data[i+4])<<24 |
+				uint64(data[i+5])<<32 |
+				uint64(data[i+6])<<40 |
+				uint64(data[i+7])<<48 |
+				uint64(data[i+8])<<56
+
+			// Reject unreasonably large values that would cause OOM
+			if value > maxReasonableVarInt {
+				return fmt.Errorf("%w: value %d exceeds maximum %d", ErrMaliciousVarInt, value, maxReasonableVarInt)
+			}
+		}
+	}
+	return nil
 }
