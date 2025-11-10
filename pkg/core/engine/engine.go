@@ -929,59 +929,64 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		if output.Beef == nil {
 			slog.Error("missing BEEF in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", ErrMissingInput)
 			return nil, ErrMissingInput
-		} else if _, tx, _, err := transaction.ParseBeef(output.Beef); err != nil {
-			slog.Error("failed to parse BEEF in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", err)
-			return nil, err
-		} else if tx == nil {
-			for _, outpoint := range output.OutputsConsumed {
-				if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, false); err == nil {
-					return hydrator(ctx, output)
-				}
-			}
-			err := errors.New("unable to find output")
-			slog.Error("unable to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "error", err)
-			return nil, err
-		} else {
-			node := &gasp.Node{
-				GraphID:     graphId,
-				RawTx:       tx.Hex(),
-				OutputIndex: outpoint.Index,
-			}
-			if tx.MerklePath != nil {
-				proof := tx.MerklePath.Hex()
-				node.Proof = &proof
-				node.AncillaryBeef = output.AncillaryBeef
-			} else {
-				// For unmined transactions, provide full BEEF as ancillary
-				// Default to output.Beef, but try to merge with ancillary if it exists
-				node.AncillaryBeef = output.Beef
-
-				if len(output.AncillaryBeef) > 0 {
-					// Try to merge ancillary BEEF into the main BEEF
-					if beef, _, _, err := transaction.ParseBeef(output.Beef); err == nil {
-						if err := beef.MergeBeefBytes(output.AncillaryBeef); err == nil {
-							// Use AtomicBytes to ensure client can parse with NewTransactionFromBEEF
-							if mergedBytes, err := beef.AtomicBytes(&outpoint.Txid); err == nil {
-								node.AncillaryBeef = mergedBytes
-							}
-						}
-					}
-				}
-
-				// Validate the ancillary BEEF before sending it
-				if _, _, _, err := transaction.ParseBeef(node.AncillaryBeef); err != nil {
-					slog.Error("Invalid ancillary BEEF for unmined transaction",
-						"graphID", graphId.String(),
-						"outpoint", outpoint.String(),
-						"topic", topic,
-						"error", err)
-					return nil, fmt.Errorf("invalid ancillary BEEF: %w", err)
-				}
-			}
-			return node, nil
-
 		}
 
+		// Parse BEEF and recursively search through the transaction tree
+		_, rootTx, _, err := transaction.ParseBeef(output.Beef)
+		if err != nil {
+			slog.Error("failed to parse BEEF in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", err)
+			return nil, err
+		}
+
+		// Recursive function to search through input transactions
+		var correctTx *transaction.Transaction
+		var searchInput func(tx *transaction.Transaction)
+		searchInput = func(tx *transaction.Transaction) {
+			if tx.TxID().IsEqual(&outpoint.Txid) {
+				correctTx = tx
+				return
+			}
+			// Recursively search through inputs
+			for _, input := range tx.Inputs {
+				if input.SourceTransaction != nil {
+					searchInput(input.SourceTransaction)
+					if correctTx != nil {
+						return
+					}
+				}
+			}
+		}
+
+		if rootTx != nil {
+			searchInput(rootTx)
+		}
+
+		// If found in BEEF, return the node
+		if correctTx != nil {
+			node := &gasp.Node{
+				GraphID:     graphId,
+				RawTx:       correctTx.Hex(),
+				OutputIndex: outpoint.Index,
+			}
+			if correctTx.MerklePath != nil {
+				proof := correctTx.MerklePath.Hex()
+				node.Proof = &proof
+			}
+			return node, nil
+		}
+
+		// If not found in BEEF, recursively search through outputsConsumed
+		for _, consumedOutpoint := range output.OutputsConsumed {
+			if consumedOutput, err := e.Storage.FindOutput(ctx, consumedOutpoint, &topic, nil, true); err == nil && consumedOutput != nil {
+				if node, err := hydrator(ctx, consumedOutput); err == nil {
+					return node, nil
+				}
+			}
+		}
+
+		err = errors.New("unable to find transaction in BEEF tree or consumed outputs")
+		slog.Error("unable to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "outpoint", outpoint.String(), "error", err)
+		return nil, err
 	}
 	if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true); err != nil {
 		slog.Error("failed to find output in ProvideForeignGASPNode",

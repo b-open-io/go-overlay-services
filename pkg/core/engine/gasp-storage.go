@@ -145,24 +145,12 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	}
 
 	var beef *transaction.Beef
-	if len(gaspTx.AncillaryBeef) > 0 {
-		// If we have ancillary BEEF, use it as the base (contains full transaction graph)
-		if beef, _, _, err = transaction.ParseBeef(gaspTx.AncillaryBeef); err != nil {
-			return nil, err
-		}
-		// Merge in the transaction we just received
-		if _, err = beef.MergeTransaction(tx); err != nil {
-			return nil, err
-		}
-	} else if tx.MerklePath != nil {
-		// If we have a merkle path but no ancillary BEEF, create BEEF from transaction
+	if tx.MerklePath != nil {
+		// If we have a merkle path, create BEEF from transaction
 		if beef, err = transaction.NewBeefFromTransaction(tx); err != nil {
 			return nil, err
 		}
-	} /* else {
-		// Unmined transaction without ancillary BEEF is an error
-		return nil, fmt.Errorf("unmined transaction without ancillary BEEF")
-	}*/
+	}
 
 	if beef != nil {
 		inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
@@ -455,13 +443,6 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 		panic(fmt.Sprintf("GASP DEBUG: getBEEFForNode called with nil node. Total goroutines: %d", runtime.NumGoroutine()))
 	}
 
-	// For unmined transactions (no proof), if ancillaryBeef is provided, use it directly
-	// as it contains the complete BEEF for the unmined transaction
-	if (node.Proof == nil || *node.Proof == "") && len(node.AncillaryBeef) > 0 {
-		// slog.Info("Using ancillaryBeef directly for unmined transaction", "beefSize", len(node.AncillaryBeef))
-		return node.AncillaryBeef, nil
-	}
-
 	var hydrator func(node *GraphNode) (*transaction.Transaction, error)
 	hydrator = func(node *GraphNode) (*transaction.Transaction, error) {
 		if node == nil {
@@ -494,11 +475,6 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 	} else if beef, err := transaction.NewBeefFromTransaction(tx); err != nil {
 		return nil, err
 	} else {
-		if len(node.AncillaryBeef) > 0 {
-			if err := beef.MergeBeefBytes(node.AncillaryBeef); err != nil {
-				return nil, err
-			}
-		}
 		return beef.AtomicBytes(tx.TxID())
 	}
 }
