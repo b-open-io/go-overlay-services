@@ -916,37 +916,18 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		}
 
 		// Parse BEEF and recursively search through the transaction tree
-		_, rootTx, _, err := transaction.ParseBeef(output.Beef)
+		beef, _, _, err := transaction.ParseBeef(output.Beef)
 		if err != nil {
 			slog.Error("failed to parse BEEF in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", err)
 			return nil, err
-		}
-
-		// Recursive function to search through input transactions
-		var correctTx *transaction.Transaction
-		var searchInput func(tx *transaction.Transaction)
-		searchInput = func(tx *transaction.Transaction) {
-			if tx.TxID().IsEqual(&outpoint.Txid) {
-				correctTx = tx
-				return
+		} else if len(output.AncillaryBeef) > 0 {
+			if err := beef.MergeBeefBytes(output.AncillaryBeef); err != nil {
+				return nil, err
 			}
-			// Recursively search through inputs
-			for _, input := range tx.Inputs {
-				if input.SourceTransaction != nil {
-					searchInput(input.SourceTransaction)
-					if correctTx != nil {
-						return
-					}
-				}
-			}
-		}
-
-		if rootTx != nil {
-			searchInput(rootTx)
 		}
 
 		// If found in BEEF, return the node
-		if correctTx != nil {
+		if correctTx := beef.FindTransactionByHash(&outpoint.Txid); correctTx != nil {
 			node := &gasp.Node{
 				GraphID:     graphId,
 				RawTx:       correctTx.Hex(),
