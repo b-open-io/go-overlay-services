@@ -11,11 +11,9 @@ import (
 )
 
 type OutputAdmittedByTopic struct {
-	Topic         string
-	Outpoint      *transaction.Outpoint
-	Satoshis      uint64
-	LockingScript *script.Script
-	AtomicBEEF    []byte
+	Topic       string
+	OutputIndex uint32
+	AtomicBEEF  []byte
 }
 
 type OutputSpent struct {

@@ -86,6 +86,5 @@ func NewRequestForeignGASPNodeSuccessResponse(node *gasp.Node) openapi.GASPNode 
 		TxMetadata:     node.TxMetadata,
 		OutputMetadata: node.OutputMetadata,
 		Inputs:         inputs,
-		AncillaryBeef:  node.AncillaryBeef,
 	}
 }

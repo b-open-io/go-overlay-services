@@ -51,7 +51,6 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				Index: 0,
 			},
 			Topic:       "test-topic",
-			Satoshis:    1000,
 			BlockHeight: 0,
 			BlockIdx:    0,
 			Beef:        beefBytes,

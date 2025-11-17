@@ -193,7 +193,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			continue
 		} else {
 			topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
-			previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
+			previousCoins := make([]uint32, 0, len(tx.Inputs))
 			outputs, err := e.Storage.FindOutputs(ctx, inpoints, topic, nil, false)
 			if err != nil {
 				slog.Error("failed to find outputs", "topic", topic, "error", err)
@@ -201,10 +201,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 			for vin, output := range outputs {
 				if output != nil {
-					previousCoins[uint32(vin)] = &transaction.TransactionOutput{
-						LockingScript: output.Script,
-						Satoshis:      output.Satoshis,
-					}
+					previousCoins = append(previousCoins, uint32(vin))
 					topicInputs[topic][uint32(vin)] = output
 				}
 			}
@@ -315,14 +312,11 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 
 		newOutpoints := make([]*transaction.Outpoint, 0, len(admit.OutputsToAdmit))
 		for _, vout := range admit.OutputsToAdmit {
-			out := tx.Outputs[vout]
 			output := &Output{
 				Outpoint: transaction.Outpoint{
 					Txid:  *txid,
 					Index: uint32(vout),
 				},
-				Script:          out.LockingScript,
-				Satoshis:        out.Satoshis,
 				Topic:           topic,
 				OutputsConsumed: outpointsConsumed,
 				Beef:            taggedBEEF.Beef,
@@ -345,11 +339,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			newOutpoints = append(newOutpoints, &output.Outpoint)
 			for _, l := range e.LookupServices {
 				if err := l.OutputAdmittedByTopic(ctx, &OutputAdmittedByTopic{
-					Topic:         topic,
-					Outpoint:      &output.Outpoint,
-					Satoshis:      output.Satoshis,
-					LockingScript: output.Script,
-					AtomicBEEF:    taggedBEEF.Beef,
+					Topic:       topic,
+					OutputIndex: output.Outpoint.Index,
+					AtomicBEEF:  taggedBEEF.Beef,
 				}); err != nil {
 					slog.Error("failed to notify lookup service about admitted output", "topic", topic, "outpoint", output.Outpoint.String(), "error", err)
 					return nil, err

@@ -160,16 +160,13 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 				Index: input.SourceTxOutIndex,
 			}
 		}
-		previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
+		previousCoins := make([]uint32, 0, len(tx.Inputs))
 		if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, false); err != nil {
 			return nil, err
 		} else {
 			for vin, output := range outputs {
 				if output != nil {
-					previousCoins[uint32(vin)] = &transaction.TransactionOutput{
-						LockingScript: output.Script,
-						Satoshis:      output.Satoshis,
-					}
+					previousCoins = append(previousCoins, uint32(vin))
 				}
 			}
 		}
@@ -197,7 +194,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	return response, nil
 }
 
-func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
 	if _, ok := s.Engine.Managers[s.Topic]; !ok {
 		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic (identify admissible outputs): " + s.Topic)
 	}
@@ -291,16 +288,13 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 						Index: input.SourceTxOutIndex,
 					}
 				}
-				previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
+				previousCoins := make([]uint32, 0, len(tx.Inputs))
 				if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, false); err != nil {
 					return err
 				} else {
 					for vin, output := range outputs {
 						if output != nil {
-							previousCoins[uint32(vin)] = &transaction.TransactionOutput{
-								LockingScript: output.Script,
-								Satoshis:      output.Satoshis,
-							}
+							previousCoins = append(previousCoins, uint32(vin))
 						}
 					}
 				}

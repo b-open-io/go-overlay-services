@@ -2,7 +2,6 @@ package engine
 
 import (
 	"github.com/bsv-blockchain/go-sdk/chainhash"
-	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 )
 
@@ -33,10 +32,10 @@ func (m MerkleState) String() string {
 }
 
 type Output struct {
-	Outpoint        transaction.Outpoint
-	Topic           string
-	Script          *script.Script
-	Satoshis        uint64
+	Outpoint transaction.Outpoint
+	Topic    string
+	// Script          *script.Script
+	// Satoshis        uint64
 	Spent           bool
 	OutputsConsumed []*transaction.Outpoint
 	ConsumedBy      []*transaction.Outpoint

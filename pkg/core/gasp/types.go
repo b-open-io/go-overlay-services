@@ -51,7 +51,6 @@ type Node struct {
 	TxMetadata     string                `json:"txMetadata,omitempty"`
 	OutputMetadata string                `json:"outputMetadata,omitempty"`
 	Inputs         map[string]*Input     `json:"inputs,omitempty"`
-	AncillaryBeef  []byte                `json:"ancillaryBeef,omitempty"`
 }
 
 type NodeResponseData struct {

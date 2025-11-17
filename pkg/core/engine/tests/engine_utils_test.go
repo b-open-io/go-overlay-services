@@ -142,13 +142,13 @@ func (f fakeStorage) ReconcileMerkleRoot(ctx context.Context, topic string, bloc
 }
 
 type fakeManager struct {
-	identifyAdmissibleOutputsFunc func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error)
+	identifyAdmissibleOutputsFunc func(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error)
 	identifyNeededInputsFunc      func(ctx context.Context, beef []byte) ([]*transaction.Outpoint, error)
 	getMetaData                   func() *overlay.MetaData
 	getDocumentation              func() string
 }
 
-func (f fakeManager) IdentifyAdmissibleOutputs(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+func (f fakeManager) IdentifyAdmissibleOutputs(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
 	if f.identifyAdmissibleOutputsFunc != nil {
 		return f.identifyAdmissibleOutputsFunc(ctx, beef, previousCoins)
 	}
@@ -336,7 +336,7 @@ func (f fakeAdvertiser) ParseAdvertisement(script *script.Script) (*advertiser.A
 
 type fakeTopicManager struct{}
 
-func (fakeTopicManager) IdentifyAdmissibleOutputs(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+func (fakeTopicManager) IdentifyAdmissibleOutputs(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
 	return overlay.AdmittanceInstructions{}, nil
 }
 func (fakeTopicManager) IdentifyNeededInputs(ctx context.Context, beef []byte) ([]*transaction.Outpoint, error) {
