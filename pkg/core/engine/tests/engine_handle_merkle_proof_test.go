@@ -61,7 +61,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			findOutputsForTransactionFunc: func(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error) {
 				return []*engine.Output{output}, nil
 			},
-			updateOutputBlockHeightFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64, ancillaryBeef []byte) error {
+			updateOutputBlockHeightFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64) error {
 				// Verify the block height and index are updated
 				require.Equal(t, uint32(814435), blockHeight)
 				require.Equal(t, uint64(123), blockIdx)
@@ -302,7 +302,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				}
 				return nil, nil
 			},
-			updateOutputBlockHeightFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64, ancillaryBeef []byte) error {
+			updateOutputBlockHeightFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64) error {
 				updateCount++
 				return nil
 			},
@@ -331,7 +331,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 type mockHandleMerkleProofStorage struct {
 	findOutputsForTransactionFunc func(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error)
 	findOutputFunc                func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error)
-	updateOutputBlockHeightFunc   func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64, ancillaryBeef []byte) error
+	updateOutputBlockHeightFunc   func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64) error
 }
 
 func (m *mockHandleMerkleProofStorage) FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error) {
@@ -348,9 +348,9 @@ func (m *mockHandleMerkleProofStorage) FindOutput(ctx context.Context, outpoint 
 	return nil, nil
 }
 
-func (m *mockHandleMerkleProofStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64, ancillaryBeef []byte) error {
+func (m *mockHandleMerkleProofStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64) error {
 	if m.updateOutputBlockHeightFunc != nil {
-		return m.updateOutputBlockHeightFunc(ctx, outpoint, topic, blockHeight, blockIdx, ancillaryBeef)
+		return m.updateOutputBlockHeightFunc(ctx, outpoint, topic, blockHeight, blockIdx)
 	}
 	return nil
 }

@@ -27,7 +27,7 @@ type fakeStorage struct {
 	deleteOutputFunc                func(ctx context.Context, outpoint *transaction.Outpoint, topic string) error
 	findUTXOsForTopicFunc           func(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*engine.Output, error)
 	updateTransactionBEEF           func(ctx context.Context, txid *chainhash.Hash, beef []byte) error
-	updateOutputBlockHeight         func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error
+	updateOutputBlockHeight         func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error
 	findOutputsForTransaction       func(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error)
 	updateLastInteractionFunc       func(ctx context.Context, host string, topic string, since float64) error
 	getLastInteractionFunc          func(ctx context.Context, host string, topic string) (float64, error)
@@ -112,9 +112,9 @@ func (f fakeStorage) UpdateTransactionBEEF(ctx context.Context, txid *chainhash.
 	panic("func not defined")
 }
 
-func (f fakeStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error {
+func (f fakeStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error {
 	if f.updateOutputBlockHeight != nil {
-		return f.updateOutputBlockHeight(ctx, outpoint, topic, blockHeight, blockIndex, ancillaryBeef)
+		return f.updateOutputBlockHeight(ctx, outpoint, topic, blockHeight, blockIndex)
 	}
 	panic("func not defined")
 }

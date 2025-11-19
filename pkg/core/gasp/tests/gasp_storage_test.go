@@ -550,7 +550,7 @@ func (m *mockStorage) FindOutputsForTransaction(ctx context.Context, txid *chain
 	return nil, nil
 }
 
-func (m *mockStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error {
+func (m *mockStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error {
 	return nil
 }
 

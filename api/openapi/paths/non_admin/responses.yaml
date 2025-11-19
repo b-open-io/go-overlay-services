@@ -139,10 +139,6 @@ components:
         inputs:
           type: object
           description: The inputs of the GASP node
-        ancillaryBeef:
-          type: string
-          format: byte
-          description: The ancillary beef of the GASP node
       required:
         - graphID
         - rawTx
@@ -151,7 +147,6 @@ components:
         - txMetadata
         - outputMetadata
         - inputs
-        - ancillaryBeef
 
     UTXOItem:
       type: object

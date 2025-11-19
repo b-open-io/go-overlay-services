@@ -154,7 +154,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	}
 
 	var tx *transaction.Transaction
-	beef, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
+	_, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
 	if err != nil {
 		slog.Error("failed to parse BEEF in Submit", "error", err)
 		return nil, err
@@ -172,7 +172,6 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	steak := make(overlay.Steak, len(taggedBEEF.Topics))
 	topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
 	inpoints := make([]*transaction.Outpoint, 0, len(tx.Inputs))
-	ancillaryBeefs := make(map[string][]byte, len(taggedBEEF.Topics))
 	for _, input := range tx.Inputs {
 		inpoints = append(inpoints, &transaction.Outpoint{
 			Txid:  *input.SourceTXID,
@@ -210,31 +209,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				slog.Error("failed to identify admissible outputs", "txid", txid.String(), "topic", topic, "mode", string(mode), "error", err)
 				return nil, err
 			} else {
-				if len(admit.AncillaryTxids) > 0 {
-					ancillaryBeef := transaction.Beef{
-						Version:      transaction.BEEF_V2,
-						Transactions: make(map[chainhash.Hash]*transaction.BeefTx, len(admit.AncillaryTxids)),
-					}
-					for _, txid := range admit.AncillaryTxids {
-						if tx := beef.FindTransaction(txid.String()); tx == nil {
-							err := errors.New("missing dependency transaction")
-							slog.Error("missing dependency transaction", "txid", txid, "error", err)
-							return nil, err
-						} else if beefBytes, err := tx.BEEF(); err != nil {
-							slog.Error("failed to get BEEF bytes", "txid", txid, "error", err)
-							return nil, err
-						} else if err := ancillaryBeef.MergeBeefBytes(beefBytes); err != nil {
-							slog.Error("failed to merge BEEF bytes", "txid", txid, "error", err)
-							return nil, err
-						}
-					}
-					if beefBytes, err := ancillaryBeef.Bytes(); err != nil {
-						slog.Error("failed to get ancillary BEEF bytes", "topic", topic, "error", err)
-						return nil, err
-					} else {
-						ancillaryBeefs[topic] = beefBytes
-					}
-				}
+				// AncillaryBeef removed - ancillary txids are stored in admit.AncillaryTxids
 				steak[topic] = &admit
 			}
 		}
@@ -321,7 +296,6 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				OutputsConsumed: outpointsConsumed,
 				Beef:            taggedBEEF.Beef,
 				AncillaryTxids:  admit.AncillaryTxids,
-				AncillaryBeef:   ancillaryBeefs[topic],
 			}
 			if tx.MerklePath != nil {
 				output.BlockHeight = tx.MerklePath.BlockHeight
@@ -928,10 +902,6 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		if err != nil {
 			slog.Error("failed to parse BEEF in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", err)
 			return nil, err
-		} else if len(output.AncillaryBeef) > 0 {
-			if err := beef.MergeBeefBytes(output.AncillaryBeef); err != nil {
-				return nil, err
-			}
 		}
 
 		// If found in BEEF, return the node
@@ -1055,7 +1025,7 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 		slog.Error("missing BEEF in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
 		return err
 	}
-	beef, tx, _, err := transaction.ParseBeef(output.Beef)
+	_, tx, _, err := transaction.ParseBeef(output.Beef)
 	if err != nil {
 		slog.Error("failed to parse BEEF in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
 		return err
@@ -1082,31 +1052,6 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 		slog.Error("failed to get atomic BEEF", "txid", txid, "error", err)
 		return err
 	} else {
-		if len(output.AncillaryTxids) > 0 {
-			ancillaryBeef := transaction.Beef{
-				Version:      transaction.BEEF_V2,
-				Transactions: make(map[chainhash.Hash]*transaction.BeefTx, len(output.AncillaryTxids)),
-			}
-			for _, dep := range output.AncillaryTxids {
-				if depTx := beef.FindTransaction(dep.String()); depTx == nil {
-					err := errors.New("missing dependency transaction")
-					slog.Error("missing dependency transaction in updateMerkleProof", "dep", dep, "error", err)
-					return err
-				} else if depBeefBytes, err := depTx.BEEF(); err != nil {
-					slog.Error("failed to get dependency BEEF bytes", "dep", dep, "error", err)
-					return err
-				} else if err := ancillaryBeef.MergeBeefBytes(depBeefBytes); err != nil {
-					slog.Error("failed to merge dependency BEEF bytes", "dep", dep, "error", err)
-					return err
-				}
-			}
-			if output.AncillaryBeef, err = ancillaryBeef.Bytes(); err != nil {
-				slog.Error("failed to get ancillary BEEF bytes in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
-				return err
-			}
-		} else {
-			output.AncillaryBeef = nil
-		}
 
 		output.BlockHeight = proof.BlockHeight
 		for _, leaf := range proof.Path[0] {
@@ -1180,7 +1125,7 @@ func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash,
 			if err := e.updateMerkleProof(ctx, output, *txid, proof); err != nil {
 				slog.Error("failed to update merkle proof in HandleNewMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
 				return err
-			} else if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, output.BlockHeight, output.BlockIdx, output.AncillaryBeef); err != nil {
+			} else if err := e.Storage.UpdateOutputBlockHeight(ctx, &output.Outpoint, output.Topic, output.BlockHeight, output.BlockIdx); err != nil {
 				slog.Error("failed to update output block height", "outpoint", output.Outpoint.String(), "error", err)
 				return err
 			}
