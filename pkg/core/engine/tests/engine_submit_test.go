@@ -12,6 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var emptyBeefBytes = func() []byte {
+	emptyBeef := &transaction.Beef{
+		Version:      transaction.BEEF_V2,
+		BUMPs:        []*transaction.MerklePath{},
+		Transactions: make(map[chainhash.Hash]*transaction.BeefTx),
+	}
+	bytes, _ := emptyBeef.Bytes()
+	return bytes
+}()
+
 func TestEngine_Submit_Success(t *testing.T) {
 	// given:
 	ctx := context.Background()
@@ -31,10 +41,10 @@ func TestEngine_Submit_Success(t *testing.T) {
 				return nil
 			},
 			findOutputFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
-				return &engine.Output{}, nil
+				return &engine.Output{Beef: emptyBeefBytes}, nil
 			},
 			findOutputsFunc: func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
-				return []*engine.Output{{}}, nil
+				return []*engine.Output{{Beef: emptyBeefBytes}}, nil
 			},
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 				return false, nil
@@ -224,10 +234,10 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 		},
 		Storage: fakeStorage{
 			findOutputFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
-				return &engine.Output{}, nil
+				return &engine.Output{Beef: emptyBeefBytes}, nil
 			},
 			findOutputsFunc: func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
-				return []*engine.Output{{}}, nil
+				return []*engine.Output{{Beef: emptyBeefBytes}}, nil
 			},
 			doesAppliedTransactionExistFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 				return false, nil
@@ -292,6 +302,7 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 						Index: 0,
 					},
 					Topic: "test-topic",
+					Beef:  emptyBeefBytes,
 				}, nil
 			},
 			findOutputsFunc: func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error) {
@@ -302,6 +313,7 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 							Index: 0,
 						},
 						Topic: "test-topic",
+						Beef:  emptyBeefBytes,
 					},
 				}, nil
 			},
