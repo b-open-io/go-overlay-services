@@ -318,13 +318,18 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 			return err
 		} else if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
 			return err
-		} else if neededInputs != nil {
+		} else if len(neededInputs.RequestedInputs) > 0 {
 			slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), neededInputs))
 			for outpoint, data := range neededInputs.RequestedInputs {
 				slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
 				if err := g.processUTXOToCompletion(ctx, &outpoint, nodeOutpoint, seenNodes); err != nil {
-					return err
+					slog.Warn(fmt.Sprintf("%s Error processing dependency %s: %v", g.LogPrefix, outpoint.String(), err))
 				}
+			}
+			if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
+				return err
+			} else if len(neededInputs.RequestedInputs) > 0 {
+				return fmt.Errorf("not all inputs could be resolved for node %s after processing dependencies", nodeOutpoint.String())
 			}
 		}
 	}
@@ -398,7 +403,12 @@ func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transactio
 		// We're the first to process this outpoint, do the complete processing
 
 		// Request node from remote
-		resolvedNode, err := g.Remote.RequestNode(ctx, spentBy, outpoint, true)
+		// For top-level UTXOs, graphID should be the outpoint itself (not nil)
+		graphID := spentBy
+		if graphID == nil {
+			graphID = outpoint
+		}
+		resolvedNode, err := g.Remote.RequestNode(ctx, graphID, outpoint, true)
 		if err != nil {
 			state.err = fmt.Errorf("error with incoming UTXO %s: %w", outpoint, err)
 			return state.err

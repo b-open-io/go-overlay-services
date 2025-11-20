@@ -154,7 +154,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	}
 
 	var tx *transaction.Transaction
-	_, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
+	beef, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
 	if err != nil {
 		slog.Error("failed to parse BEEF in Submit", "error", err)
 		return nil, err
@@ -193,23 +193,24 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		} else {
 			topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
 			previousCoins := make([]uint32, 0, len(tx.Inputs))
-			outputs, err := e.Storage.FindOutputs(ctx, inpoints, topic, nil, false)
+			outputs, err := e.Storage.FindOutputs(ctx, inpoints, topic, nil, true)
 			if err != nil {
 				slog.Error("failed to find outputs", "topic", topic, "error", err)
 				return nil, err
 			}
 			for vin, output := range outputs {
 				if output != nil {
+					beef.MergeBeefBytes(output.Beef)
 					previousCoins = append(previousCoins, uint32(vin))
 					topicInputs[topic][uint32(vin)] = output
 				}
 			}
-
-			if admit, err := e.Managers[topic].IdentifyAdmissibleOutputs(ctx, taggedBEEF.Beef, previousCoins); err != nil {
+			if beefBytes, err := beef.AtomicBytes(txid); err != nil {
+				return nil, err
+			} else if admit, err := e.Managers[topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
 				slog.Error("failed to identify admissible outputs", "txid", txid.String(), "topic", topic, "mode", string(mode), "error", err)
 				return nil, err
 			} else {
-				// AncillaryBeef removed - ancillary txids are stored in admit.AncillaryTxids
 				steak[topic] = &admit
 			}
 		}
