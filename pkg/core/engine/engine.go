@@ -636,6 +636,9 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					if err != nil {
 						slog.Error("failed to parse advertisement output BEEF", "topic", topic, "error", err)
 						continue
+					} else if txId == nil {
+						slog.Error("error parsing advertisement output BEEF, no txId", "topic", topic)
+						continue
 					}
 					slog.Info(fmt.Sprintf("[GASP SYNC] Successfully parsed BEEF for topic \"%s\", transaction count: %d, txId: %s\n", topic, len(beef.Transactions), txId.String()))
 
