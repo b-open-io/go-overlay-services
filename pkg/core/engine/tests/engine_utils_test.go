@@ -27,7 +27,7 @@ type fakeStorage struct {
 	deleteOutputFunc                func(ctx context.Context, outpoint *transaction.Outpoint, topic string) error
 	findUTXOsForTopicFunc           func(ctx context.Context, topic string, since float64, limit uint32, includeBEEF bool) ([]*engine.Output, error)
 	updateTransactionBEEF           func(ctx context.Context, txid *chainhash.Hash, beef []byte) error
-	updateOutputBlockHeight         func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error
+	updateOutputBlockHeight         func(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error
 	findOutputsForTransaction       func(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error)
 	updateLastInteractionFunc       func(ctx context.Context, host string, topic string, since float64) error
 	getLastInteractionFunc          func(ctx context.Context, host string, topic string) (float64, error)
@@ -112,9 +112,9 @@ func (f fakeStorage) UpdateTransactionBEEF(ctx context.Context, txid *chainhash.
 	panic("func not defined")
 }
 
-func (f fakeStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error {
+func (f fakeStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error {
 	if f.updateOutputBlockHeight != nil {
-		return f.updateOutputBlockHeight(ctx, outpoint, topic, blockHeight, blockIndex, ancillaryBeef)
+		return f.updateOutputBlockHeight(ctx, outpoint, topic, blockHeight, blockIndex)
 	}
 	panic("func not defined")
 }
@@ -142,13 +142,13 @@ func (f fakeStorage) ReconcileMerkleRoot(ctx context.Context, topic string, bloc
 }
 
 type fakeManager struct {
-	identifyAdmissibleOutputsFunc func(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error)
+	identifyAdmissibleOutputsFunc func(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error)
 	identifyNeededInputsFunc      func(ctx context.Context, beef []byte) ([]*transaction.Outpoint, error)
 	getMetaData                   func() *overlay.MetaData
 	getDocumentation              func() string
 }
 
-func (f fakeManager) IdentifyAdmissibleOutputs(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+func (f fakeManager) IdentifyAdmissibleOutputs(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
 	if f.identifyAdmissibleOutputsFunc != nil {
 		return f.identifyAdmissibleOutputsFunc(ctx, beef, previousCoins)
 	}
@@ -336,7 +336,7 @@ func (f fakeAdvertiser) ParseAdvertisement(script *script.Script) (*advertiser.A
 
 type fakeTopicManager struct{}
 
-func (fakeTopicManager) IdentifyAdmissibleOutputs(ctx context.Context, beef []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+func (fakeTopicManager) IdentifyAdmissibleOutputs(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
 	return overlay.AdmittanceInstructions{}, nil
 }
 func (fakeTopicManager) IdentifyNeededInputs(ctx context.Context, beef []byte) ([]*transaction.Outpoint, error) {

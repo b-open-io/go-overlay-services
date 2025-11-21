@@ -19,9 +19,6 @@ type ArcIngest struct {
 
 // GASPNode A GASP node representation from the overlay engine
 type GASPNode struct {
-	// AncillaryBeef The ancillary beef of the GASP node
-	AncillaryBeef []byte `json:"ancillaryBeef"`
-
 	// GraphID The graph ID of the GASP node
 	GraphID string `json:"graphID"`
 

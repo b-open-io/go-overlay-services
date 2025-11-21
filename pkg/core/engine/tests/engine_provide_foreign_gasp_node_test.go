@@ -15,20 +15,29 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 	// given:
 	ctx := context.Background()
 	graphID := &transaction.Outpoint{}
-	outpoint := &transaction.Outpoint{Index: 1}
 	BEEF := createDummyBEEF(t)
+	tx := parseBEEFToTx(t, BEEF)
+	txid := tx.TxID()
+
+	// The outpoint must match a transaction that exists in the BEEF
+	outpoint := &transaction.Outpoint{
+		Txid:  *txid,
+		Index: 0,
+	}
 
 	expectedNode := &gasp.Node{
-		GraphID:       graphID,
-		RawTx:         parseBEEFToTx(t, BEEF).Hex(),
-		OutputIndex:   outpoint.Index,
-		AncillaryBeef: BEEF, // Unmined transactions now include BEEF as ancillary
+		GraphID:     graphID,
+		RawTx:       tx.Hex(),
+		OutputIndex: outpoint.Index,
 	}
 
 	sut := &engine.Engine{
 		Storage: fakeStorage{
-			findOutputFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
-				return &engine.Output{Beef: BEEF}, nil
+			findOutputFunc: func(ctx context.Context, op *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
+				return &engine.Output{
+					Outpoint: *op,
+					Beef:     BEEF,
+				}, nil
 			},
 		},
 	}

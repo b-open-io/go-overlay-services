@@ -160,16 +160,14 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 				Index: input.SourceTxOutIndex,
 			}
 		}
-		previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
-		if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, false); err != nil {
+		previousCoins := make([]uint32, 0, len(tx.Inputs))
+		if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, true); err != nil {
 			return nil, err
 		} else {
 			for vin, output := range outputs {
 				if output != nil {
-					previousCoins[uint32(vin)] = &transaction.TransactionOutput{
-						LockingScript: output.Script,
-						Satoshis:      output.Satoshis,
-					}
+					beef.MergeBeefBytes(output.Beef)
+					previousCoins = append(previousCoins, uint32(vin))
 				}
 			}
 		}
@@ -197,7 +195,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	return response, nil
 }
 
-func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
 	if _, ok := s.Engine.Managers[s.Topic]; !ok {
 		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic (identify admissible outputs): " + s.Topic)
 	}
@@ -281,7 +279,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 	} else {
 		coins := make(map[transaction.Outpoint]struct{})
 		for _, beefBytes := range beefs {
-			if tx, err := transaction.NewTransactionFromBEEF(beefBytes); err != nil {
+			if beef, tx, txid, err := transaction.ParseBeef(beefBytes); err != nil {
 				return err
 			} else {
 				inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
@@ -291,20 +289,20 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 						Index: input.SourceTxOutIndex,
 					}
 				}
-				previousCoins := make(map[uint32]*transaction.TransactionOutput, len(tx.Inputs))
-				if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, false); err != nil {
+				previousCoins := make([]uint32, 0, len(tx.Inputs))
+				if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, true); err != nil {
 					return err
 				} else {
 					for vin, output := range outputs {
 						if output != nil {
-							previousCoins[uint32(vin)] = &transaction.TransactionOutput{
-								LockingScript: output.Script,
-								Satoshis:      output.Satoshis,
-							}
+							beef.MergeBeefBytes(output.Beef)
+							previousCoins = append(previousCoins, uint32(vin))
 						}
 					}
 				}
-				if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+				if beefBytes, err = beef.AtomicBytes(txid); err != nil {
+					return err
+				} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
 					return err
 				} else {
 					for _, vout := range admit.OutputsToAdmit {
@@ -353,17 +351,13 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 	} else {
 		for _, beef := range beefs {
 			// Extract transaction ID from BEEF for deduplication key
-			_, tx, _, err := transaction.ParseBeef(beef)
+			_, tx, txid, err := transaction.ParseBeef(beef)
 			if err != nil {
 				return err
 			}
 			if tx == nil {
 				return errors.New("no transaction in BEEF")
 			}
-
-			txid := *tx.TxID()
-
-			// Deduplicate submissions by transaction ID
 
 			// Pre-initialize the submission state to avoid race conditions
 			newState := &submissionState{}

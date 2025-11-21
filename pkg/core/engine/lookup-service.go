@@ -12,9 +12,7 @@ import (
 
 type OutputAdmittedByTopic struct {
 	Topic          string
-	Outpoint       *transaction.Outpoint
-	Satoshis       uint64
-	LockingScript  *script.Script
+	OutputIndex    uint32
 	AtomicBEEF     []byte
 	OffChainValues []byte
 }
