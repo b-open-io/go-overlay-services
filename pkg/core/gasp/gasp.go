@@ -327,6 +327,7 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 				}
 			}
 			if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
+				slog.Error(fmt.Sprintf("%s Error re-checking needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), err))
 				return err
 			} else if neededInputs != nil && len(neededInputs.RequestedInputs) > 0 {
 				return fmt.Errorf("not all inputs could be resolved for node %s after processing dependencies", nodeOutpoint.String())

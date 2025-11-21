@@ -174,12 +174,8 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 
 		if beefBytes, err := beef.AtomicBytes(tx.TxID()); err != nil {
 			return nil, err
-		} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
-			return nil, err
-		} else if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
-			if _, ok := s.Engine.Managers[s.Topic]; !ok {
-				return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
-			} else if neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes); err != nil {
+		} else if admit, _ := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
+			if neededInputs, err := s.IdentifyNeededInputs(ctx, beefBytes); err != nil {
 				return nil, err
 			} else {
 				for _, outpoint := range neededInputs {
@@ -200,6 +196,13 @@ func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beef
 		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic (identify admissible outputs): " + s.Topic)
 	}
 	return s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+}
+
+func (s *OverlayGASPStorage) IdentifyNeededInputs(ctx context.Context, beefBytes []byte) ([]*transaction.Outpoint, error) {
+	if _, ok := s.Engine.Managers[s.Topic]; !ok {
+		return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
+	}
+	return s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes)
 }
 
 func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {
@@ -304,6 +307,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 				if beefBytes, err = beef.AtomicBytes(txid); err != nil {
 					return err
 				} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+					slog.Error("[GASP] ValidateGraphAnchor failed to identify admissible outputs", "error", err)
 					return err
 				} else {
 					for _, vout := range admit.OutputsToAdmit {
@@ -387,6 +391,7 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 					nil,
 				)
 				if state.err != nil {
+					slog.Error("[GASP] Failed to submit transaction", "txid", txid.String(), "error", state.err)
 					return state.err
 				}
 				slog.Info(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
