@@ -1,7 +1,10 @@
+// Package gasp implements the Graph Aware Sync Protocol for synchronizing transaction graphs between nodes.
 package gasp
 
 import (
 	"context"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -12,7 +15,21 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const MAX_CONCURRENCY = 16
+// MaxConcurrency defines the maximum number of concurrent GASP operations allowed.
+const MaxConcurrency = 16
+
+var (
+	// ErrNodeNilInProcessOutgoingNode is returned when a nil node is passed to processOutgoingNode.
+	ErrNodeNilInProcessOutgoingNode = errors.New("node is nil in processOutgoingNode")
+	// ErrTransactionParsingPanic is returned when transaction parsing triggers a panic.
+	ErrTransactionParsingPanic = errors.New("panic during transaction parsing")
+	// ErrTransactionHexTooShort is returned when transaction hex is too short to be valid.
+	ErrTransactionHexTooShort = errors.New("transaction hex too short")
+	// ErrTransactionHexTooLong is returned when transaction hex exceeds maximum size.
+	ErrTransactionHexTooLong = errors.New("transaction hex too long")
+	// ErrMaliciousVarInt is returned when a VarInt value exceeds reasonable limits.
+	ErrMaliciousVarInt = errors.New("malicious VarInt detected")
+)
 
 // utxoProcessingState tracks the state of a UTXO processing operation with result sharing
 type utxoProcessingState struct {
@@ -20,6 +37,7 @@ type utxoProcessingState struct {
 	err error
 }
 
+// NodeRequest represents a request for a specific node in the GASP graph.
 type NodeRequest struct {
 	GraphID     *transaction.Outpoint `json:"graphID"`
 	Txid        *chainhash.Hash       `json:"txid"`
@@ -27,7 +45,8 @@ type NodeRequest struct {
 	Metadata    bool                  `json:"metadata"`
 }
 
-type GASPParams struct {
+// Params contains the parameters for creating a new GASP instance.
+type Params struct {
 	Storage         Storage
 	Remote          Remote
 	LastInteraction float64
@@ -39,6 +58,7 @@ type GASPParams struct {
 	Topic           string
 }
 
+// GASP implements the Graph Aware Sync Protocol for synchronizing transaction graphs.
 type GASP struct {
 	Version         int
 	Remote          Remote
@@ -57,7 +77,8 @@ type GASP struct {
 	utxoQueue chan *transaction.Outpoint
 }
 
-func NewGASP(params GASPParams) *GASP {
+// NewGASP creates a new GASP instance with the provided parameters.
+func NewGASP(params Params) *GASP {
 	gasp := &GASP{
 		Storage:         params.Storage,
 		Remote:          params.Remote,
@@ -90,7 +111,8 @@ func NewGASP(params GASPParams) *GASP {
 	return gasp
 }
 
-func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
+// Sync performs a GASP synchronization with the specified host.
+func (g *GASP) Sync(ctx context.Context, _ string, limit uint32) error {
 	var sharedOutpoints sync.Map
 
 	initialRequest := &InitialRequest{
@@ -215,6 +237,7 @@ func (g *GASP) Sync(ctx context.Context, host string, limit uint32) error {
 	return nil
 }
 
+// GetInitialResponse processes an initial GASP request and returns known UTXOs.
 func (g *GASP) GetInitialResponse(ctx context.Context, request *InitialRequest) (resp *InitialResponse, err error) {
 	slog.Info(fmt.Sprintf("%s Received initial request: %v", g.LogPrefix, request))
 	if request.Version != g.Version {
@@ -237,6 +260,7 @@ func (g *GASP) GetInitialResponse(ctx context.Context, request *InitialRequest) 
 	return resp, nil
 }
 
+// GetInitialReply processes an initial response and returns UTXOs not in the response list.
 func (g *GASP) GetInitialReply(ctx context.Context, response *InitialResponse) (resp *InitialReply, err error) {
 	slog.Info(fmt.Sprintf("%s Received initial response: %v", g.LogPrefix, response))
 	knownUtxos, err := g.Storage.FindKnownUTXOs(ctx, response.Since, 0)
@@ -260,7 +284,8 @@ func (g *GASP) GetInitialReply(ctx context.Context, response *InitialResponse) (
 	return resp, nil
 }
 
-func (g *GASP) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (node *Node, err error) {
+// RequestNode handles a request for a specific node in the GASP graph.
+func (g *GASP) RequestNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (node *Node, err error) {
 	slog.Info(fmt.Sprintf("%s Remote is requesting node with graphID: %s, txid: %s, outputIndex: %d, metadata: %v", g.LogPrefix, graphID.String(), outpoint.Txid.String(), outpoint.Index, metadata))
 	if node, err = g.Storage.HydrateGASPNode(ctx, graphID, outpoint, metadata); err != nil {
 		return nil, err
@@ -269,6 +294,7 @@ func (g *GASP) RequestNode(ctx context.Context, graphID *transaction.Outpoint, o
 	return node, nil
 }
 
+// SubmitNode processes a submitted node and returns any needed inputs.
 func (g *GASP) SubmitNode(ctx context.Context, node *Node) (requestedInputs *NodeResponse, err error) {
 	slog.Info(fmt.Sprintf("%s Remote is submitting node: %v", g.LogPrefix, node))
 	if err = g.Storage.AppendToGraph(ctx, node, nil); err != nil {
@@ -284,10 +310,11 @@ func (g *GASP) SubmitNode(ctx context.Context, node *Node) (requestedInputs *Nod
 	return requestedInputs, nil
 }
 
+// CompleteGraph finalizes a newly-synced graph by hydrating and storing outputs.
 func (g *GASP) CompleteGraph(ctx context.Context, graphID *transaction.Outpoint) (err error) {
 	if err = g.Storage.ValidateGraphAnchor(ctx, graphID); err == nil {
 		slog.Debug(fmt.Sprintf("%s Graph validated for node: %s", g.LogPrefix, graphID.String()))
-		if err := g.Storage.FinalizeGraph(ctx, graphID); err == nil {
+		if finalizeErr := g.Storage.FinalizeGraph(ctx, graphID); finalizeErr == nil {
 			slog.Info(fmt.Sprintf("%s Graph finalized for node: %s", g.LogPrefix, graphID.String()))
 			return nil
 		}
@@ -297,44 +324,49 @@ func (g *GASP) CompleteGraph(ctx context.Context, graphID *transaction.Outpoint)
 }
 
 func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *transaction.Outpoint, seenNodes *sync.Map) error {
-	if txid, err := g.computeTxID(node.RawTx); err != nil {
+	txid, err := g.computeTxID(node.RawTx)
+	if err != nil {
 		return err
-	} else {
-		nodeOutpoint := &transaction.Outpoint{
-			Txid:  *txid,
-			Index: node.OutputIndex,
-		}
+	}
+	nodeOutpoint := &transaction.Outpoint{
+		Txid:  *txid,
+		Index: node.OutputIndex,
+	}
 
-		slog.Debug(fmt.Sprintf("%s Processing incoming node: %v, spentBy: %v", g.LogPrefix, node, spentBy))
+	slog.Debug(fmt.Sprintf("%s Processing incoming node: %v, spentBy: %v", g.LogPrefix, node, spentBy))
 
-		// Per-graph cycle detection
-		if _, ok := seenNodes.Load(*nodeOutpoint); ok {
-			slog.Debug(fmt.Sprintf("%s Node %s already seen in this graph, skipping.", g.LogPrefix, nodeOutpoint.String()))
-			return nil
-		}
-		seenNodes.Store(*nodeOutpoint, struct{}{})
+	// Per-graph cycle detection
+	if _, ok := seenNodes.Load(*nodeOutpoint); ok {
+		slog.Debug(fmt.Sprintf("%s Node %s already seen in this graph, skipping.", g.LogPrefix, nodeOutpoint.String()))
+		return nil
+	}
+	seenNodes.Store(*nodeOutpoint, struct{}{})
 
-		if err := g.Storage.AppendToGraph(ctx, node, spentBy); err != nil {
-			return err
-		} else if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
-			return err
-		} else if len(neededInputs.RequestedInputs) > 0 {
-			slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), neededInputs))
-			for outpoint, data := range neededInputs.RequestedInputs {
-				slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
-				childSpentBy := spentBy
-				if childSpentBy == nil {
-					childSpentBy = nodeOutpoint
-				}
-				if err := g.processUTXOToCompletion(ctx, &outpoint, childSpentBy, seenNodes); err != nil {
-					slog.Warn(fmt.Sprintf("%s Error processing dependency %s: %v", g.LogPrefix, outpoint.String(), err))
-				}
+	if appendErr := g.Storage.AppendToGraph(ctx, node, spentBy); appendErr != nil {
+		return appendErr
+	}
+	neededInputs, err := g.Storage.FindNeededInputs(ctx, node)
+	if err != nil {
+		return err
+	}
+	if len(neededInputs.RequestedInputs) > 0 {
+		slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), neededInputs))
+		for outpoint, data := range neededInputs.RequestedInputs {
+			slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
+			childSpentBy := spentBy
+			if childSpentBy == nil {
+				childSpentBy = nodeOutpoint
 			}
-			if neededInputs, err := g.Storage.FindNeededInputs(ctx, node); err != nil {
-				return err
-			} else if len(neededInputs.RequestedInputs) > 0 {
-				return fmt.Errorf("not all inputs could be resolved for node %s after processing dependencies", nodeOutpoint.String())
+			if err := g.processUTXOToCompletion(ctx, &outpoint, childSpentBy, seenNodes); err != nil {
+				slog.Warn(fmt.Sprintf("%s Error processing dependency %s: %v", g.LogPrefix, outpoint.String(), err))
 			}
+		}
+		neededInputs, err = g.Storage.FindNeededInputs(ctx, node)
+		if err != nil {
+			return err
+		}
+		if len(neededInputs.RequestedInputs) > 0 {
+			return fmt.Errorf("not all inputs could be resolved for node %s after processing dependencies", nodeOutpoint.String())
 		}
 	}
 	return nil
@@ -346,45 +378,47 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 		return nil
 	}
 	if node == nil {
-		return fmt.Errorf("node is nil in processOutgoingNode")
+		return ErrNodeNilInProcessOutgoingNode
 	}
-	if txid, err := g.computeTxID(node.RawTx); err != nil {
+	txid, err := g.computeTxID(node.RawTx)
+	if err != nil {
 		return err
-	} else {
-		nodeId := transaction.Outpoint{
-			Txid:  *txid,
-			Index: node.OutputIndex,
-		}
-		slog.Debug(fmt.Sprintf("%s Processing outgoing node: %v", g.LogPrefix, node))
-		if _, ok := seenNodes.Load(nodeId); ok {
-			slog.Debug(fmt.Sprintf("%s Node %s already processed, skipping.", g.LogPrefix, nodeId.String()))
-			return nil
-		}
-		seenNodes.Store(nodeId, struct{}{})
-		if response, err := g.Remote.SubmitNode(ctx, node); err != nil {
-			return err
-		} else if response != nil {
-			var wg sync.WaitGroup
-			for outpoint, data := range response.RequestedInputs {
-				wg.Add(1)
-				go func(outpoint transaction.Outpoint, data *NodeResponseData) {
-					defer wg.Done()
-					var hydratedNode *Node
-					var err error
-					slog.Info(fmt.Sprintf("%s Hydrating node for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
-					if hydratedNode, err = g.Storage.HydrateGASPNode(ctx, node.GraphID, &outpoint, data.Metadata); err == nil {
-						slog.Debug(fmt.Sprintf("%s Sending hydrated node: %v", g.LogPrefix, hydratedNode))
-						if err = g.processOutgoingNode(ctx, hydratedNode, seenNodes); err == nil {
-							return
-						}
+	}
+	nodeID := transaction.Outpoint{
+		Txid:  *txid,
+		Index: node.OutputIndex,
+	}
+	slog.Debug(fmt.Sprintf("%s Processing outgoing node: %v", g.LogPrefix, node))
+	if _, ok := seenNodes.Load(nodeID); ok {
+		slog.Debug(fmt.Sprintf("%s Node %s already processed, skipping.", g.LogPrefix, nodeID.String()))
+		return nil
+	}
+	seenNodes.Store(nodeID, struct{}{})
+	response, err := g.Remote.SubmitNode(ctx, node)
+	if err != nil {
+		return err
+	}
+	if response != nil {
+		var wg sync.WaitGroup
+		for outpoint, data := range response.RequestedInputs {
+			wg.Add(1)
+			go func(outpoint transaction.Outpoint, data *NodeResponseData) {
+				defer wg.Done()
+				var hydratedNode *Node
+				var err error
+				slog.Info(fmt.Sprintf("%s Hydrating node for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
+				if hydratedNode, err = g.Storage.HydrateGASPNode(ctx, node.GraphID, &outpoint, data.Metadata); err == nil {
+					slog.Debug(fmt.Sprintf("%s Sending hydrated node: %v", g.LogPrefix, hydratedNode))
+					if err = g.processOutgoingNode(ctx, hydratedNode, seenNodes); err == nil {
+						return
 					}
-					if err != nil {
-						slog.Error(fmt.Sprintf("%s Error hydrating node: %v", g.LogPrefix, err))
-					}
-				}(outpoint, data)
-			}
-			wg.Wait()
+				}
+				if err != nil {
+					slog.Error(fmt.Sprintf("%s Error hydrating node: %v", g.LogPrefix, err))
+				}
+			}(outpoint, data)
 		}
+		wg.Wait()
 	}
 	return nil
 }
@@ -434,12 +468,79 @@ func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transactio
 	}
 }
 
-func (g *GASP) computeTxID(rawtx string) (*chainhash.Hash, error) {
-	if tx, err := transaction.NewTransactionFromHex(rawtx); err != nil {
-		return nil, err
-	} else {
-		return tx.TxID(), nil
+func (g *GASP) computeTxID(rawtx string) (txID *chainhash.Hash, err error) {
+	// Recover from panics in transaction parsing (e.g., malformed VarInts in go-sdk)
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%w: %v", ErrTransactionParsingPanic, r)
+			txID = nil
+		}
+	}()
+
+	// Validate input length to prevent problematic VarInt patterns that cause EOF errors
+	// during fuzz test minimization. Minimum valid transaction is ~10 bytes (20 hex chars):
+	// 4 bytes version + 1 byte input count + 1 byte output count + 4 bytes locktime
+	if len(rawtx) < 20 {
+		return nil, fmt.Errorf("%w: %d characters (minimum 20)", ErrTransactionHexTooShort, len(rawtx))
 	}
+
+	// Reject extremely long inputs to prevent DoS attacks
+	// Maximum reasonable transaction size is ~1MB = 2M hex characters
+	if len(rawtx) > 2_000_000 {
+		return nil, fmt.Errorf("%w: %d characters (maximum 2,000,000)", ErrTransactionHexTooLong, len(rawtx))
+	}
+
+	// Decode hex to validate and check for malicious VarInt patterns
+	txBytes, err := hex.DecodeString(rawtx)
+	if err != nil {
+		return nil, fmt.Errorf("invalid hex: %w", err)
+	}
+
+	// Validate that VarInt values are reasonable to prevent OOM attacks
+	// VarInt 0xff prefix indicates next 8 bytes represent the actual value
+	// We scan for 0xff markers and validate the following 8-byte values are reasonable
+	if validationErr := validateVarInts(txBytes); validationErr != nil {
+		return nil, validationErr
+	}
+
+	tx, err := transaction.NewTransactionFromHex(rawtx)
+	if err != nil {
+		return nil, err
+	}
+	return tx.TxID(), nil
+}
+
+// validateVarInts checks for malicious VarInt patterns that could cause OOM.
+// Bitcoin uses VarInt encoding where 0xff prefix means the next 8 bytes are the value.
+// Malicious inputs can have 0xff followed by huge values (e.g., 281TB) causing allocation failures.
+func validateVarInts(data []byte) error {
+	const maxReasonableVarInt = 10_000_000 // 10MB is reasonable for script/input/output counts
+
+	for i := 0; i < len(data); i++ {
+		// Check for VarInt 0xff marker
+		if data[i] == 0xff {
+			// Need 8 bytes after 0xff
+			if i+8 >= len(data) {
+				continue // Will fail during actual parsing anyway
+			}
+
+			// Read next 8 bytes as little-endian uint64
+			value := uint64(data[i+1]) |
+				uint64(data[i+2])<<8 |
+				uint64(data[i+3])<<16 |
+				uint64(data[i+4])<<24 |
+				uint64(data[i+5])<<32 |
+				uint64(data[i+6])<<40 |
+				uint64(data[i+7])<<48 |
+				uint64(data[i+8])<<56
+
+			// Reject unreasonably large values that would cause OOM
+			if value > maxReasonableVarInt {
+				return fmt.Errorf("%w: value %d exceeds maximum %d", ErrMaliciousVarInt, value, maxReasonableVarInt)
+			}
+		}
+	}
+	return nil
 }
 
 // ProcessUTXO queues a single UTXO for processing outside of the sync workflow.

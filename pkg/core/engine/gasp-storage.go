@@ -17,7 +17,23 @@ import (
 	"github.com/bsv-blockchain/go-sdk/transaction"
 )
 
-var ErrGraphFull = errors.New("graph is full")
+var (
+	// ErrGraphFull indicates the graph has reached its maximum size
+	ErrGraphFull = errors.New("graph is full")
+
+	// ErrParsedBEEFReturnedNilTx indicates that parsing BEEF returned a nil transaction
+	ErrParsedBEEFReturnedNilTx = errors.New("parsed BEEF returned nil transaction")
+
+	// ErrGraphAnchorInvalidTx indicates that the graph anchor is not a valid transaction
+	ErrGraphAnchorInvalidTx = errors.New("graph anchor is not a valid transaction")
+
+	// ErrGraphNoTopicalAdmittance indicates that the graph did not result in topical admittance of the root node
+	ErrGraphNoTopicalAdmittance = errors.New("graph did not result in topical admittance of the root node. rejecting")
+	// ErrUnableToFindRootNodeInGraph indicates that the root node could not be found in the graph for finalization
+	ErrUnableToFindRootNodeInGraph = errors.New("unable to find root node in graph for finalization")
+	// ErrRequiredInputNodeNotFoundInTempGraph indicates that a required input node was not found in the temporary graph store
+	ErrRequiredInputNodeNotFoundInTempGraph = errors.New("required input node for unproven parent not found in temporary graph store")
+)
 
 // submissionState tracks the state of a transaction submission
 type submissionState struct {
@@ -25,14 +41,17 @@ type submissionState struct {
 	err error
 }
 
+// GraphNode represents a node in the GASP graph
 type GraphNode struct {
 	gasp.Node
+
 	Txid     *chainhash.Hash `json:"txid"`
 	SpentBy  *chainhash.Hash `json:"spentBy"`
 	Children sync.Map        `json:"-"` // map[string]*GraphNode - concurrent safe
 	Parent   *GraphNode      `json:"parent"`
 }
 
+// OverlayGASPStorage implements GASP storage using the overlay engine
 type OverlayGASPStorage struct {
 	Topic              string
 	Engine             *Engine
@@ -42,6 +61,7 @@ type OverlayGASPStorage struct {
 	submissionTracker  sync.Map // map[chainhash.Hash]*submissionState
 }
 
+// NewOverlayGASPStorage creates a new OverlayGASPStorage instance
 func NewOverlayGASPStorage(topic string, engine *Engine, maxNodesInGraph *int) *OverlayGASPStorage {
 	return &OverlayGASPStorage{
 		Topic:           topic,
@@ -50,22 +70,26 @@ func NewOverlayGASPStorage(topic string, engine *Engine, maxNodesInGraph *int) *
 	}
 }
 
+// ErrNoKnownUTXOs is returned when no UTXOs are found
+var ErrNoKnownUTXOs = errors.New("no known UTXOs")
+
+// FindKnownUTXOs retrieves known UTXOs for the topic
 func (s *OverlayGASPStorage) FindKnownUTXOs(ctx context.Context, since float64, limit uint32) ([]*gasp.Output, error) {
-	if utxos, err := s.Engine.Storage.FindUTXOsForTopic(ctx, s.Topic, since, limit, false); err != nil {
+	utxos, err := s.Engine.Storage.FindUTXOsForTopic(ctx, s.Topic, since, limit, false)
+	if err != nil {
 		return nil, err
-	} else {
-		gaspOutputs := make([]*gasp.Output, len(utxos))
-
-		for i, utxo := range utxos {
-			gaspOutputs[i] = &gasp.Output{
-				Txid:        utxo.Outpoint.Txid,
-				OutputIndex: utxo.Outpoint.Index,
-				Score:       utxo.Score,
-			}
-		}
-
-		return gaspOutputs, nil
 	}
+	gaspOutputs := make([]*gasp.Output, len(utxos))
+
+	for i, utxo := range utxos {
+		gaspOutputs[i] = &gasp.Output{
+			Txid:        utxo.Outpoint.Txid,
+			OutputIndex: utxo.Outpoint.Index,
+			Score:       utxo.Score,
+		}
+	}
+
+	return gaspOutputs, nil
 }
 
 func (s *OverlayGASPStorage) HasOutputs(ctx context.Context, outpoints []*transaction.Outpoint) ([]bool, error) {
@@ -83,36 +107,42 @@ func (s *OverlayGASPStorage) HasOutputs(ctx context.Context, outpoints []*transa
 	return result, nil
 }
 
-func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
-	if output, err := s.Engine.Storage.FindOutput(ctx, outpoint, nil, nil, true); err != nil {
+// HydrateGASPNode hydrates a GASP node from storage
+func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, _ bool) (*gasp.Node, error) {
+	output, err := s.Engine.Storage.FindOutput(ctx, outpoint, nil, nil, true)
+	if err != nil {
 		return nil, err
-	} else if output == nil || output.Beef == nil {
-		return nil, ErrMissingInput
-	} else {
-		// Parse BEEF to get the transaction
-		_, tx, _, err := transaction.ParseBeef(output.Beef)
-		if err != nil {
-			return nil, err
-		}
-
-		// Check if we got a valid transaction
-		if tx == nil {
-			return nil, errors.New("parsed BEEF returned nil transaction")
-		}
-
-		node := &gasp.Node{
-			GraphID:     graphID,
-			OutputIndex: outpoint.Index,
-			RawTx:       tx.Hex(),
-		}
-		if tx.MerklePath != nil {
-			proof := tx.MerklePath.Hex()
-			node.Proof = &proof
-		}
-		return node, nil
 	}
+	if output == nil || output.Beef == nil {
+		return nil, ErrMissingInput
+	}
+	// Parse BEEF to get the transaction
+	_, tx, _, err := transaction.ParseBeef(output.Beef)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if we got a valid transaction
+	if tx == nil {
+		return nil, ErrParsedBEEFReturnedNilTx
+	}
+
+	node := &gasp.Node{
+		GraphID:     graphID,
+		OutputIndex: outpoint.Index,
+		RawTx:       tx.Hex(),
+	}
+	if tx.MerklePath != nil {
+		proof := tx.MerklePath.Hex()
+		node.Proof = &proof
+	}
+	return node, nil
 }
 
+// ErrNoNeededInputs is returned when no inputs are needed
+var ErrNoNeededInputs = errors.New("no needed inputs")
+
+// FindNeededInputs determines which inputs are needed for a GASP transaction
 func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.Node) (*gasp.NodeResponse, error) {
 	response := &gasp.NodeResponse{
 		RequestedInputs: make(map[transaction.Outpoint]*gasp.NodeResponseData),
@@ -161,34 +191,39 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 			}
 		}
 		previousCoins := make([]uint32, 0, len(tx.Inputs))
-		if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, true); err != nil {
+		outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, true)
+		if err != nil {
 			return nil, err
-		} else {
-			for vin, output := range outputs {
-				if output != nil {
-					beef.MergeBeefBytes(output.Beef)
-					previousCoins = append(previousCoins, uint32(vin))
-				}
+		}
+		for vin, output := range outputs {
+			if output != nil {
+				beef.MergeBeefBytes(output.Beef)
+				previousCoins = append(previousCoins, uint32(vin))
 			}
 		}
 
-		if beefBytes, err := beef.AtomicBytes(tx.TxID()); err != nil {
+		beefBytes, err := beef.AtomicBytes(tx.TxID())
+		if err != nil {
 			return nil, err
-		} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+		}
+		admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+		if err != nil {
 			return nil, err
-		} else if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
+		}
+		if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
 			if _, ok := s.Engine.Managers[s.Topic]; !ok {
 				return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
-			} else if neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes); err != nil {
-				return nil, err
-			} else {
-				for _, outpoint := range neededInputs {
-					response.RequestedInputs[*outpoint] = &gasp.NodeResponseData{
-						Metadata: true,
-					}
-				}
-				return s.stripAlreadyKnowInputs(ctx, response)
 			}
+			neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes)
+			if err != nil {
+				return nil, err
+			}
+			for _, outpoint := range neededInputs {
+				response.RequestedInputs[*outpoint] = &gasp.NodeResponseData{
+					Metadata: true,
+				}
+			}
+			return s.stripAlreadyKnowInputs(ctx, response)
 		}
 	}
 
@@ -202,9 +237,12 @@ func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beef
 	return s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
 }
 
+// ErrNoInputsToStrip is returned when there are no inputs to strip
+var ErrNoInputsToStrip = errors.New("no inputs to strip")
+
 func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {
 	if response == nil {
-		return nil, nil
+		return nil, ErrNoInputsToStrip
 	}
 	for outpoint := range response.RequestedInputs {
 		if found, err := s.Engine.Storage.FindOutput(ctx, &outpoint, &s.Topic, nil, false); err != nil {
@@ -214,55 +252,57 @@ func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, respons
 		}
 	}
 	if len(response.RequestedInputs) == 0 {
-		return nil, nil
+		return nil, ErrNoInputsToStrip
 	}
 	return response, nil
 }
 
-func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *gasp.Node, spentBy *transaction.Outpoint) error {
+// AppendToGraph adds a GASP node to the temporary graph store for later validation and finalization.
+func (s *OverlayGASPStorage) AppendToGraph(_ context.Context, gaspTx *gasp.Node, spentBy *transaction.Outpoint) error {
 	if s.MaxNodesInGraph != nil && s.tempGraphNodeCount >= *s.MaxNodesInGraph {
 		return ErrGraphFull
 	}
 
-	if tx, err := transaction.NewTransactionFromHex(gaspTx.RawTx); err != nil {
+	tx, err := transaction.NewTransactionFromHex(gaspTx.RawTx)
+	if err != nil {
 		return err
-	} else {
-		txid := tx.TxID()
-		if gaspTx.Proof != nil && *gaspTx.Proof != "" {
-			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
-				slog.Error("Failed to parse merkle path", "error", err, "proofLength", len(*gaspTx.Proof))
-				return err
-			}
-		}
-		newGraphNode := &GraphNode{
-			Node: *gaspTx,
-			Txid: txid,
-		}
-		if spentBy == nil {
-			if _, ok := s.tempGraphNodeRefs.LoadOrStore(*gaspTx.GraphID, newGraphNode); !ok {
-				s.tempGraphNodeCount++
-			}
-		} else {
-			// Find parent node by spentBy outpoint
-			if parentNode, ok := s.tempGraphNodeRefs.Load(*spentBy); !ok {
-				return ErrMissingInput
-			} else {
-				parent := parentNode.(*GraphNode)
-				parent.Children.Store(*gaspTx.GraphID, newGraphNode)
-				newGraphNode.Parent = parentNode.(*GraphNode)
-			}
-			newGraphOutpoint := &transaction.Outpoint{
-				Txid:  *txid,
-				Index: gaspTx.OutputIndex,
-			}
-			if _, ok := s.tempGraphNodeRefs.LoadOrStore(*newGraphOutpoint, newGraphNode); !ok {
-				s.tempGraphNodeCount++
-			}
-		}
-		return nil
 	}
+	txid := tx.TxID()
+	if gaspTx.Proof != nil && *gaspTx.Proof != "" {
+		if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
+			slog.Error("Failed to parse merkle path", "error", err, "proofLength", len(*gaspTx.Proof))
+			return err
+		}
+	}
+	newGraphNode := &GraphNode{
+		Node: *gaspTx,
+		Txid: txid,
+	}
+	if spentBy == nil {
+		if _, ok := s.tempGraphNodeRefs.LoadOrStore(*gaspTx.GraphID, newGraphNode); !ok {
+			s.tempGraphNodeCount++
+		}
+	} else {
+		// Find parent node by spentBy outpoint
+		parentNode, ok := s.tempGraphNodeRefs.Load(*spentBy)
+		if !ok {
+			return ErrMissingInput
+		}
+		parent := parentNode.(*GraphNode)
+		parent.Children.Store(*gaspTx.GraphID, newGraphNode)
+		newGraphNode.Parent = parentNode.(*GraphNode)
+		newGraphOutpoint := &transaction.Outpoint{
+			Txid:  *txid,
+			Index: gaspTx.OutputIndex,
+		}
+		if _, ok := s.tempGraphNodeRefs.LoadOrStore(*newGraphOutpoint, newGraphNode); !ok {
+			s.tempGraphNodeCount++
+		}
+	}
+	return nil
 }
 
+// ValidateGraphAnchor verifies that the graph anchor transaction is valid and results in topical admittance.
 func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *transaction.Outpoint) error {
 	if rootNode, ok := s.tempGraphNodeRefs.Load(*graphID); !ok {
 		return ErrMissingInput
@@ -273,55 +313,57 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 	} else if valid, err := spv.Verify(ctx, tx, s.Engine.ChainTracker, nil); err != nil {
 		return err
 	} else if !valid {
-		return errors.New("graph anchor is not a valid transaction")
-	} else if beefs, err := s.computeOrderedBEEFsForGraph(ctx, graphID); err != nil {
-		return err
-	} else {
-		coins := make(map[transaction.Outpoint]struct{})
-		for _, beefBytes := range beefs {
-			if beef, tx, txid, err := transaction.ParseBeef(beefBytes); err != nil {
+		return ErrGraphAnchorInvalidTx
+	}
+	beefs, beefsErr := s.computeOrderedBEEFsForGraph(ctx, graphID)
+	if beefsErr != nil {
+		return beefsErr
+	}
+	coins := make(map[transaction.Outpoint]struct{})
+	for _, beefBytes := range beefs {
+		if beef, tx, txid, err := transaction.ParseBeef(beefBytes); err != nil {
+			return err
+		} else {
+			inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
+			for vin, input := range tx.Inputs {
+				inpoints[vin] = &transaction.Outpoint{
+					Txid:  *input.SourceTXID,
+					Index: input.SourceTxOutIndex,
+				}
+			}
+			previousCoins := make([]uint32, 0, len(tx.Inputs))
+			if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, true); err != nil {
 				return err
 			} else {
-				inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
-				for vin, input := range tx.Inputs {
-					inpoints[vin] = &transaction.Outpoint{
-						Txid:  *input.SourceTXID,
-						Index: input.SourceTxOutIndex,
-					}
-				}
-				previousCoins := make([]uint32, 0, len(tx.Inputs))
-				if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, true); err != nil {
-					return err
-				} else {
-					for vin, output := range outputs {
-						if output != nil {
-							beef.MergeBeefBytes(output.Beef)
-							previousCoins = append(previousCoins, uint32(vin))
-						}
-					}
-				}
-				if beefBytes, err = beef.AtomicBytes(txid); err != nil {
-					return err
-				} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
-					return err
-				} else {
-					for _, vout := range admit.OutputsToAdmit {
-						outpoint := &transaction.Outpoint{
-							Txid:  *tx.TxID(),
-							Index: vout,
-						}
-						coins[*outpoint] = struct{}{}
+				for vin, output := range outputs {
+					if output != nil {
+						beef.MergeBeefBytes(output.Beef)
+						previousCoins = append(previousCoins, uint32(vin))
 					}
 				}
 			}
+			if beefBytes, err = beef.AtomicBytes(txid); err != nil {
+				return err
+			} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+				return err
+			} else {
+				for _, vout := range admit.OutputsToAdmit {
+					outpoint := &transaction.Outpoint{
+						Txid:  *tx.TxID(),
+						Index: vout,
+					}
+					coins[*outpoint] = struct{}{}
+				}
+			}
 		}
-		if _, ok := coins[*graphID]; !ok {
-			return errors.New("graph did not result in topical admittance of the root node. rejecting")
-		}
-		return nil
 	}
+	if _, ok := coins[*graphID]; !ok {
+		return ErrGraphNoTopicalAdmittance
+	}
+	return nil
 }
 
+// DiscardGraph removes all nodes associated with the specified graph from the temporary storage.
 func (s *OverlayGASPStorage) DiscardGraph(_ context.Context, graphID *transaction.Outpoint) error {
 	// Find and delete all nodes that belong to this graph
 	nodesToDelete := make([]*transaction.Outpoint, 0)
@@ -337,99 +379,102 @@ func (s *OverlayGASPStorage) DiscardGraph(_ context.Context, graphID *transactio
 	})
 
 	// Delete all collected nodes
-	for _, nodeId := range nodesToDelete {
-		s.tempGraphNodeRefs.Delete(*nodeId)
+	for _, nodeID := range nodesToDelete {
+		s.tempGraphNodeRefs.Delete(*nodeID)
 		s.tempGraphNodeCount--
 	}
 
 	return nil
 }
 
+// FinalizeGraph submits all transactions in the graph to the overlay engine for processing.
 func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transaction.Outpoint) error {
-	if beefs, err := s.computeOrderedBEEFsForGraph(ctx, graphID); err != nil {
+	beefs, err := s.computeOrderedBEEFsForGraph(ctx, graphID)
+	if err != nil {
 		return err
-	} else {
-		for _, beef := range beefs {
-			// Extract transaction ID from BEEF for deduplication key
-			_, tx, txid, err := transaction.ParseBeef(beef)
-			if err != nil {
-				return err
-			}
-			if tx == nil {
-				return errors.New("no transaction in BEEF")
-			}
-
-			// Pre-initialize the submission state to avoid race conditions
-			newState := &submissionState{}
-			newState.wg.Add(1)
-
-			if existing, loaded := s.submissionTracker.LoadOrStore(txid, newState); loaded {
-				// Another goroutine is already submitting this transaction, wait for it
-				state := existing.(*submissionState)
-				state.wg.Wait()
-				if state.err != nil {
-					return state.err
-				}
-			} else {
-				// We're the first caller, do the submission using our pre-initialized state
-				state := newState
-				defer state.wg.Done() // Signal completion
-
-				// Perform the actual submission
-				_, state.err = s.Engine.Submit(
-					ctx,
-					overlay.TaggedBEEF{
-						Topics: []string{s.Topic},
-						Beef:   beef,
-					},
-					SubmitModeHistorical,
-					nil,
-				)
-				if state.err != nil {
-					return state.err
-				}
-				slog.Info(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
-			}
-		}
-		return nil
 	}
+	for _, beef := range beefs {
+		// Extract transaction ID from BEEF for deduplication key
+		_, tx, txid, err := transaction.ParseBeef(beef)
+		if err != nil {
+			return err
+		}
+		if tx == nil {
+			return errors.New("no transaction in BEEF")
+		}
+
+		// Pre-initialize the submission state to avoid race conditions
+		newState := &submissionState{}
+		newState.wg.Add(1)
+
+		if existing, loaded := s.submissionTracker.LoadOrStore(txid, newState); loaded {
+			// Another goroutine is already submitting this transaction, wait for it
+			state := existing.(*submissionState)
+			state.wg.Wait()
+			if state.err != nil {
+				return state.err
+			}
+		} else {
+			// We're the first caller, do the submission using our pre-initialized state
+			state := newState
+			defer state.wg.Done() // Signal completion
+
+			// Perform the actual submission
+			_, state.err = s.Engine.Submit(
+				ctx,
+				overlay.TaggedBEEF{
+					Topics: []string{s.Topic},
+					Beef:   beef,
+				},
+				SubmitModeHistorical,
+				nil,
+			)
+			if state.err != nil {
+				return state.err
+			}
+			slog.Info(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
+		}
+	}
+	return nil
+
 }
 
-func (s *OverlayGASPStorage) computeOrderedBEEFsForGraph(ctx context.Context, graphID *transaction.Outpoint) ([][]byte, error) {
+func (s *OverlayGASPStorage) computeOrderedBEEFsForGraph(_ context.Context, graphID *transaction.Outpoint) ([][]byte, error) {
 	beefs := make([][]byte, 0)
 	var hydrator func(node *GraphNode) error
 	hydrator = func(node *GraphNode) error {
-		if currentBeef, err := s.getBEEFForNode(node); err != nil {
+		currentBeef, err := s.getBEEFForNode(node)
+		if err != nil {
 			return err
-		} else {
-			if slices.IndexFunc(beefs, func(beef []byte) bool {
-				return bytes.Equal(beef, currentBeef)
-			}) == -1 {
-				beefs = append([][]byte{currentBeef}, beefs...)
+		}
+		if slices.IndexFunc(beefs, func(beef []byte) bool {
+			return bytes.Equal(beef, currentBeef)
+		}) == -1 {
+			beefs = append([][]byte{currentBeef}, beefs...)
+		}
+		var childErr error
+		node.Children.Range(func(key, value any) bool {
+			child := value.(*GraphNode)
+			if err := hydrator(child); err != nil {
+				childErr = err
+				return false
 			}
-			var childErr error
-			node.Children.Range(func(key, value any) bool {
-				child := value.(*GraphNode)
-				if err := hydrator(child); err != nil {
-					childErr = err
-					return false
-				}
-				return true
-			})
-			if childErr != nil {
-				return childErr
-			}
+			return true
+		})
+		if childErr != nil {
+			return childErr
 		}
 		return nil
 	}
 
-	if foundRoot, ok := s.tempGraphNodeRefs.Load(*graphID); !ok {
-		return nil, errors.New("unable to find root node in graph for finalization")
-	} else if err := hydrator(foundRoot.(*GraphNode)); err != nil {
-		return nil, err
-	} else {
-		return beefs, nil
+	foundRoot, ok := s.tempGraphNodeRefs.Load(*graphID)
+	if !ok {
+		return nil, ErrUnableToFindRootNodeInGraph
 	}
+	if err := hydrator(foundRoot.(*GraphNode)); err != nil {
+		return nil, err
+	}
+	return beefs, nil
 }
 
 func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
@@ -442,33 +487,38 @@ func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 		if node == nil {
 			panic(fmt.Sprintf("GASP DEBUG: hydrator called with nil node. Goroutine: %d", runtime.NumGoroutine()))
 		}
-		if tx, err := transaction.NewTransactionFromHex(node.RawTx); err != nil {
+		tx, err := transaction.NewTransactionFromHex(node.RawTx)
+		if err != nil {
 			return nil, err
-		} else if node.Proof != nil && *node.Proof != "" {
+		}
+		if node.Proof != nil && *node.Proof != "" {
 			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*node.Proof); err != nil {
 				return nil, err
 			}
 			return tx, nil
-		} else {
-			for vin, input := range tx.Inputs {
-				outpoint := &transaction.Outpoint{
-					Txid:  *input.SourceTXID,
-					Index: input.SourceTxOutIndex,
-				}
-				if foundNode, ok := s.tempGraphNodeRefs.Load(*outpoint); !ok {
-					return nil, errors.New("required input node for unproven parent not found in temporary graph store")
-				} else if tx.Inputs[vin].SourceTransaction, err = hydrator(foundNode.(*GraphNode)); err != nil {
-					return nil, err
-				}
-			}
-			return tx, nil
 		}
+		for vin, input := range tx.Inputs {
+			outpoint := &transaction.Outpoint{
+				Txid:  *input.SourceTXID,
+				Index: input.SourceTxOutIndex,
+			}
+			foundNode, ok := s.tempGraphNodeRefs.Load(*outpoint)
+			if !ok {
+				return nil, ErrRequiredInputNodeNotFoundInTempGraph
+			}
+			if tx.Inputs[vin].SourceTransaction, err = hydrator(foundNode.(*GraphNode)); err != nil {
+				return nil, err
+			}
+		}
+		return tx, nil
 	}
-	if tx, err := hydrator(node); err != nil {
+	tx, err := hydrator(node)
+	if err != nil {
 		return nil, err
-	} else if beef, err := transaction.NewBeefFromTransaction(tx); err != nil {
-		return nil, err
-	} else {
-		return beef.AtomicBytes(tx.TxID())
 	}
+	beef, err := transaction.NewBeefFromTransaction(tx)
+	if err != nil {
+		return nil, err
+	}
+	return beef.AtomicBytes(tx.TxID())
 }

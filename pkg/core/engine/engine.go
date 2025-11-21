@@ -22,23 +22,35 @@ import (
 	"github.com/bsv-blockchain/go-sdk/transaction/chaintracker"
 )
 
-const DEFAULT_GASP_SYNC_LIMIT = 1000
+// DefaultGASPSyncLimit is the default limit for GASP synchronization
+const DefaultGASPSyncLimit = 1000
 
-var TRUE = true
-var FALSE = false
+var (
+	// TRUE is a boolean true value
+	TRUE = true
+	// FALSE is a boolean false value
+	FALSE = false
+)
 
+// SumbitMode represents the mode for transaction submission
 type SumbitMode string
 
 var (
+	// SubmitModeHistorical is the mode for submitting historical transactions
 	SubmitModeHistorical SumbitMode = "historical-tx"
-	SubmitModeCurrent    SumbitMode = "current-tx"
+	// SubmitModeCurrent is the mode for submitting current transactions
+	SubmitModeCurrent SumbitMode = "current-tx"
 )
 
+// SyncConfigurationType represents the type of synchronization configuration
 type SyncConfigurationType int
 
 const (
+	// SyncConfigurationPeers indicates peer-based synchronization
 	SyncConfigurationPeers SyncConfigurationType = iota
+	// SyncConfigurationSHIP indicates SHIP-based synchronization
 	SyncConfigurationSHIP
+	// SyncConfigurationNone indicates no synchronization
 	SyncConfigurationNone
 )
 
@@ -56,20 +68,24 @@ func (s SyncConfigurationType) String() string {
 	}
 }
 
+// SyncConfiguration represents the configuration for synchronization
 type SyncConfiguration struct {
 	Type        SyncConfigurationType
 	Peers       []string
 	Concurrency int
 }
 
+// OnSteakReady is a callback function that is called when a steak is ready
 type OnSteakReady func(steak *overlay.Steak)
 
+// LookupResolverProvider is an interface for looking up and resolving blockchain data
 type LookupResolverProvider interface {
 	SLAPTrackers() []string
 	SetSLAPTrackers(trackers []string)
 	Query(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error)
 }
 
+// Engine is the core overlay services engine
 type Engine struct {
 	Managers                map[string]TopicManager
 	LookupServices          map[string]LookupService
@@ -89,6 +105,7 @@ type Engine struct {
 	// Logger				  Logger //TODO: Implement Logger Interface
 }
 
+// NewEngine creates and returns a new Engine instance
 func NewEngine(cfg Engine) *Engine {
 	if cfg.SyncConfiguration == nil {
 		cfg.SyncConfiguration = make(map[string]SyncConfiguration)
@@ -138,13 +155,34 @@ func NewEngine(cfg Engine) *Engine {
 	return &cfg
 }
 
-var ErrUnknownTopic = errors.New("unknown-topic")
-var ErrInvalidBeef = errors.New("invalid-beef")
-var ErrInvalidTransaction = errors.New("invalid-transaction")
-var ErrMissingInput = errors.New("missing-input")
-var ErrMissingOutput = errors.New("missing-output")
-var ErrInputSpent = errors.New("input-spent")
+var (
+	// ErrUnknownTopic is returned when a topic is not found in the engine
+	ErrUnknownTopic = errors.New("unknown-topic")
+	// ErrInvalidBeef is returned when BEEF data is invalid
+	ErrInvalidBeef = errors.New("invalid-beef")
+	// ErrInvalidTransaction is returned when a transaction is invalid
+	ErrInvalidTransaction = errors.New("invalid-transaction")
+	// ErrMissingInput is returned when an input is missing
+	ErrMissingInput = errors.New("missing-input")
+	// ErrMissingOutput is returned when an output is missing
+	ErrMissingOutput = errors.New("missing-output")
+	// ErrInputSpent is returned when an input has already been spent
+	ErrInputSpent = errors.New("input-spent")
+	// ErrMissingDependencyTx is returned when a dependency transaction is missing
+	ErrMissingDependencyTx = errors.New("missing dependency transaction")
+	// ErrMissingBeef is returned when BEEF data is missing
+	ErrMissingBeef = errors.New("missing beef")
+	// ErrUnableToFindOutput is returned when an output cannot be found
+	ErrUnableToFindOutput = errors.New("unable to find output")
+	// ErrMissingSourceTransaction is returned when a source transaction is missing
+	ErrMissingSourceTransaction = errors.New("missing source transaction")
+	// ErrMissingTransaction is returned when a transaction is missing
+	ErrMissingTransaction = errors.New("missing transaction")
+	// ErrNoDocumentationFound is returned when no documentation is found
+	ErrNoDocumentationFound = errors.New("no documentation found")
+)
 
+// Submit submits a transaction to the overlay service
 func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady OnSteakReady) (overlay.Steak, error) {
 	for _, topic := range taggedBEEF.Topics {
 		if _, ok := e.Managers[topic]; !ok {
@@ -190,30 +228,31 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			steak[topic] = &overlay.AdmittanceInstructions{}
 			dupeTopics[topic] = struct{}{}
 			continue
-		} else {
-			topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
-			previousCoins := make([]uint32, 0, len(tx.Inputs))
-			outputs, err := e.Storage.FindOutputs(ctx, inpoints, topic, nil, true)
-			if err != nil {
-				slog.Error("failed to find outputs", "topic", topic, "error", err)
-				return nil, err
-			}
-			for vin, output := range outputs {
-				if output != nil {
-					beef.MergeBeefBytes(output.Beef)
-					previousCoins = append(previousCoins, uint32(vin))
-					topicInputs[topic][uint32(vin)] = output
-				}
-			}
-			if beefBytes, err := beef.AtomicBytes(txid); err != nil {
-				return nil, err
-			} else if admit, err := e.Managers[topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
-				slog.Error("failed to identify admissible outputs", "txid", txid.String(), "topic", topic, "mode", string(mode), "error", err)
-				return nil, err
-			} else {
-				steak[topic] = &admit
+		}
+		topicInputs[topic] = make(map[uint32]*Output, len(tx.Inputs))
+		previousCoins := make([]uint32, 0, len(tx.Inputs))
+		outputs, err := e.Storage.FindOutputs(ctx, inpoints, topic, nil, true)
+		if err != nil {
+			slog.Error("failed to find outputs", "topic", topic, "error", err)
+			return nil, err
+		}
+		for vin, output := range outputs {
+			if output != nil {
+				beef.MergeBeefBytes(output.Beef)
+				previousCoins = append(previousCoins, uint32(vin)) //nolint:gosec // index bounded by slice length
+				topicInputs[topic][uint32(vin)] = output           //nolint:gosec // index bounded by slice length
 			}
 		}
+		beefBytes, err := beef.AtomicBytes(txid)
+		if err != nil {
+			return nil, err
+		}
+		admit, err := e.Managers[topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+		if err != nil {
+			slog.Error("failed to identify admissible outputs", "txid", txid.String(), "topic", topic, "mode", string(mode), "error", err)
+			return nil, err
+		}
+		steak[topic] = &admit
 	}
 
 	for _, topic := range taggedBEEF.Topics {
@@ -238,7 +277,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					Outpoint:           &output.Outpoint,
 					Topic:              topic,
 					SpendingTxid:       txid,
-					InputIndex:         vin,
+					InputIndex:         vin, //nolint:gosec // index bounded by slice length
 					UnlockingScript:    tx.Inputs[vin].UnlockingScript,
 					SequenceNumber:     tx.Inputs[vin].SequenceNumber,
 					SpendingAtomicBEEF: taggedBEEF.Beef,
@@ -283,7 +322,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				slog.Error("failed to delete UTXO deep", "topic", topic, "outpoint", output.Outpoint.String(), "error", err)
 				return nil, err
 			}
-			admit.CoinsRemoved = append(admit.CoinsRemoved, uint32(vin))
+			admit.CoinsRemoved = append(admit.CoinsRemoved, vin)
 		}
 
 		newOutpoints := make([]*transaction.Outpoint, 0, len(admit.OutputsToAdmit))
@@ -291,7 +330,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			output := &Output{
 				Outpoint: transaction.Outpoint{
 					Txid:  *txid,
-					Index: uint32(vout),
+					Index: vout,
 				},
 				Topic:           topic,
 				OutputsConsumed: outpointsConsumed,
@@ -372,38 +411,46 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	return steak, nil
 }
 
+// Lookup performs a lookup query on the overlay service
 func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error) {
-	if l, ok := e.LookupServices[question.Service]; !ok {
+	l, ok := e.LookupServices[question.Service]
+	if !ok {
 		slog.Error("unknown lookup service", "service", question.Service, "error", ErrUnknownTopic)
 		return nil, ErrUnknownTopic
-	} else if result, err := l.Lookup(ctx, question); err != nil {
+	}
+	result, err := l.Lookup(ctx, question)
+	if err != nil {
 		slog.Error("lookup service failed", "service", question.Service, "error", err)
 		return nil, err
-	} else if result.Type == lookup.AnswerTypeFreeform || result.Type == lookup.AnswerTypeOutputList {
+	}
+	if result.Type == lookup.AnswerTypeFreeform || result.Type == lookup.AnswerTypeOutputList {
 		return result, nil
-	} else {
-		hydratedOutputs := make([]*lookup.OutputListItem, 0, len(result.Outputs))
-		for _, formula := range result.Formulas {
-			if output, err := e.Storage.FindOutput(ctx, formula.Outpoint, nil, nil, true); err != nil {
-				slog.Error("failed to find output in Lookup", "outpoint", formula.Outpoint.String(), "error", err)
+	}
+	hydratedOutputs := make([]*lookup.OutputListItem, 0, len(result.Outputs))
+	for _, formula := range result.Formulas {
+		output, err := e.Storage.FindOutput(ctx, formula.Outpoint, nil, nil, true)
+		if err != nil {
+			slog.Error("failed to find output in Lookup", "outpoint", formula.Outpoint.String(), "error", err)
+			return nil, err
+		}
+		if output != nil && output.Beef != nil {
+			hydratedOutput, err := e.GetUTXOHistory(ctx, output, formula.History, 0)
+			if err != nil {
+				slog.Error("failed to get UTXO history in Lookup", "outpoint", formula.Outpoint.String(), "error", err)
 				return nil, err
-			} else if output != nil && output.Beef != nil {
-				if output, err := e.GetUTXOHistory(ctx, output, formula.History, 0); err != nil {
-					slog.Error("failed to get UTXO history in Lookup", "outpoint", formula.Outpoint.String(), "error", err)
-					return nil, err
-				} else if output != nil {
-					hydratedOutputs = append(hydratedOutputs, &lookup.OutputListItem{
-						Beef:        output.Beef,
-						OutputIndex: output.Outpoint.Index,
-					})
-				}
+			}
+			if hydratedOutput != nil {
+				hydratedOutputs = append(hydratedOutputs, &lookup.OutputListItem{
+					Beef:        hydratedOutput.Beef,
+					OutputIndex: hydratedOutput.Outpoint.Index,
+				})
 			}
 		}
-		return &lookup.LookupAnswer{
-			Type:    lookup.AnswerTypeOutputList,
-			Outputs: hydratedOutputs,
-		}, nil
 	}
+	return &lookup.LookupAnswer{
+		Type:    lookup.AnswerTypeOutputList,
+		Outputs: hydratedOutputs,
+	}, nil
 }
 
 func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySelector func(beef []byte, outputIndex uint32, currentDepth uint32) bool, currentDepth uint32) (*Output, error) {
@@ -412,7 +459,7 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 	}
 	shouldTravelHistory := historySelector(output.Beef, output.Outpoint.Index, currentDepth)
 	if !shouldTravelHistory {
-		return nil, nil
+		return nil, nil //nolint:nilnil // returning nil output with no error is valid when selector returns false
 	}
 	if output != nil && len(output.OutputsConsumed) == 0 {
 		return output, nil
@@ -420,49 +467,56 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 	outputsConsumed := output.OutputsConsumed[:]
 	childHistories := make(map[string]*Output, len(outputsConsumed))
 	for _, outpoint := range outputsConsumed {
-		if output, err := e.Storage.FindOutput(ctx, outpoint, nil, nil, true); err != nil {
+		childOutput, err := e.Storage.FindOutput(ctx, outpoint, nil, nil, true)
+		if err != nil {
 			slog.Error("failed to find output in GetUTXOHistory", "outpoint", outpoint.String(), "error", err)
 			return nil, err
-		} else if output != nil {
-			if child, err := e.GetUTXOHistory(ctx, output, historySelector, currentDepth+1); err != nil {
+		}
+		if childOutput != nil {
+			child, err := e.GetUTXOHistory(ctx, childOutput, historySelector, currentDepth+1)
+			if err != nil {
 				slog.Error("failed to get child UTXO history", "outpoint", outpoint.String(), "depth", currentDepth+1, "error", err)
 				return nil, err
-			} else if child != nil {
+			}
+			if child != nil {
 				childHistories[child.Outpoint.String()] = child
 			}
 		}
 	}
 
-	if tx, err := transaction.NewTransactionFromBEEF(output.Beef); err != nil {
+	tx, err := transaction.NewTransactionFromBEEF(output.Beef)
+	if err != nil {
 		slog.Error("failed to create transaction from BEEF in GetUTXOHistory", "outpoint", output.Outpoint.String(), "error", err)
 		return nil, err
-	} else {
-		for _, txin := range tx.Inputs {
-			outpoint := &transaction.Outpoint{
-				Txid:  *txin.SourceTXID,
-				Index: txin.SourceTxOutIndex,
-			}
-			if input := childHistories[outpoint.String()]; input != nil {
-				if input.Beef == nil {
-					err := errors.New("missing beef")
-					slog.Error("missing BEEF in GetUTXOHistory", "outpoint", outpoint.String(), "error", err)
-					return nil, err
-				} else if txin.SourceTransaction, err = transaction.NewTransactionFromBEEF(input.Beef); err != nil {
-					slog.Error("failed to create source transaction from BEEF", "outpoint", outpoint.String(), "error", err)
-					return nil, err
-				}
-			}
+	}
+	for _, txin := range tx.Inputs {
+		outpoint := &transaction.Outpoint{
+			Txid:  *txin.SourceTXID,
+			Index: txin.SourceTxOutIndex,
 		}
-		if beef, err := tx.BEEF(); err != nil {
-			slog.Error("failed to get BEEF from transaction in GetUTXOHistory", "outpoint", output.Outpoint.String(), "error", err)
-			return nil, err
-		} else {
-			output.Beef = beef
-			return output, nil
+		if input := childHistories[outpoint.String()]; input != nil {
+			if input.Beef == nil {
+				beefErr := ErrMissingBeef
+				slog.Error("missing BEEF in GetUTXOHistory", "outpoint", outpoint.String(), "error", beefErr)
+				return nil, beefErr
+			}
+			txin.SourceTransaction, err = transaction.NewTransactionFromBEEF(input.Beef)
+			if err != nil {
+				slog.Error("failed to create source transaction from BEEF", "outpoint", outpoint.String(), "error", err)
+				return nil, err
+			}
 		}
 	}
+	beef, err := tx.BEEF()
+	if err != nil {
+		slog.Error("failed to get BEEF from transaction in GetUTXOHistory", "outpoint", output.Outpoint.String(), "error", err)
+		return nil, err
+	}
+	output.Beef = beef
+	return output, nil
 }
 
+// SyncAdvertisements synchronizes advertisements from topic managers
 func (e *Engine) SyncAdvertisements(ctx context.Context) error {
 	if e.Advertiser == nil {
 		return nil
@@ -551,6 +605,7 @@ func (e *Engine) SyncAdvertisements(ctx context.Context) error {
 	return nil
 }
 
+// StartGASPSync starts the GASP synchronization process
 func (e *Engine) StartGASPSync(ctx context.Context) error {
 	for topic := range e.SyncConfiguration {
 		syncEndpoints, ok := e.SyncConfiguration[topic]
@@ -651,12 +706,23 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 
 					slog.Debug("successfully parsed advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
 
-					// All SHIP advertisements should have protocol='SHIP'
-					if advertisement.Protocol == overlay.ProtocolSHIP {
-						slog.Debug("found SHIP advertisement for topic", "topic", topic, "domain", advertisement.Domain)
+					// Determine expected protocol based on topic
+					var expectedProtocol overlay.Protocol
+					if topic == "tm_ship" {
+						expectedProtocol = overlay.ProtocolSHIP
+					} else if topic == "tm_slap" {
+						expectedProtocol = overlay.ProtocolSLAP
+					} else {
+						// For unknown topics, log a warning but continue
+						slog.Warn("unknown topic, cannot determine expected protocol", "topic", topic)
+						continue
+					}
+
+					if advertisement.Protocol == expectedProtocol {
+						slog.Debug("found matching advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
 						endpointSet[advertisement.Domain] = struct{}{}
 					} else {
-						slog.Debug("skipping non-SHIP advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
+						slog.Debug("skipping advertisement with mismatched protocol", "topic", topic, "expected", expectedProtocol, "actual", advertisement.Protocol, "domain", advertisement.Domain)
 					}
 				}
 
@@ -706,7 +772,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 			}
 
 			// Create a new GASP provider for each peer to avoid state conflicts
-			gaspProvider := gasp.NewGASP(gasp.GASPParams{
+			gaspProvider := gasp.NewGASP(gasp.Params{
 				Storage:         NewOverlayGASPStorage(topic, e, nil),
 				Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 0),
 				LastInteraction: lastInteraction,
@@ -715,7 +781,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				Concurrency:     syncEndpoints.Concurrency,
 			})
 
-			if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
+			if err := gaspProvider.Sync(ctx, peer, DefaultGASPSyncLimit); err != nil {
 				slog.Error(fmt.Sprintf("[GASP SYNC] Sync failed for topic \"%s\" with peer \"%s\"", topic, peer), "error", err)
 			} else {
 				slog.Info(fmt.Sprintf("[GASP SYNC] Sync successful for topic \"%s\" with peer \"%s\"", topic, peer))
@@ -728,7 +794,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				}
 
 				// Create a GASP provider for this peer
-				gaspProvider := gasp.NewGASP(gasp.GASPParams{
+				gaspProvider := gasp.NewGASP(gasp.Params{
 					Storage:         NewOverlayGASPStorage(topic, e, nil),
 					Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),
 					LastInteraction: lastInteraction,
@@ -743,7 +809,7 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					previousLastInteraction := gaspProvider.LastInteraction
 
 					// Sync one page
-					if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
+					if err := gaspProvider.Sync(ctx, peer, DefaultGASPSyncLimit); err != nil {
 						slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
 						break // Exit loop on error
 					}
@@ -850,28 +916,30 @@ func (e *Engine) SyncInvalidatedOutputs(ctx context.Context, topic string) error
 	return nil
 }
 
+// ProvideForeignSyncResponse provides a synchronization response for foreign peers
 func (e *Engine) ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error) {
-	if utxos, err := e.Storage.FindUTXOsForTopic(ctx, topic, initialRequest.Since, initialRequest.Limit, false); err != nil {
+	utxos, err := e.Storage.FindUTXOsForTopic(ctx, topic, initialRequest.Since, initialRequest.Limit, false)
+	if err != nil {
 		slog.Error("failed to find UTXOs for topic in ProvideForeignSyncResponse", "topic", topic, "error", err)
 		return nil, err
-	} else {
-		// Convert to GASPOutput format
-		gaspOutputs := make([]*gasp.Output, 0, len(utxos))
-		for _, utxo := range utxos {
-			gaspOutputs = append(gaspOutputs, &gasp.Output{
-				Txid:        utxo.Outpoint.Txid,
-				OutputIndex: utxo.Outpoint.Index,
-				Score:       utxo.Score,
-			})
-		}
-
-		return &gasp.InitialResponse{
-			UTXOList: gaspOutputs,
-			Since:    initialRequest.Since,
-		}, nil
 	}
+	// Convert to GASPOutput format
+	gaspOutputs := make([]*gasp.Output, 0, len(utxos))
+	for _, utxo := range utxos {
+		gaspOutputs = append(gaspOutputs, &gasp.Output{
+			Txid:        utxo.Outpoint.Txid,
+			OutputIndex: utxo.Outpoint.Index,
+			Score:       utxo.Score,
+		})
+	}
+
+	return &gasp.InitialResponse{
+		UTXOList: gaspOutputs,
+		Since:    initialRequest.Since,
+	}, nil
 }
 
+// ProvideForeignGASPNode provides a GASP node for foreign peers
 func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transaction.Outpoint, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error) {
 	slog.Debug("ProvideForeignGASPNode called",
 		"graphID", graphId.String(),
@@ -919,22 +987,23 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		slog.Error("unable to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "outpoint", outpoint.String(), "error", err)
 		return nil, err
 	}
-	if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true); err != nil {
+	output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true)
+	if err != nil {
 		slog.Error("failed to find output in ProvideForeignGASPNode",
 			"graphID", graphId.String(),
 			"outpoint", outpoint.String(),
 			"topic", topic,
 			"error", err)
 		return nil, err
-	} else if output == nil {
+	}
+	if output == nil {
 		slog.Warn("Output not found in storage",
 			"graphID", graphId.String(),
 			"outpoint", outpoint.String(),
 			"topic", topic)
 		return nil, ErrMissingOutput
-	} else {
-		return hydrator(ctx, output)
 	}
+	return hydrator(ctx, output)
 }
 
 func (e *Engine) deleteUTXODeep(ctx context.Context, output *Output) error {
@@ -987,7 +1056,7 @@ func (e *Engine) deleteUTXODeep(ctx context.Context, output *Output) error {
 func (e *Engine) updateInputProofs(ctx context.Context, tx *transaction.Transaction, txid chainhash.Hash, proof *transaction.MerklePath) (err error) {
 	if tx.MerklePath != nil {
 		tx.MerklePath = proof
-		return
+		return nil
 	}
 
 	if tx.TxID().Equal(txid) {
@@ -995,9 +1064,9 @@ func (e *Engine) updateInputProofs(ctx context.Context, tx *transaction.Transact
 	} else {
 		for _, input := range tx.Inputs {
 			if input.SourceTransaction == nil {
-				err := errors.New("missing source transaction")
-				slog.Error("missing source transaction in updateInputProofs", "txid", txid, "error", err)
-				return err
+				sourceErr := ErrMissingSourceTransaction
+				slog.Error("missing source transaction in updateInputProofs", "txid", txid, "error", sourceErr)
+				return sourceErr
 			} else if err = e.updateInputProofs(ctx, input.SourceTransaction, txid, proof); err != nil {
 				slog.Error("failed to update input proofs recursively", "txid", txid, "error", err)
 				return err
@@ -1009,7 +1078,7 @@ func (e *Engine) updateInputProofs(ctx context.Context, tx *transaction.Transact
 
 func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid chainhash.Hash, proof *transaction.MerklePath) error {
 	if len(output.Beef) == 0 {
-		err := errors.New("missing beef")
+		err := ErrMissingBeef
 		slog.Error("missing BEEF in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
 		return err
 	}
@@ -1018,17 +1087,17 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 		slog.Error("failed to parse BEEF in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
 		return err
 	} else if tx == nil {
-		err := errors.New("missing transaction")
-		slog.Error("missing transaction in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
-		return err
+		txErr := ErrMissingTransaction
+		slog.Error("missing transaction in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", txErr)
+		return txErr
 	}
 	if tx.MerklePath != nil {
-		if oldRoot, err := tx.MerklePath.ComputeRoot(&txid); err != nil {
-			slog.Error("failed to compute old merkle root", "txid", txid, "error", err)
-			return err
-		} else if newRoot, err := proof.ComputeRoot(&txid); err != nil {
-			slog.Error("failed to compute new merkle root", "txid", txid, "error", err)
-			return err
+		if oldRoot, rootErr := tx.MerklePath.ComputeRoot(&txid); rootErr != nil {
+			slog.Error("failed to compute old merkle root", "txid", txid, "error", rootErr)
+			return rootErr
+		} else if newRoot, proofErr := proof.ComputeRoot(&txid); proofErr != nil {
+			slog.Error("failed to compute new merkle root", "txid", txid, "error", proofErr)
+			return proofErr
 		} else if oldRoot.Equal(*newRoot) {
 			return nil
 		}
@@ -1036,41 +1105,42 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 	if err = e.updateInputProofs(ctx, tx, txid, proof); err != nil {
 		slog.Error("failed to update input proofs in updateMerkleProof", "txid", txid, "error", err)
 		return err
-	} else if atomicBytes, err := tx.AtomicBEEF(false); err != nil {
-		slog.Error("failed to get atomic BEEF", "txid", txid, "error", err)
-		return err
-	} else {
+	}
+	atomicBytes, atomicErr := tx.AtomicBEEF(false)
+	if atomicErr != nil {
+		slog.Error("failed to get atomic BEEF", "txid", txid, "error", atomicErr)
+		return atomicErr
+	}
 
-		output.BlockHeight = proof.BlockHeight
-		for _, leaf := range proof.Path[0] {
-			if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
-				output.BlockIdx = leaf.Offset
-				break
-			}
+	output.BlockHeight = proof.BlockHeight
+	for _, leaf := range proof.Path[0] {
+		if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
+			output.BlockIdx = leaf.Offset
+			break
 		}
-		if err = e.Storage.UpdateTransactionBEEF(ctx, &output.Outpoint.Txid, atomicBytes); err != nil {
-			slog.Error("failed to update transaction BEEF", "txid", output.Outpoint.Txid, "error", err)
+	}
+	if err = e.Storage.UpdateTransactionBEEF(ctx, &output.Outpoint.Txid, atomicBytes); err != nil {
+		slog.Error("failed to update transaction BEEF", "txid", output.Outpoint.Txid, "error", err)
+		return err
+	}
+	for _, outpoint := range output.ConsumedBy {
+		consumingOutputs, err := e.Storage.FindOutputsForTransaction(ctx, &outpoint.Txid, true)
+		if err != nil {
+			slog.Error("failed to find consuming outputs", "txid", outpoint.Txid, "error", err)
 			return err
 		}
-		for _, outpoint := range output.ConsumedBy {
-			if consumingOutputs, err := e.Storage.FindOutputsForTransaction(ctx, &outpoint.Txid, true); err != nil {
-				slog.Error("failed to find consuming outputs", "txid", outpoint.Txid, "error", err)
-				return err
-			} else {
-				for _, consuming := range consumingOutputs {
-					// Check if consuming transaction has its own merkle path
-					// If it does, it's mined and doesn't include parent transactions anymore
-					if len(consuming.Beef) > 0 {
-						if _, consumingTx, _, err := transaction.ParseBeef(consuming.Beef); err == nil && consumingTx != nil && consumingTx.MerklePath != nil {
-							continue
-						}
-					}
-
-					if err := e.updateMerkleProof(ctx, consuming, txid, proof); err != nil {
-						slog.Error("failed to update merkle proof for consuming output", "consumingTxid", consuming.Outpoint.Txid, "error", err)
-						return err
-					}
+		for _, consuming := range consumingOutputs {
+			// Check if consuming transaction has its own merkle path
+			// If it does, it's mined and doesn't include parent transactions anymore
+			if len(consuming.Beef) > 0 {
+				if _, consumingTx, _, err := transaction.ParseBeef(consuming.Beef); err == nil && consumingTx != nil && consumingTx.MerklePath != nil {
+					continue
 				}
+			}
+
+			if err := e.updateMerkleProof(ctx, consuming, txid, proof); err != nil {
+				slog.Error("failed to update merkle proof for consuming output", "consumingTxid", consuming.Outpoint.Txid, "error", err)
+				return err
 			}
 		}
 	}
@@ -1078,6 +1148,7 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 
 }
 
+// HandleNewMerkleProof handles a new Merkle proof
 func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash, proof *transaction.MerklePath) error {
 	// Validate the merkle proof before processing
 	if merkleRoot, err := proof.ComputeRoot(txid); err != nil {
@@ -1104,7 +1175,7 @@ func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash,
 			}
 		}
 		if blockIdx == nil {
-			err := fmt.Errorf("not found in proof: %s", txid)
+			err := fmt.Errorf("not found in proof: %s", txid) //nolint:err113 // dynamic error needed for context
 			slog.Error("transaction not found in merkle proof", "txid", txid, "error", err)
 			return err
 		}
@@ -1128,6 +1199,7 @@ func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash,
 	return nil
 }
 
+// ListTopicManagers returns a list of topic managers and their metadata
 func (e *Engine) ListTopicManagers() map[string]*overlay.MetaData {
 	result := make(map[string]*overlay.MetaData, len(e.Managers))
 	for name, manager := range e.Managers {
@@ -1136,6 +1208,7 @@ func (e *Engine) ListTopicManagers() map[string]*overlay.MetaData {
 	return result
 }
 
+// ListLookupServiceProviders returns a list of lookup service providers and their metadata
 func (e *Engine) ListLookupServiceProviders() map[string]*overlay.MetaData {
 	result := make(map[string]*overlay.MetaData, len(e.LookupServices))
 	for name, provider := range e.LookupServices {
@@ -1144,22 +1217,24 @@ func (e *Engine) ListLookupServiceProviders() map[string]*overlay.MetaData {
 	return result
 }
 
+// GetDocumentationForTopicManager returns documentation for a topic manager
 func (e *Engine) GetDocumentationForTopicManager(manager string) (string, error) {
-	if tm, ok := e.Managers[manager]; !ok {
+	tm, ok := e.Managers[manager]
+	if !ok {
 		err := errors.New("no documentation found")
 		slog.Error("topic manager not found", "manager", manager, "error", err)
 		return "", err
-	} else {
-		return tm.GetDocumentation(), nil
 	}
+	return tm.GetDocumentation(), nil
 }
 
+// GetDocumentationForLookupServiceProvider returns documentation for a lookup service provider
 func (e *Engine) GetDocumentationForLookupServiceProvider(provider string) (string, error) {
-	if l, ok := e.LookupServices[provider]; !ok {
+	l, ok := e.LookupServices[provider]
+	if !ok {
 		err := errors.New("no documentation found")
 		slog.Error("lookup service provider not found", "provider", provider, "error", err)
 		return "", err
-	} else {
-		return l.GetDocumentation(), nil
 	}
+	return l.GetDocumentation(), nil
 }

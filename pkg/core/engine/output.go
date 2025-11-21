@@ -31,6 +31,7 @@ func (m MerkleState) String() string {
 	}
 }
 
+// Output represents a transaction output with its metadata, history, and BEEF data.
 type Output struct {
 	Outpoint        transaction.Outpoint
 	Topic           string

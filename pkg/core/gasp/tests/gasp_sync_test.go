@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var errInvalidGraphAnchor = errors.New("invalid graph anchor")
+
 // Mock types for testing
 type mockUTXO struct {
 	GraphID     *transaction.Outpoint
@@ -31,13 +33,13 @@ type mockGASPStorage struct {
 	updateCallback func()
 
 	// Configurable behavior functions
-	findKnownUTXOsFunc      func(ctx context.Context, sinceWhen float64, limit uint32) ([]*gasp.Output, error)
-	hydrateGASPNodeFunc     func(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error)
-	appendToGraphFunc       func(ctx context.Context, tx *gasp.Node, spentBy *transaction.Outpoint) error
-	validateGraphAnchorFunc func(ctx context.Context, graphID *transaction.Outpoint) error
-	discardGraphFunc        func(ctx context.Context, graphID *transaction.Outpoint) error
-	finalizeGraphFunc       func(ctx context.Context, graphID *transaction.Outpoint) error
-	findNeededInputsFunc    func(ctx context.Context, tx *gasp.Node) (*gasp.NodeResponse, error)
+	findKnownUTXOsFunc      func(_ context.Context, sinceWhen float64, limit uint32) ([]*gasp.Output, error)
+	hydrateGASPNodeFunc     func(_ context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error)
+	appendToGraphFunc       func(_ context.Context, tx *gasp.Node, spentBy *transaction.Outpoint) error
+	validateGraphAnchorFunc func(_ context.Context, graphID *transaction.Outpoint) error
+	discardGraphFunc        func(_ context.Context, graphID *transaction.Outpoint) error
+	finalizeGraphFunc       func(_ context.Context, graphID *transaction.Outpoint) error
+	findNeededInputsFunc    func(_ context.Context, tx *gasp.Node) (*gasp.NodeResponse, error)
 }
 
 func newMockGASPStorage(knownStore []*mockUTXO) *mockGASPStorage {
@@ -80,7 +82,7 @@ func (m *mockGASPStorage) FindKnownUTXOs(ctx context.Context, sinceWhen float64,
 	return result, nil
 }
 
-func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
+func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
 	if m.hydrateGASPNodeFunc != nil {
 		return m.hydrateGASPNodeFunc(ctx, graphID, outpoint, metadata)
 	}
@@ -124,7 +126,7 @@ func (m *mockGASPStorage) HydrateGASPNode(ctx context.Context, graphID *transact
 		}, nil
 	}
 
-	return nil, nil
+	return nil, nil //nolint:nilnil // mock returns nil when not found
 }
 
 func (m *mockGASPStorage) FindNeededInputs(ctx context.Context, tx *gasp.Node) (*gasp.NodeResponse, error) {
@@ -246,8 +248,8 @@ func (m *mockGASPStorage) HasOutputs(ctx context.Context, outpoints []*transacti
 
 type mockGASPRemote struct {
 	targetGASP          *gasp.GASP
-	initialResponseFunc func(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error)
-	requestNodeFunc     func(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error)
+	initialResponseFunc func(_ context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error)
+	requestNodeFunc     func(_ context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error)
 }
 
 func (m *mockGASPRemote) GetInitialResponse(ctx context.Context, request *gasp.InitialRequest) (*gasp.InitialResponse, error) {
@@ -259,7 +261,7 @@ func (m *mockGASPRemote) GetInitialResponse(ctx context.Context, request *gasp.I
 		return m.targetGASP.GetInitialResponse(ctx, request)
 	}
 
-	return nil, nil
+	return nil, nil //nolint:nilnil // mock returns nil when target is not set
 }
 
 func (m *mockGASPRemote) GetInitialReply(ctx context.Context, response *gasp.InitialResponse) (*gasp.InitialReply, error) {
@@ -283,7 +285,7 @@ func (m *mockGASPRemote) RequestNode(ctx context.Context, graphID, outpoint *tra
 		return m.targetGASP.Storage.HydrateGASPNode(ctx, graphID, outpoint, metadata)
 	}
 
-	return nil, nil
+	return nil, nil //nolint:nilnil // mock returns nil when target is not set
 }
 
 func (m *mockGASPRemote) SubmitNode(ctx context.Context, node *gasp.Node) (*gasp.NodeResponse, error) {
@@ -297,7 +299,7 @@ func (m *mockGASPRemote) SubmitNode(ctx context.Context, node *gasp.Node) (*gasp
 	}, nil
 }
 
-func createMockUTXO(txHex string, outputIndex uint32, time uint32) *mockUTXO {
+func createMockUTXO(txHex string, outputIndex, time uint32) *mockUTXO {
 	// Create a proper transaction and get its hex
 	tx := transaction.NewTransaction()
 	tx.AddOutput(&transaction.TransactionOutput{
@@ -335,11 +337,11 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
 
-		gasp1 := gasp.NewGASP(gasp.GASPParams{
+		gasp1 := gasp.NewGASP(gasp.Params{
 			Storage: storage1,
 			Version: intPtr(2), // Different version
 		})
-		gasp2 := gasp.NewGASP(gasp.GASPParams{
+		gasp2 := gasp.NewGASP(gasp.Params{
 			Storage: storage2,
 			Version: intPtr(1),
 		})
@@ -360,8 +362,8 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{utxo1}) // Alice has UTXO
 		storage2 := newMockGASPStorage([]*mockUTXO{})      // Bob has no UTXOs
 
-		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
-		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.Params{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.Params{Storage: storage2})
 
 		// Bob syncs from Alice
 		gasp2.Remote = &mockGASPRemote{targetGASP: gasp1}
@@ -376,7 +378,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
 
 		require.Len(t, result2, 1)
-		require.Equal(t, len(result1), len(result2))
+		require.Len(t, result1, len(result2))
 	})
 
 	t.Run("should synchronize a single UTXO from Bob to Alice", func(t *testing.T) {
@@ -387,8 +389,8 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{})      // Alice has no UTXOs
 		storage2 := newMockGASPStorage([]*mockUTXO{utxo1}) // Bob has UTXO
 
-		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
-		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.Params{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.Params{Storage: storage2})
 
 		gasp1.Remote = &mockGASPRemote{targetGASP: gasp2}
 
@@ -402,7 +404,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
 
 		require.Len(t, result1, 1)
-		require.Equal(t, len(result1), len(result2))
+		require.Len(t, result2, len(result1))
 	})
 
 	t.Run("should discard graphs that do not validate", func(t *testing.T) {
@@ -414,17 +416,17 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage2 := newMockGASPStorage([]*mockUTXO{})
 
 		discardGraphCalled := false
-		storage2.validateGraphAnchorFunc = func(ctx context.Context, graphID *transaction.Outpoint) error {
-			return errors.New("invalid graph anchor")
+		storage2.validateGraphAnchorFunc = func(_ context.Context, _ *transaction.Outpoint) error {
+			return errInvalidGraphAnchor
 		}
-		storage2.discardGraphFunc = func(ctx context.Context, graphID *transaction.Outpoint) error {
+		storage2.discardGraphFunc = func(_ context.Context, graphID *transaction.Outpoint) error {
 			discardGraphCalled = true
 			require.Equal(t, utxo1.GraphID.String(), graphID.String())
 			return nil
 		}
 
-		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
-		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.Params{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.Params{Storage: storage2})
 
 		// Bob syncs from Alice
 		gasp2.Remote = &mockGASPRemote{targetGASP: gasp1}
@@ -436,7 +438,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		require.NoError(t, err) // Sync should complete despite validation failure
 
 		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
-		require.Len(t, result2, 0) // No UTXOs should be synchronized
+		require.Empty(t, result2) // No UTXOs should be synchronized
 		require.True(t, discardGraphCalled)
 	})
 
@@ -449,8 +451,8 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{utxo1, utxo2})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
 
-		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
-		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.Params{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.Params{Storage: storage2})
 
 		// Bob syncs from Alice
 		gasp2.Remote = &mockGASPRemote{targetGASP: gasp1}
@@ -467,7 +469,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, result2, 2)
-		require.Equal(t, len(result1), len(result2))
+		require.Len(t, result1, len(result2))
 	})
 
 	t.Run("should synchronize only UTXOs created after the specified since timestamp", func(t *testing.T) {
@@ -479,11 +481,11 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		storage1 := newMockGASPStorage([]*mockUTXO{oldUTXO, newUTXO})
 		storage2 := newMockGASPStorage([]*mockUTXO{})
 
-		gasp1 := gasp.NewGASP(gasp.GASPParams{
+		gasp1 := gasp.NewGASP(gasp.Params{
 			Storage:         storage1,
 			LastInteraction: 0,
 		})
-		gasp2 := gasp.NewGASP(gasp.GASPParams{
+		gasp2 := gasp.NewGASP(gasp.Params{
 			Storage:         storage2,
 			LastInteraction: 150, // Bob only wants UTXOs newer than 150
 		})
@@ -515,17 +517,17 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		finalizeGraphCalled1 := false
 		finalizeGraphCalled2 := false
 
-		storage1.finalizeGraphFunc = func(ctx context.Context, graphID *transaction.Outpoint) error {
+		storage1.finalizeGraphFunc = func(_ context.Context, _ *transaction.Outpoint) error {
 			finalizeGraphCalled1 = true
 			return nil
 		}
-		storage2.finalizeGraphFunc = func(ctx context.Context, graphID *transaction.Outpoint) error {
+		storage2.finalizeGraphFunc = func(_ context.Context, _ *transaction.Outpoint) error {
 			finalizeGraphCalled2 = true
 			return nil
 		}
 
-		gasp1 := gasp.NewGASP(gasp.GASPParams{Storage: storage1})
-		gasp2 := gasp.NewGASP(gasp.GASPParams{Storage: storage2})
+		gasp1 := gasp.NewGASP(gasp.Params{Storage: storage1})
+		gasp2 := gasp.NewGASP(gasp.Params{Storage: storage2})
 
 		gasp1.Remote = &mockGASPRemote{targetGASP: gasp2}
 

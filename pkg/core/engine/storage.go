@@ -9,8 +9,10 @@ import (
 	"github.com/bsv-blockchain/go-sdk/transaction"
 )
 
+// ErrNotFound is returned when a requested item is not found in storage.
 var ErrNotFound = fmt.Errorf("not-found")
 
+// Storage defines the interface for persisting and retrieving overlay transaction data.
 type Storage interface {
 	// Adds a new output to storage
 	InsertOutput(ctx context.Context, utxo *Output) error
@@ -48,11 +50,11 @@ type Storage interface {
 	DoesAppliedTransactionExist(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error)
 
 	// Updates the last interaction score for a given host and topic
-	UpdateLastInteraction(ctx context.Context, host string, topic string, since float64) error
+	UpdateLastInteraction(ctx context.Context, host, topic string, since float64) error
 
 	// Retrieves the last interaction score for a given host and topic
 	// Returns 0 if no record exists
-	GetLastInteraction(ctx context.Context, host string, topic string) (float64, error)
+	GetLastInteraction(ctx context.Context, host, topic string) (float64, error)
 
 	// Finds outpoints with a specific merkle validation state
 	// Returns only the outpoints (not full output data) for efficiency

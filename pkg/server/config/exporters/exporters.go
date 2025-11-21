@@ -1,7 +1,9 @@
+// Package exporters provides utilities for exporting configuration to various file formats.
 package exporters
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -11,18 +13,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const ownerReadWriteAccess = 0600
+const ownerReadWriteAccess = 0o600
+
+// ErrConfigEmptyOrUnsupported is returned when the configuration appears empty or unsupported.
+var ErrConfigEmptyOrUnsupported = errors.New("config appears empty or unsupported, nothing to write")
 
 // ToEnvFile writes the configuration to an environment file at the specified path.
 // It formats the configuration as key-value pairs and writes them to the file.
 // Returns an error if decoding the config, flattening, or file writing fails.
-func ToEnvFile(cfg any, filename string, envPrefix string) error {
+func ToEnvFile(cfg any, filename, envPrefix string) error {
 	var m map[string]any
 	if err := mapstructure.Decode(cfg, &m); err != nil {
 		return fmt.Errorf("failed to decode config to map: %w", err)
 	}
 	if len(m) == 0 {
-		return fmt.Errorf("config appears empty or unsupported, nothing to write")
+		return ErrConfigEmptyOrUnsupported
 	}
 
 	flat := make(map[string]string)
@@ -50,7 +55,7 @@ func ToYAMLFile(config any, filename string) error {
 		return fmt.Errorf("failed to decode config to map: %w", err)
 	}
 	if len(m) == 0 {
-		return fmt.Errorf("config appears empty or unsupported, nothing to write")
+		return ErrConfigEmptyOrUnsupported
 	}
 
 	bb, err := yaml.Marshal(m)
@@ -73,7 +78,7 @@ func ToJSONFile(cfg any, filename string) error {
 		return fmt.Errorf("failed to decode config to map: %w", err)
 	}
 	if len(m) == 0 {
-		return fmt.Errorf("config appears empty or unsupported, nothing to write")
+		return ErrConfigEmptyOrUnsupported
 	}
 
 	bb, err := json.MarshalIndent(m, "", "  ")

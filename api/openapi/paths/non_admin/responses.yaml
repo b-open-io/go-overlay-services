@@ -229,7 +229,7 @@ components:
 
     RequestForeignGASPNodeResponse:
       description: |
-         Overlay engine successfully provided the requested foreign GASP node.
+        Overlay engine successfully provided the requested foreign GASP node.
       content:
         application/json:
           schema:
@@ -253,7 +253,7 @@ components:
 
     ArcIngestResponse:
       description: |
-         Merkle proof successfully processed and transaction status updated.
+        Merkle proof successfully processed and transaction status updated.
       content:
         application/json:
           schema:

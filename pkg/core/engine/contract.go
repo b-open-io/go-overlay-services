@@ -1,3 +1,4 @@
+// Package engine provides the core overlay services engine implementation for managing and querying blockchain data.
 package engine
 
 import (
@@ -11,16 +12,16 @@ import (
 )
 
 // OverlayEngineProvider defines the contract for the overlay engine.
-// Note: The contract definition is still in development and will be updated after
+// The contract definition is still in development and will be updated after
 // migrating the engine code.
 type OverlayEngineProvider interface {
 	Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady OnSteakReady) (overlay.Steak, error)
 	Lookup(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error)
-	GetUTXOHistory(ctx context.Context, output *Output, historySelector func(beef []byte, outputIndex uint32, currentDepth uint32) bool, currentDepth uint32) (*Output, error)
+	GetUTXOHistory(ctx context.Context, output *Output, historySelector func(beef []byte, outputIndex, currentDepth uint32) bool, currentDepth uint32) (*Output, error)
 	SyncAdvertisements(ctx context.Context) error
 	StartGASPSync(ctx context.Context) error
 	ProvideForeignSyncResponse(ctx context.Context, initialRequest *gasp.InitialRequest, topic string) (*gasp.InitialResponse, error)
-	ProvideForeignGASPNode(ctx context.Context, graphId, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error)
+	ProvideForeignGASPNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, topic string) (*gasp.Node, error)
 	ListTopicManagers() map[string]*overlay.MetaData
 	ListLookupServiceProviders() map[string]*overlay.MetaData
 	GetDocumentationForLookupServiceProvider(provider string) (string, error)
