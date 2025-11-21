@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
@@ -37,6 +38,14 @@ type RequestForeignGASPNodeService struct {
 // All validated data is then passed to the configured provider.
 // Returns the GASP node on success, or a detailed error if processing fails.
 func (s *RequestForeignGASPNodeService) RequestForeignGASPNode(ctx context.Context, dto RequestForeignGASPNodeDTO) (*gasp.Node, error) {
+	slog.Debug("RequestForeignGASPNode received",
+		"graphID", dto.GraphID,
+		"txID", dto.TxID,
+		"outputIndex", dto.OutputIndex,
+		"topic", dto.Topic,
+		"graphID_empty", dto.GraphID == "",
+		"graphID_length", len(dto.GraphID))
+
 	txID, err := chainhash.NewHashFromHex(dto.TxID)
 	if err != nil {
 		return nil, NewRawDataProcessingWithFieldError(err, "TransactionID")
@@ -44,6 +53,9 @@ func (s *RequestForeignGASPNodeService) RequestForeignGASPNode(ctx context.Conte
 
 	graphID, err := transaction.OutpointFromString(dto.GraphID)
 	if err != nil {
+		slog.Error("Failed to parse GraphID",
+			"graphID", dto.GraphID,
+			"error", err)
 		return nil, NewRawDataProcessingWithFieldError(err, "GraphID")
 	}
 

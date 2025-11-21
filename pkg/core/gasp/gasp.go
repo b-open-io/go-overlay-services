@@ -385,8 +385,8 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 	return nil
 }
 
-// ProcessUTXOToCompletion handles the complete UTXO processing pipeline with result sharing deduplication
-func (g *GASP) ProcessUTXOToCompletion(ctx context.Context, outpoint *transaction.Outpoint, spentBy *transaction.Outpoint, seenNodes *sync.Map) error {
+// processUTXOToCompletion handles the complete UTXO processing pipeline with result sharing deduplication
+func (g *GASP) ProcessUTXOToCompletion(ctx context.Context, outpoint, spentBy *transaction.Outpoint, seenNodes *sync.Map) error {
 	// Pre-initialize the processing state to avoid race conditions
 	newState := &utxoProcessingState{}
 	newState.wg.Add(1)

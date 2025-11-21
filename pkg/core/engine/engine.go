@@ -907,9 +907,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			}
 		}
 
-		err = errors.New("unable to find transaction in BEEF tree or consumed outputs")
-		slog.Error("unable to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "outpoint", outpoint.String(), "error", err)
-		return nil, err
+		return nil, ErrMissingOutput
 	}
 	if output, err := e.Storage.FindOutput(ctx, graphId, &topic, nil, true); err != nil {
 		slog.Error("failed to find output in ProvideForeignGASPNode",

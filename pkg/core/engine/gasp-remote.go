@@ -89,13 +89,12 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transactio
 		graphID = outpoint
 	}
 
-	outpointStr := outpoint.String()
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Done()
 
 	// Check if there's already an in-flight request for this outpoint
-	if inflight, loaded := r.inflightMap.LoadOrStore(outpointStr, &inflightNodeRequest{wg: &wg}); loaded {
+	if inflight, loaded := r.inflightMap.LoadOrStore(*outpoint, &inflightNodeRequest{wg: &wg}); loaded {
 		req := inflight.(*inflightNodeRequest)
 		req.wg.Wait()
 		return req.result, req.err
@@ -104,7 +103,7 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transactio
 		req.result, req.err = r.doNodeRequest(ctx, graphID, outpoint, metadata)
 
 		// Clean up inflight map
-		r.inflightMap.Delete(outpointStr)
+		r.inflightMap.Delete(*outpoint)
 		return req.result, req.err
 	}
 }
@@ -117,6 +116,7 @@ func (r *OverlayGASPRemote) doNodeRequest(ctx context.Context, graphID *transact
 		return nil, ctx.Err()
 	}
 	defer func() { <-r.networkLimiter }()
+
 	if j, err := json.Marshal(&gasp.NodeRequest{
 		GraphID:     graphID,
 		Txid:        &outpoint.Txid,
