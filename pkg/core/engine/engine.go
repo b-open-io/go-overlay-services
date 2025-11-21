@@ -711,6 +711,8 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 
 			slog.Info(fmt.Sprintf("[GASP SYNC] Starting sync for topic \"%s\" with peer \"%s\"", topic, peer))
 
+			slog.Info(fmt.Sprintf("[GASP SYNC] Sync successful for topic \"%s\" with peer \"%s\"", topic, peer))
+
 			// Read the last interaction score from storage
 			lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
 			if err != nil {
@@ -718,60 +720,37 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 				return err
 			}
 
-			// Create a new GASP provider for each peer to avoid state conflicts
+			// Create a GASP provider for this peer
 			gaspProvider := gasp.NewGASP(gasp.GASPParams{
 				Storage:         NewOverlayGASPStorage(topic, e, nil),
-				Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 0),
+				Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),
 				LastInteraction: lastInteraction,
 				LogPrefix:       &logPrefix,
 				Unidirectional:  true,
 				Concurrency:     syncEndpoints.Concurrency,
+				Topic:           topic,
 			})
 
-			if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
-				slog.Error(fmt.Sprintf("[GASP SYNC] Sync failed for topic \"%s\" with peer \"%s\"", topic, peer), "error", err)
-			} else {
-				slog.Info(fmt.Sprintf("[GASP SYNC] Sync successful for topic \"%s\" with peer \"%s\"", topic, peer))
+			// Paginate through GASP sync, saving progress after each successful page
+			for {
+				previousLastInteraction := gaspProvider.LastInteraction
 
-				// Read the last interaction score from storage
-				lastInteraction, err := e.Storage.GetLastInteraction(ctx, peer, topic)
-				if err != nil {
-					slog.Error("Failed to get last interaction", "topic", topic, "peer", peer, "error", err)
-					return err
+				// Sync one page
+				if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
+					slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
+					break // Exit loop on error
 				}
 
-				// Create a GASP provider for this peer
-				gaspProvider := gasp.NewGASP(gasp.GASPParams{
-					Storage:         NewOverlayGASPStorage(topic, e, nil),
-					Remote:          NewOverlayGASPRemote(peer, topic, http.DefaultClient, 8),
-					LastInteraction: lastInteraction,
-					LogPrefix:       &logPrefix,
-					Unidirectional:  true,
-					Concurrency:     syncEndpoints.Concurrency,
-					Topic:           topic,
-				})
-
-				// Paginate through GASP sync, saving progress after each successful page
-				for {
-					previousLastInteraction := gaspProvider.LastInteraction
-
-					// Sync one page
-					if err := gaspProvider.Sync(ctx, peer, DEFAULT_GASP_SYNC_LIMIT); err != nil {
-						slog.Error("failed to sync with peer", "topic", topic, "peer", peer, "error", err)
-						break // Exit loop on error
+				// Save progress after successful page
+				if gaspProvider.LastInteraction > previousLastInteraction {
+					if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err != nil {
+						slog.Error("Failed to update last interaction", "topic", topic, "peer", peer, "error", err)
+						// Continue anyway - we don't want to lose progress
 					}
-
-					// Save progress after successful page
-					if gaspProvider.LastInteraction > previousLastInteraction {
-						if err := e.Storage.UpdateLastInteraction(ctx, peer, topic, gaspProvider.LastInteraction); err != nil {
-							slog.Error("Failed to update last interaction", "topic", topic, "peer", peer, "error", err)
-							// Continue anyway - we don't want to lose progress
-						}
-					} else {
-						// No progress made, we're done syncing
-						slog.Info(logPrefix + " Sync completed")
-						break
-					}
+				} else {
+					// No progress made, we're done syncing
+					slog.Info(logPrefix + " Sync completed")
+					break
 				}
 			}
 		}
@@ -932,7 +911,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		slog.Error("unable to find output in ProvideForeignGASPNode", "graphId", graphId.String(), "outpoint", outpoint.String(), "error", err)
 		return nil, err
 	}
-	if output, err := e.Storage.FindOutput(ctx, outpoint, &topic, nil, true); err != nil {
+	if output, err := e.Storage.FindOutput(ctx, graphId, &topic, nil, true); err != nil {
 		slog.Error("failed to find output in ProvideForeignGASPNode",
 			"graphID", graphId.String(),
 			"outpoint", outpoint.String(),

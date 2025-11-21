@@ -84,6 +84,11 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gas
 }
 
 func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
+	// If graphID is nil, use outpoint (for root node requests)
+	if graphID == nil {
+		graphID = outpoint
+	}
+
 	outpointStr := outpoint.String()
 	var wg sync.WaitGroup
 	wg.Add(1)

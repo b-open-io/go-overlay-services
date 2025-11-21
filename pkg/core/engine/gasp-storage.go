@@ -238,25 +238,26 @@ func (s *OverlayGASPStorage) AppendToGraph(ctx context.Context, gaspTx *gasp.Nod
 			Node: *gaspTx,
 			Txid: txid,
 		}
-		if spentBy == nil {
-			if _, ok := s.tempGraphNodeRefs.LoadOrStore(*gaspTx.GraphID, newGraphNode); !ok {
-				s.tempGraphNodeCount++
-			}
-		} else {
-			// Find parent node by spentBy outpoint
+
+		// Compute the actual outpoint from the returned transaction
+		newGraphOutpoint := &transaction.Outpoint{
+			Txid:  *txid,
+			Index: gaspTx.OutputIndex,
+		}
+
+		// Store the node by its actual outpoint (not by GraphID)
+		if _, ok := s.tempGraphNodeRefs.LoadOrStore(*newGraphOutpoint, newGraphNode); !ok {
+			s.tempGraphNodeCount++
+		}
+
+		// If this node has a parent, link them together
+		if spentBy != nil {
 			if parentNode, ok := s.tempGraphNodeRefs.Load(*spentBy); !ok {
 				return ErrMissingInput
 			} else {
 				parent := parentNode.(*GraphNode)
-				parent.Children.Store(*gaspTx.GraphID, newGraphNode)
+				parent.Children.Store(*newGraphOutpoint, newGraphNode)
 				newGraphNode.Parent = parentNode.(*GraphNode)
-			}
-			newGraphOutpoint := &transaction.Outpoint{
-				Txid:  *txid,
-				Index: gaspTx.OutputIndex,
-			}
-			if _, ok := s.tempGraphNodeRefs.LoadOrStore(*newGraphOutpoint, newGraphNode); !ok {
-				s.tempGraphNodeCount++
 			}
 		}
 		return nil
