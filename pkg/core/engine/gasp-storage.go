@@ -206,15 +206,9 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 		if err != nil {
 			return nil, err
 		}
-		admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
-		if err != nil {
-			return nil, err
-		}
+		admit, _ := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
 		if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
-			if _, ok := s.Engine.Managers[s.Topic]; !ok {
-				return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
-			}
-			neededInputs, err := s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes)
+			neededInputs, err := s.IdentifyNeededInputs(ctx, beefBytes)
 			if err != nil {
 				return nil, err
 			}
@@ -235,6 +229,13 @@ func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beef
 		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic (identify admissible outputs): " + s.Topic)
 	}
 	return s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+}
+
+func (s *OverlayGASPStorage) IdentifyNeededInputs(ctx context.Context, beefBytes []byte) ([]*transaction.Outpoint, error) {
+	if _, ok := s.Engine.Managers[s.Topic]; !ok {
+		return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
+	}
+	return s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes)
 }
 
 // ErrNoInputsToStrip is returned when there are no inputs to strip
@@ -278,25 +279,25 @@ func (s *OverlayGASPStorage) AppendToGraph(_ context.Context, gaspTx *gasp.Node,
 		Node: *gaspTx,
 		Txid: txid,
 	}
-	if spentBy == nil {
-		if _, ok := s.tempGraphNodeRefs.LoadOrStore(*gaspTx.GraphID, newGraphNode); !ok {
-			s.tempGraphNodeCount++
-		}
-	} else {
-		// Find parent node by spentBy outpoint
-		parentNode, ok := s.tempGraphNodeRefs.Load(*spentBy)
-		if !ok {
+	// Compute the actual outpoint from the returned transaction
+	newGraphOutpoint := &transaction.Outpoint{
+		Txid:  *txid,
+		Index: gaspTx.OutputIndex,
+	}
+
+	// Store the node by its actual outpoint (not by GraphID)
+	if _, ok := s.tempGraphNodeRefs.LoadOrStore(*newGraphOutpoint, newGraphNode); !ok {
+		s.tempGraphNodeCount++
+	}
+
+	// If this node has a parent, link them together
+	if spentBy != nil {
+		if parentNode, ok := s.tempGraphNodeRefs.Load(*spentBy); !ok {
 			return ErrMissingInput
-		}
-		parent := parentNode.(*GraphNode)
-		parent.Children.Store(*gaspTx.GraphID, newGraphNode)
-		newGraphNode.Parent = parentNode.(*GraphNode)
-		newGraphOutpoint := &transaction.Outpoint{
-			Txid:  *txid,
-			Index: gaspTx.OutputIndex,
-		}
-		if _, ok := s.tempGraphNodeRefs.LoadOrStore(*newGraphOutpoint, newGraphNode); !ok {
-			s.tempGraphNodeCount++
+		} else {
+			parent := parentNode.(*GraphNode)
+			parent.Children.Store(*newGraphOutpoint, newGraphNode)
+			newGraphNode.Parent = parentNode.(*GraphNode)
 		}
 	}
 	return nil
@@ -345,6 +346,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 			if beefBytes, err = beef.AtomicBytes(txid); err != nil {
 				return err
 			} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+				slog.Error("[GASP] ValidateGraphAnchor failed to identify admissible outputs", "error", err)
 				return err
 			} else {
 				for _, vout := range admit.OutputsToAdmit {
@@ -430,13 +432,13 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 				nil,
 			)
 			if state.err != nil {
+				slog.Error("[GASP] Failed to submit transaction", "txid", txid.String(), "error", state.err)
 				return state.err
 			}
 			slog.Info(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
 		}
 	}
 	return nil
-
 }
 
 func (s *OverlayGASPStorage) computeOrderedBEEFsForGraph(_ context.Context, graphID *transaction.Outpoint) ([][]byte, error) {

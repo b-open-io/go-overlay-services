@@ -91,15 +91,18 @@ func (r *OverlayGASPRemote) GetInitialResponse(ctx context.Context, request *gas
 	return result, nil
 }
 
-// RequestNode requests a specific node from the remote overlay.
-func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
-	outpointStr := outpoint.String()
+func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID *transaction.Outpoint, outpoint *transaction.Outpoint, metadata bool) (*gasp.Node, error) {
+	// If graphID is nil, use outpoint (for root node requests)
+	if graphID == nil {
+		graphID = outpoint
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Done()
 
 	// Check if there's already an in-flight request for this outpoint
-	inflight, loaded := r.inflightMap.LoadOrStore(outpointStr, &inflightNodeRequest{wg: &wg})
+	inflight, loaded := r.inflightMap.LoadOrStore(*outpoint, &inflightNodeRequest{wg: &wg})
 	req := inflight.(*inflightNodeRequest)
 
 	if loaded {
@@ -110,7 +113,7 @@ func (r *OverlayGASPRemote) RequestNode(ctx context.Context, graphID, outpoint *
 	req.result, req.err = r.doNodeRequest(ctx, graphID, outpoint, metadata)
 
 	// Clean up inflight map
-	r.inflightMap.Delete(outpointStr)
+	r.inflightMap.Delete(*outpoint)
 	return req.result, req.err
 }
 

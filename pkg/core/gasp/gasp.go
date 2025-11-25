@@ -1,4 +1,3 @@
-// Package gasp implements the Graph Aware Sync Protocol for synchronizing transaction graphs between nodes.
 package gasp
 
 import (
@@ -174,9 +173,9 @@ func (g *GASP) Sync(ctx context.Context, _ string, limit uint32) error {
 				<-g.limiter
 			}()
 
-			if err := g.processUTXOToCompletion(processingCtx, outpoint, nil, seenNodes); err != nil {
+			if err := g.ProcessUTXOToCompletion(processingCtx, outpoint, nil, seenNodes); err != nil {
 				slog.Error("error processing UTXO", "outpoint", outpoint, "error", err)
-				return nil
+				return fmt.Errorf("error processing UTXO: %s %x", outpoint, err)
 			}
 			sharedOutpoints.Store(*outpoint, struct{}{})
 			return nil
@@ -349,23 +348,20 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 	if err != nil {
 		return err
 	}
-	if len(neededInputs.RequestedInputs) > 0 {
+	if neededInputs != nil && len(neededInputs.RequestedInputs) > 0 {
 		slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), neededInputs))
 		for outpoint, data := range neededInputs.RequestedInputs {
 			slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
-			childSpentBy := spentBy
-			if childSpentBy == nil {
-				childSpentBy = nodeOutpoint
-			}
-			if err := g.processUTXOToCompletion(ctx, &outpoint, childSpentBy, seenNodes); err != nil {
+			if err := g.ProcessUTXOToCompletion(ctx, &outpoint, nodeOutpoint, seenNodes); err != nil {
 				slog.Warn(fmt.Sprintf("%s Error processing dependency %s: %v", g.LogPrefix, outpoint.String(), err))
 			}
 		}
 		neededInputs, err = g.Storage.FindNeededInputs(ctx, node)
 		if err != nil {
+			slog.Error(fmt.Sprintf("%s Error re-checking needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), err))
 			return err
 		}
-		if len(neededInputs.RequestedInputs) > 0 {
+		if neededInputs != nil && len(neededInputs.RequestedInputs) > 0 {
 			return fmt.Errorf("not all inputs could be resolved for node %s after processing dependencies", nodeOutpoint.String())
 		}
 	}
@@ -424,7 +420,7 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 }
 
 // processUTXOToCompletion handles the complete UTXO processing pipeline with result sharing deduplication
-func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transaction.Outpoint, spentBy *transaction.Outpoint, seenNodes *sync.Map) error {
+func (g *GASP) ProcessUTXOToCompletion(ctx context.Context, outpoint, spentBy *transaction.Outpoint, seenNodes *sync.Map) error {
 	// Pre-initialize the processing state to avoid race conditions
 	newState := &utxoProcessingState{}
 	newState.wg.Add(1)
@@ -441,12 +437,7 @@ func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transactio
 		// We're the first to process this outpoint, do the complete processing
 
 		// Request node from remote
-		// For top-level UTXOs, graphID should be the outpoint itself (not nil)
-		graphID := spentBy
-		if graphID == nil {
-			graphID = outpoint
-		}
-		resolvedNode, err := g.Remote.RequestNode(ctx, graphID, outpoint, true)
+		resolvedNode, err := g.Remote.RequestNode(ctx, spentBy, outpoint, true)
 		if err != nil {
 			state.err = fmt.Errorf("error with incoming UTXO %s: %w", outpoint, err)
 			return state.err
@@ -457,8 +448,8 @@ func (g *GASP) processUTXOToCompletion(ctx context.Context, outpoint *transactio
 			return state.err
 		}
 
-		// Complete the graph (submit to engine)
-		if err = g.CompleteGraph(ctx, resolvedNode.GraphID); err != nil {
+		// Complete the graph (submit to engine) using the outpoint we requested
+		if err = g.CompleteGraph(ctx, outpoint); err != nil {
 			state.err = fmt.Errorf("error completing graph for %s: %w", outpoint, err)
 			return state.err
 		}
@@ -571,7 +562,7 @@ func (g *GASP) runProcessingWorker() {
 			}()
 
 			ctx := context.Background()
-			if err := g.processUTXOToCompletion(ctx, op, nil, seenNodes); err != nil {
+			if err := g.ProcessUTXOToCompletion(ctx, op, nil, seenNodes); err != nil {
 				slog.Error(fmt.Sprintf("%s Error processing UTXO %s: %v", g.LogPrefix, op, err))
 			}
 
