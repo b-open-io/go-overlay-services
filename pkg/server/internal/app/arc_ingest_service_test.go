@@ -3,9 +3,10 @@ package app_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/testabilities"
-	"github.com/stretchr/testify/require"
 )
 
 func TestARCIngestService_InvalidCases(t *testing.T) {

@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 )
 
 // SubmitTransactionProviderMockExpectations defines the expected behavior of the SubmitTransactionProviderMock during a test.

@@ -4,10 +4,11 @@ package ports
 import (
 	"fmt"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
-	"github.com/gofiber/fiber/v2"
 )
 
 // ARCIngestHandler is a Fiber-compatible HTTP handler that accepts incoming

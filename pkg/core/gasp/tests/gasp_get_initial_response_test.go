@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	gasp "github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
+
+	gasp "github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 )
 
 var errForcedStorageError = errors.New("forced storage error")

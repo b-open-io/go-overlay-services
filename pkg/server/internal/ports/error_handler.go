@@ -3,9 +3,10 @@ package ports
 import (
 	"errors"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
-	"github.com/gofiber/fiber/v2"
 )
 
 // ErrorHandler returns a Fiber error handler that translates application-level errors

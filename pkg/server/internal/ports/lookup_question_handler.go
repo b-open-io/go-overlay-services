@@ -1,9 +1,10 @@
 package ports
 
 import (
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
-	"github.com/gofiber/fiber/v2"
 )
 
 // LookupQuestionHandler is a Fiber-compatible HTTP handler that processes

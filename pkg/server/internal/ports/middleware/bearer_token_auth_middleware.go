@@ -5,9 +5,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
-	"github.com/gofiber/fiber/v2"
 )
 
 // BearerTokenAuthorizationMiddleware returns a fiber.Handler that validates the

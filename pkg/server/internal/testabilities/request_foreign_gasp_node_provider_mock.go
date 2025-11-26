@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 )
 
 // Default test values for RequestForeignGASPNode operations.

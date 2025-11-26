@@ -1,10 +1,11 @@
 package ports
 
 import (
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
-	"github.com/gofiber/fiber/v2"
 )
 
 // RequestForeignGASPNodeHandler is a Fiber-compatible HTTP handler that processes

@@ -4,12 +4,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/gofiber/fiber/v2"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/testabilities"
-	"github.com/gofiber/fiber/v2"
-	"github.com/stretchr/testify/require"
 )
 
 var errTopicManagerDocHandlerTestError = errors.New("test error")

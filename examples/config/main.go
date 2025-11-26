@@ -5,8 +5,9 @@ import (
 	"flag"
 	"log"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/config"
 	"github.com/google/uuid"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/config"
 )
 
 func main() {

@@ -1,14 +1,15 @@
 package server
 
 import (
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/adapters"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/decorators"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/middleware"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
-	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 )
 
 // DefaultRegisterRoutesConfig provides a default configuration with reasonable values for local development.

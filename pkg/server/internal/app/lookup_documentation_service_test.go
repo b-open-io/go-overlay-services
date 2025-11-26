@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/testabilities"
-	"github.com/stretchr/testify/require"
 )
 
 var errLookupDocTestError = errors.New("internal lookup service documentation provider test error")
