@@ -707,15 +707,14 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					slog.Debug("successfully parsed advertisement", "topic", topic, "protocol", advertisement.Protocol, "domain", advertisement.Domain)
 
 					// Determine expected protocol based on topic
+					// SHIP advertisements are used for hosting topics (including tm_ship itself)
+					// SLAP advertisements are only for the tm_slap topic
 					var expectedProtocol overlay.Protocol
-					if topic == "tm_ship" {
-						expectedProtocol = overlay.ProtocolSHIP
-					} else if topic == "tm_slap" {
+					if topic == "tm_slap" {
 						expectedProtocol = overlay.ProtocolSLAP
 					} else {
-						// For unknown topics, log a warning but continue
-						slog.Warn("unknown topic, cannot determine expected protocol", "topic", topic)
-						continue
+						// All other topics use SHIP protocol for discovery
+						expectedProtocol = overlay.ProtocolSHIP
 					}
 
 					if advertisement.Protocol == expectedProtocol {
@@ -733,10 +732,8 @@ func (e *Engine) StartGASPSync(ctx context.Context) error {
 					}
 				}
 				// Determine protocol name for logging
-				protocolName := "UNKNOWN"
-				if topic == "tm_ship" {
-					protocolName = "SHIP"
-				} else if topic == "tm_slap" {
+				protocolName := "SHIP"
+				if topic == "tm_slap" {
 					protocolName = "SLAP"
 				}
 				slog.Info(fmt.Sprintf("[GASP SYNC] Discovered %d unique %s peer endpoint(s) for topic \"%s\"", len(syncEndpoints.Peers), protocolName, topic))

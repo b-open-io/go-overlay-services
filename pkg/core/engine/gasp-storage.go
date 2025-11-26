@@ -151,8 +151,8 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	if err != nil {
 		return nil, err
 	}
-	// Commented out: This was requesting ALL inputs for unmined transactions
-	// but should use IdentifyNeededInputs to get only relevant inputs
+
+	// For unmined transactions, request all inputs for SPV verification
 	if gaspTx.Proof == nil || *gaspTx.Proof == "" {
 		for _, input := range tx.Inputs {
 			outpoint := &transaction.Outpoint{
@@ -238,12 +238,9 @@ func (s *OverlayGASPStorage) IdentifyNeededInputs(ctx context.Context, beefBytes
 	return s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes)
 }
 
-// ErrNoInputsToStrip is returned when there are no inputs to strip
-var ErrNoInputsToStrip = errors.New("no inputs to strip")
-
 func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {
 	if response == nil {
-		return nil, ErrNoInputsToStrip
+		return nil, nil
 	}
 	for outpoint := range response.RequestedInputs {
 		if found, err := s.Engine.Storage.FindOutput(ctx, &outpoint, &s.Topic, nil, false); err != nil {
@@ -253,7 +250,7 @@ func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, respons
 		}
 	}
 	if len(response.RequestedInputs) == 0 {
-		return nil, ErrNoInputsToStrip
+		return nil, nil
 	}
 	return response, nil
 }
@@ -320,46 +317,57 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 	if beefsErr != nil {
 		return beefsErr
 	}
+	slog.Debug("[GASP] ValidateGraphAnchor starting", "graphID", graphID.String(), "topic", s.Topic, "numBeefs", len(beefs))
 	coins := make(map[transaction.Outpoint]struct{})
-	for _, beefBytes := range beefs {
-		if beef, tx, txid, err := transaction.ParseBeef(beefBytes); err != nil {
+	for beefIdx, beefBytes := range beefs {
+		// Parse BEEF to get transaction info - but use original beefBytes for validation
+		// The BEEFs from computeOrderedBEEFsForGraph already include parent tx data from temp graph
+		tx, err := transaction.NewTransactionFromBEEF(beefBytes)
+		if err != nil {
+			return err
+		}
+		txid := tx.TxID()
+		slog.Debug("[GASP] Processing beef", "beefIdx", beefIdx, "txid", txid.String(), "numInputs", len(tx.Inputs), "numOutputs", len(tx.Outputs), "beefLen", len(beefBytes))
+
+		// Look up which inputs are known in storage (for previousCoins parameter)
+		// Don't merge or regenerate BEEF - the original already has complete parent data
+		inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
+		for vin, input := range tx.Inputs {
+			inpoints[vin] = &transaction.Outpoint{
+				Txid:  *input.SourceTXID,
+				Index: input.SourceTxOutIndex,
+			}
+		}
+		previousCoins := make([]uint32, 0, len(tx.Inputs))
+		if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, false); err != nil {
 			return err
 		} else {
-			inpoints := make([]*transaction.Outpoint, len(tx.Inputs))
-			for vin, input := range tx.Inputs {
-				inpoints[vin] = &transaction.Outpoint{
-					Txid:  *input.SourceTXID,
-					Index: input.SourceTxOutIndex,
+			for vin, output := range outputs {
+				if output != nil {
+					previousCoins = append(previousCoins, uint32(vin))
 				}
 			}
-			previousCoins := make([]uint32, 0, len(tx.Inputs))
-			if outputs, err := s.Engine.Storage.FindOutputs(ctx, inpoints, s.Topic, nil, true); err != nil {
-				return err
-			} else {
-				for vin, output := range outputs {
-					if output != nil {
-						beef.MergeBeefBytes(output.Beef)
-						previousCoins = append(previousCoins, uint32(vin))
-					}
+			slog.Debug("[GASP] Found previous coins in storage", "txid", txid.String(), "totalInputs", len(tx.Inputs), "previousCoins", previousCoins)
+		}
+
+		// Use original beefBytes directly - don't regenerate
+		if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+			slog.Error("[GASP] ValidateGraphAnchor failed to identify admissible outputs", "error", err)
+			return err
+		} else {
+			slog.Debug("[GASP] IdentifyAdmissibleOutputs result", "txid", txid.String(), "outputsToAdmit", admit.OutputsToAdmit, "coinsToRetain", admit.CoinsToRetain)
+			for _, vout := range admit.OutputsToAdmit {
+				outpoint := &transaction.Outpoint{
+					Txid:  *txid,
+					Index: vout,
 				}
-			}
-			if beefBytes, err = beef.AtomicBytes(txid); err != nil {
-				return err
-			} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
-				slog.Error("[GASP] ValidateGraphAnchor failed to identify admissible outputs", "error", err)
-				return err
-			} else {
-				for _, vout := range admit.OutputsToAdmit {
-					outpoint := &transaction.Outpoint{
-						Txid:  *tx.TxID(),
-						Index: vout,
-					}
-					coins[*outpoint] = struct{}{}
-				}
+				coins[*outpoint] = struct{}{}
 			}
 		}
 	}
+	slog.Debug("[GASP] ValidateGraphAnchor checking result", "graphID", graphID.String(), "totalCoins", len(coins))
 	if _, ok := coins[*graphID]; !ok {
+		slog.Warn("[GASP] Graph validation failed - graphID not in admitted coins", "graphID", graphID.String(), "coinsCount", len(coins))
 		return ErrGraphNoTopicalAdmittance
 	}
 	return nil
