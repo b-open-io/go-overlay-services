@@ -4,9 +4,10 @@ package main
 import (
 	"log"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server"
-	"github.com/gofiber/fiber/v2"
 )
 
 func main() {

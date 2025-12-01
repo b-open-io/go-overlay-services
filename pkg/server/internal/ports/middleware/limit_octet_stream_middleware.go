@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 )
 
 // ReadBodyLimit1GB defines the maximum allowed bytes read size (in bytes).

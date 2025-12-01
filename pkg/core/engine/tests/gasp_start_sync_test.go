@@ -5,11 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/advertiser"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/advertiser"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 )
 
 func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {

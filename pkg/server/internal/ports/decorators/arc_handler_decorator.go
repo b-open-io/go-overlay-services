@@ -4,8 +4,9 @@ package decorators
 import (
 	"strings"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 )
 
 // Handler defines an interface for handling a fiber.Ctx.

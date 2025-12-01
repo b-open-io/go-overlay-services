@@ -3,13 +3,14 @@ package ports_test
 import (
 	"testing"
 
+	"github.com/gofiber/fiber/v2"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/decorators"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/testabilities"
-	"github.com/gofiber/fiber/v2"
-	"github.com/stretchr/testify/require"
 )
 
 func TestArcIngestHandler_InvalidCases(t *testing.T) {

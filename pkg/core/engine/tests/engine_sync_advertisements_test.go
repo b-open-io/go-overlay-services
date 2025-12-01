@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/advertiser"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/advertiser"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 )
 
 var (

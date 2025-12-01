@@ -10,11 +10,12 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/spv"
 	"github.com/bsv-blockchain/go-sdk/transaction"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 )
 
 var (

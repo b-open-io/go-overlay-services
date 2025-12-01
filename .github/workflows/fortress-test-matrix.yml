@@ -125,7 +125,7 @@ jobs:
       # Checkout code (required for local actions)
       # --------------------------------------------------------------------
       - name: 📥 Checkout code
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
       # --------------------------------------------------------------------
       # Parse environment variables
@@ -147,6 +147,7 @@ jobs:
           go-primary-version: ${{ inputs.go-primary-version }}
           go-secondary-version: ${{ inputs.go-secondary-version }}
           go-sum-file: ${{ inputs.go-sum-file }}
+          enable-multi-module: ${{ env.ENABLE_MULTI_MODULE_TESTING }}
 
       # --------------------------------------------------------------------
       # Extract Go module directory from GO_SUM_FILE path
@@ -323,7 +324,11 @@ jobs:
           if [[ "$MODE" == "FULL" ]]; then
             echo "📝 Using FULL output mode - showing all test output"
             echo "🔍 Executing: $MAGEX_CMD"
-            if [ -n "$GO_MODULE_DIR" ]; then
+            if [ "$ENABLE_MULTI_MODULE_TESTING" == "true" ]; then
+              echo "🔧 Multi-module testing enabled - running from repository root"
+              echo "📦 magex will discover all Go modules and merge coverage"
+              $MAGEX_CMD 2>&1 | tee test-output.log
+            elif [ -n "$GO_MODULE_DIR" ]; then
               echo "🔧 Running from directory: $GO_MODULE_DIR"
               (cd "$GO_MODULE_DIR" && $MAGEX_CMD) 2>&1 | tee test-output.log
             else
@@ -342,7 +347,11 @@ jobs:
           elif [[ "$MODE" == "FAILURES_ONLY" ]]; then
             echo "📝 Using FAILURES_ONLY mode - JSON output with failure extraction"
             echo "🔍 Executing: $MAGEX_CMD"
-            if [ -n "$GO_MODULE_DIR" ]; then
+            if [ "$ENABLE_MULTI_MODULE_TESTING" == "true" ]; then
+              echo "🔧 Multi-module testing enabled - running from repository root"
+              echo "📦 magex will discover all Go modules and merge coverage"
+              $MAGEX_CMD 2>&1 | tee test-output.log
+            elif [ -n "$GO_MODULE_DIR" ]; then
               echo "🔧 Running from directory: $GO_MODULE_DIR"
               (cd "$GO_MODULE_DIR" && $MAGEX_CMD) 2>&1 | tee test-output.log
             else

@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-sdk/overlay"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 )
 
 // SubmitTransactionProvider defines the interface for sending a tagged transaction

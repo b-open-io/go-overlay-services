@@ -5,13 +5,14 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
 	"github.com/bsv-blockchain/go-sdk/transaction"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
 )
 
 // ProviderStateAsserter is an interface for asserting internal state after a test run.

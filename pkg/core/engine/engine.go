@@ -11,8 +11,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/advertiser"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
@@ -20,6 +18,9 @@ import (
 	"github.com/bsv-blockchain/go-sdk/spv"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/go-sdk/transaction/chaintracker"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/advertiser"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 )
 
 // DefaultGASPSyncLimit is the default limit for GASP synchronization

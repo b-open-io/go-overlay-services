@@ -7,11 +7,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 )
 
 var errInvalidGraphAnchor = errors.New("invalid graph anchor")
