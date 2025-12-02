@@ -53,7 +53,7 @@ func TestEngine_Submit_Success(t *testing.T) {
 			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spendTxid *chainhash.Hash) error {
 				return nil
 			},
-			insertOutputFunc: func(ctx context.Context, output *engine.Output) error {
+			insertOutputsFunc: func(ctx context.Context, topic string, txid *chainhash.Hash, outputs []uint32, outpointsConsumed []*transaction.Outpoint, beef []byte, ancillaryTxids []*chainhash.Hash) error {
 				return nil
 			},
 			insertAppliedTransactionFunc: func(ctx context.Context, tx *overlay.AppliedTransaction) error {
@@ -324,7 +324,7 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 			markUTXOsAsSpentFunc: func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spendTxid *chainhash.Hash) error {
 				return nil
 			},
-			insertOutputFunc: func(ctx context.Context, output *engine.Output) error {
+			insertOutputsFunc: func(ctx context.Context, topic string, txid *chainhash.Hash, outputs []uint32, outpointsConsumed []*transaction.Outpoint, beef []byte, ancillaryTxids []*chainhash.Hash) error {
 				return expectedErr
 			},
 			deleteOutputFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic string) error {

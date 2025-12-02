@@ -553,7 +553,7 @@ func (m *mockStorage) MarkUTXOsAsSpent(_ context.Context, _ []*transaction.Outpo
 	return nil
 }
 
-func (m *mockStorage) InsertOutput(_ context.Context, _ *engine.Output) error {
+func (m *mockStorage) InsertOutputs(_ context.Context, _ string, _ *chainhash.Hash, _ []uint32, _ []*transaction.Outpoint, _ []byte, _ []*chainhash.Hash) error {
 	return nil
 }
 
@@ -578,5 +578,9 @@ func (m *mockStorage) FindOutpointsByMerkleState(_ context.Context, _ string, _ 
 }
 
 func (m *mockStorage) ReconcileMerkleRoot(_ context.Context, _ string, _ uint32, _ *chainhash.Hash) error {
+	return nil
+}
+
+func (m *mockStorage) LoadAncillaryBeef(_ context.Context, _ *engine.Output) error {
 	return nil
 }
