@@ -14,8 +14,8 @@ var ErrNotFound = fmt.Errorf("not-found")
 
 // Storage defines the interface for persisting and retrieving overlay transaction data.
 type Storage interface {
-	// Adds a new output to storage
-	InsertOutput(ctx context.Context, utxo *Output) error
+	// Add a transaction's outputs to storage.
+	InsertOutputs(ctx context.Context, topic string, txid *chainhash.Hash, outputs []uint32, outpointsConsumed []*transaction.Outpoint, beef []byte, ancillaryTxids []*chainhash.Hash) error
 
 	// Finds an output from storage
 	FindOutput(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*Output, error)
@@ -66,4 +66,8 @@ type Storage interface {
 	// - Non-matching roots become Invalidated
 	// - Null roots remain Unmined
 	ReconcileMerkleRoot(ctx context.Context, topic string, blockHeight uint32, merkleRoot *chainhash.Hash) error
+
+	// LoadAncillaryBeef merges an output's AncillaryTxids into its Beef field.
+	// This is used when the full BEEF with all ancillary transactions is needed.
+	LoadAncillaryBeef(ctx context.Context, output *Output) error
 }

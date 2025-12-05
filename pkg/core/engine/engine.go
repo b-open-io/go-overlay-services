@@ -326,44 +326,30 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			admit.CoinsRemoved = append(admit.CoinsRemoved, vin)
 		}
 
+		// Insert all outputs in a single batch call
+		if err := e.Storage.InsertOutputs(ctx, topic, txid, admit.OutputsToAdmit, outpointsConsumed, taggedBEEF.Beef, admit.AncillaryTxids); err != nil {
+			slog.Error("failed to insert outputs", "topic", topic, "txid", txid.String(), "error", err)
+			return nil, err
+		}
+
+		// Build outpoints for consumed-by tracking and notify lookup services
 		newOutpoints := make([]*transaction.Outpoint, 0, len(admit.OutputsToAdmit))
 		for _, vout := range admit.OutputsToAdmit {
-			output := &Output{
-				Outpoint: transaction.Outpoint{
-					Txid:  *txid,
-					Index: vout,
-				},
-				Topic:           topic,
-				OutputsConsumed: outpointsConsumed,
-				Beef:            taggedBEEF.Beef,
-				AncillaryTxids:  admit.AncillaryTxids,
-			}
-			if tx.MerklePath != nil {
-				output.BlockHeight = tx.MerklePath.BlockHeight
-				for _, leaf := range tx.MerklePath.Path[0] {
-					if leaf.Hash != nil && leaf.Hash.Equal(output.Outpoint.Txid) {
-						output.BlockIdx = leaf.Offset
-						break
-					}
-				}
-			}
-			if err := e.Storage.InsertOutput(ctx, output); err != nil {
-				slog.Error("failed to insert output", "topic", topic, "outpoint", output.Outpoint.String(), "error", err)
-				return nil, err
-			}
-			newOutpoints = append(newOutpoints, &output.Outpoint)
+			outpoint := &transaction.Outpoint{Txid: *txid, Index: vout}
+			newOutpoints = append(newOutpoints, outpoint)
 			for _, l := range e.LookupServices {
 				if err := l.OutputAdmittedByTopic(ctx, &OutputAdmittedByTopic{
 					Topic:          topic,
-					OutputIndex:    output.Outpoint.Index,
+					OutputIndex:    vout,
 					AtomicBEEF:     taggedBEEF.Beef,
 					OffChainValues: taggedBEEF.OffChainValues,
 				}); err != nil {
-					slog.Error("failed to notify lookup service about admitted output", "topic", topic, "outpoint", output.Outpoint.String(), "error", err)
+					slog.Error("failed to notify lookup service about admitted output", "topic", topic, "outpoint", outpoint.String(), "error", err)
 					return nil, err
 				}
 			}
 		}
+
 		for _, output := range outputsConsumed {
 			output.ConsumedBy = append(output.ConsumedBy, newOutpoints...)
 
@@ -372,6 +358,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				return nil, err
 			}
 		}
+
 		if err := e.Storage.InsertAppliedTransaction(ctx, &overlay.AppliedTransaction{
 			Txid:  txid,
 			Topic: topic,
@@ -435,6 +422,11 @@ func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*
 			return nil, err
 		}
 		if output != nil && output.Beef != nil {
+			// Load ancillary transactions into the BEEF for full SPV verification
+			if err := e.Storage.LoadAncillaryBeef(ctx, output); err != nil {
+				slog.Error("failed to load ancillary beef in Lookup", "outpoint", formula.Outpoint.String(), "error", err)
+				return nil, err
+			}
 			hydratedOutput, err := e.GetUTXOHistory(ctx, output, formula.History, 0)
 			if err != nil {
 				slog.Error("failed to get UTXO history in Lookup", "outpoint", formula.Outpoint.String(), "error", err)
@@ -474,6 +466,11 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 			return nil, err
 		}
 		if childOutput != nil {
+			// Load ancillary transactions into the BEEF for full SPV verification
+			if err := e.Storage.LoadAncillaryBeef(ctx, childOutput); err != nil {
+				slog.Error("failed to load ancillary beef in GetUTXOHistory", "outpoint", outpoint.String(), "error", err)
+				return nil, err
+			}
 			child, err := e.GetUTXOHistory(ctx, childOutput, historySelector, currentDepth+1)
 			if err != nil {
 				slog.Error("failed to get child UTXO history", "outpoint", outpoint.String(), "depth", currentDepth+1, "error", err)
@@ -931,6 +928,12 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		if output.Beef == nil {
 			slog.Error("missing BEEF in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", ErrMissingInput)
 			return nil, ErrMissingInput
+		}
+
+		// Load ancillary transactions into the BEEF for full SPV verification
+		if err := e.Storage.LoadAncillaryBeef(ctx, output); err != nil {
+			slog.Error("failed to load ancillary beef in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", err)
+			return nil, err
 		}
 
 		// Parse BEEF and recursively search through the transaction tree
