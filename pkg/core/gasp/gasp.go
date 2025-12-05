@@ -476,12 +476,11 @@ func (g *GASP) computeTxID(rawtx string) (txID *chainhash.Hash, err error) {
 
 	// Reject extremely long inputs to prevent DoS attacks
 	// Maximum reasonable transaction size is 100MB
-	if len(txBytes) > 100 * 2**20 {
-		return nil, fmt.Errorf("%w: %d bytes (maximum 200MB)", ErrTransactionHexTooLong, len(txBytes))
+	if len(txBytes) > 100*1024*1024 {
+		return nil, fmt.Errorf("%w: %d bytes (maximum 100MB)", ErrTransactionHexTooLong, len(txBytes))
 	}
 
-
-	tx, err := transaction.NewTransactionFromBin(txBytes)
+	tx, err := transaction.NewTransactionFromBytes(txBytes)
 	if err != nil {
 		return nil, err
 	}
