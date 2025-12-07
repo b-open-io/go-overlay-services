@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/advertiser"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
@@ -14,13 +12,16 @@ import (
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/universal-test-vectors/pkg/testabilities"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/advertiser"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 )
 
 type fakeStorage struct {
 	findOutputFunc                  func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error)
 	findOutputsFunc                 func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error)
 	doesAppliedTransactionExistFunc func(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error)
-	insertOutputFunc                func(ctx context.Context, utxo *engine.Output) error
+	insertOutputsFunc               func(ctx context.Context, topic string, txid *chainhash.Hash, outputs []uint32, outpointsConsumed []*transaction.Outpoint, beef []byte, ancillaryTxids []*chainhash.Hash) error
 	markUTXOsAsSpentFunc            func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spendTxid *chainhash.Hash) error
 	insertAppliedTransactionFunc    func(ctx context.Context, tx *overlay.AppliedTransaction) error
 	updateConsumedByFunc            func(ctx context.Context, outpoint *transaction.Outpoint, topic string, consumedBy []*transaction.Outpoint) error
@@ -42,12 +43,6 @@ func (f fakeStorage) FindOutput(ctx context.Context, outpoint *transaction.Outpo
 func (f fakeStorage) DoesAppliedTransactionExist(ctx context.Context, tx *overlay.AppliedTransaction) (bool, error) {
 	if f.doesAppliedTransactionExistFunc != nil {
 		return f.doesAppliedTransactionExistFunc(ctx, tx)
-	}
-	panic("func not defined")
-}
-func (f fakeStorage) InsertOutput(ctx context.Context, utxo *engine.Output) error {
-	if f.insertOutputFunc != nil {
-		return f.insertOutputFunc(ctx, utxo)
 	}
 	panic("func not defined")
 }
@@ -138,6 +133,17 @@ func (f fakeStorage) FindOutpointsByMerkleState(ctx context.Context, topic strin
 }
 
 func (f fakeStorage) ReconcileMerkleRoot(ctx context.Context, topic string, blockHeight uint32, merkleRoot *chainhash.Hash) error {
+	return nil
+}
+
+func (f fakeStorage) InsertOutputs(ctx context.Context, topic string, txid *chainhash.Hash, outputs []uint32, outpointsConsumed []*transaction.Outpoint, beef []byte, ancillaryTxids []*chainhash.Hash) error {
+	if f.insertOutputsFunc != nil {
+		return f.insertOutputsFunc(ctx, topic, txid, outputs, outpointsConsumed, beef, ancillaryTxids)
+	}
+	panic("func not defined")
+}
+
+func (f fakeStorage) LoadAncillaryBeef(ctx context.Context, output *engine.Output) error {
 	return nil
 }
 

@@ -1,10 +1,11 @@
 package ports
 
 import (
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/openapi"
 )
 
 // XTopicsHeader defines the HTTP header key used to specify transaction topics.

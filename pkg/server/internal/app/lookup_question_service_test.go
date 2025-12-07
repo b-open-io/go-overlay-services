@@ -3,10 +3,11 @@ package app_test
 import (
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/testabilities"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/testabilities"
 )
 
 func TestLookupQuestionService_ValidCase(t *testing.T) {

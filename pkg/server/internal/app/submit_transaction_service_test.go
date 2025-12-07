@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/testabilities"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/app"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/testabilities"
 )
 
 var errSubmitTransactionTestError = errors.New("internal submit transaction service test error")

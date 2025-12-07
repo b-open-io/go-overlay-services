@@ -5,8 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/server/config/loaders"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/config/loaders"
 )
 
 func TestDefaults(t *testing.T) {

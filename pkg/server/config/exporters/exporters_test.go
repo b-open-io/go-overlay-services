@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/config/exporters"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/config/loaders"
-	"github.com/stretchr/testify/require"
 )
 
 func TestToEnvFile(t *testing.T) {

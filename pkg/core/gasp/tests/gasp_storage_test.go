@@ -5,13 +5,14 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 )
 
 var (
@@ -552,7 +553,7 @@ func (m *mockStorage) MarkUTXOsAsSpent(_ context.Context, _ []*transaction.Outpo
 	return nil
 }
 
-func (m *mockStorage) InsertOutput(_ context.Context, _ *engine.Output) error {
+func (m *mockStorage) InsertOutputs(_ context.Context, _ string, _ *chainhash.Hash, _ []uint32, _ []*transaction.Outpoint, _ []byte, _ []*chainhash.Hash) error {
 	return nil
 }
 
@@ -577,5 +578,9 @@ func (m *mockStorage) FindOutpointsByMerkleState(_ context.Context, _ string, _ 
 }
 
 func (m *mockStorage) ReconcileMerkleRoot(_ context.Context, _ string, _ uint32, _ *chainhash.Hash) error {
+	return nil
+}
+
+func (m *mockStorage) LoadAncillaryBeef(_ context.Context, _ *engine.Output) error {
 	return nil
 }

@@ -11,9 +11,10 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/bsv-blockchain/go-sdk/util"
+
+	"github.com/bsv-blockchain/go-overlay-services/pkg/core/gasp"
 )
 
 // ErrNotImplemented is returned when a method is not implemented for the OverlayGASPRemote.
