@@ -923,6 +923,7 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 		"outpoint", outpoint.String(),
 		"topic", topic)
 
+	var depth uint32
 	var hydrator func(ctx context.Context, output *Output) (*gasp.Node, error)
 	hydrator = func(ctx context.Context, output *Output) (*gasp.Node, error) {
 		if output.Beef == nil {
@@ -957,11 +958,15 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			return node, nil
 		}
 
-		// If not found in BEEF, recursively search through outputsConsumed
-		for _, consumedOutpoint := range output.OutputsConsumed {
-			if consumedOutput, err := e.Storage.FindOutput(ctx, consumedOutpoint, &topic, nil, true); err == nil && consumedOutput != nil {
-				if node, err := hydrator(ctx, consumedOutput); err == nil {
-					return node, nil
+		// TODO: recursive lookups of missing transactions is very heavy. Skipping recursive for now
+		if depth == 0 {
+			depth++
+			// If not found in BEEF, recursively search through outputsConsumed
+			for _, consumedOutpoint := range output.OutputsConsumed {
+				if consumedOutput, err := e.Storage.FindOutput(ctx, consumedOutpoint, &topic, nil, true); err == nil && consumedOutput != nil {
+					if node, err := hydrator(ctx, consumedOutput); err == nil {
+						return node, nil
+					}
 				}
 			}
 		}
