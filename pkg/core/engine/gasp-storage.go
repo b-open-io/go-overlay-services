@@ -239,22 +239,13 @@ func (s *OverlayGASPStorage) IdentifyNeededInputs(ctx context.Context, beefBytes
 	return s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes)
 }
 
-// ErrNoInputsToStrip is returned when there are no inputs to strip
-var ErrNoInputsToStrip = errors.New("no inputs to strip")
-
 func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {
-	if response == nil {
-		return nil, ErrNoInputsToStrip
-	}
 	for outpoint := range response.RequestedInputs {
 		if found, err := s.Engine.Storage.FindOutput(ctx, &outpoint, &s.Topic, nil, false); err != nil {
 			return nil, err
 		} else if found != nil {
 			delete(response.RequestedInputs, outpoint)
 		}
-	}
-	if len(response.RequestedInputs) == 0 {
-		return nil, ErrNoInputsToStrip
 	}
 	return response, nil
 }
