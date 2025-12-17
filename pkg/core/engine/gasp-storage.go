@@ -197,7 +197,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 			return nil, err
 		}
 		for vin, output := range outputs {
-			if output != nil {
+			if output != nil && len(output.Beef) > 0 {
 				beef.MergeBeefBytes(output.Beef)
 				previousCoins = append(previousCoins, uint32(vin))
 			}
