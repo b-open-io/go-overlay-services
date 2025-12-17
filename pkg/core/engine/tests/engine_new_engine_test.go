@@ -10,26 +10,23 @@ import (
 
 func TestEngine_NewEngine_ShouldInitializeFields_WhenNilProvided(t *testing.T) {
 	// given:
-	input := engine.Engine{}
-
-	expected := &engine.Engine{
-		Managers:          map[string]engine.TopicManager{},
-		LookupServices:    map[string]engine.LookupService{},
-		SyncConfiguration: map[string]engine.SyncConfiguration{},
-		LookupResolver:    engine.NewLookupResolver(),
-	}
+	input := &engine.EngineConfig{}
 
 	// when:
 	actual := engine.NewEngine(input)
 
 	// then:
 	require.NotNil(t, actual)
-	require.Equal(t, expected, actual)
+	require.NotNil(t, actual.SyncConfiguration)
+	require.NotNil(t, actual.LookupResolver)
+	// Managers and LookupServices are now private; verify via ListTopicManagers/ListLookupServiceProviders
+	require.Empty(t, actual.ListTopicManagers())
+	require.Empty(t, actual.ListLookupServiceProviders())
 }
 
 func TestEngine_NewEngine_ShouldMergeTrackers_WhenManagerIsShipType(t *testing.T) {
 	// given:
-	input := engine.Engine{
+	input := &engine.EngineConfig{
 		SHIPTrackers: []string{"http://tracker1.com"},
 		Managers: map[string]engine.TopicManager{
 			"tm_ship": fakeTopicManager{},
@@ -39,43 +36,37 @@ func TestEngine_NewEngine_ShouldMergeTrackers_WhenManagerIsShipType(t *testing.T
 		},
 	}
 
-	expected := &engine.Engine{
-		Managers: map[string]engine.TopicManager{
-			"tm_ship": fakeTopicManager{},
-		},
-		LookupServices: map[string]engine.LookupService{},
-		SyncConfiguration: map[string]engine.SyncConfiguration{
-			"tm_ship": {
-				Type:  engine.SyncConfigurationPeers,
-				Peers: []string{"http://tracker1.com", "http://peer1.com"},
-			},
-		},
-		SHIPTrackers: []string{"http://tracker1.com"},
-	}
+	expectedPeers := []string{"http://tracker1.com", "http://peer1.com"}
 
 	// when:
 	actual := engine.NewEngine(input)
 
 	// then:
 	require.NotNil(t, actual)
-	require.Equal(t, expected.SHIPTrackers, actual.SHIPTrackers)
-	require.Equal(t, expected.Managers, actual.Managers)
-	require.Equal(t, expected.LookupServices, actual.LookupServices)
+	require.Equal(t, input.SHIPTrackers, actual.SHIPTrackers)
+
+	// Verify the topic manager was registered
+	managers := actual.ListTopicManagers()
+	require.Len(t, managers, 1)
+	require.Contains(t, managers, "tm_ship")
+
+	// Verify lookup services are empty
+	require.Empty(t, actual.ListLookupServiceProviders())
 
 	require.ElementsMatch(t,
-		expected.SyncConfiguration["tm_ship"].Peers,
+		expectedPeers,
 		actual.SyncConfiguration["tm_ship"].Peers,
 	)
 
 	require.Equal(t,
-		expected.SyncConfiguration["tm_ship"].Type,
+		engine.SyncConfigurationPeers,
 		actual.SyncConfiguration["tm_ship"].Type,
 	)
 }
 
 func TestEngine_NewEngine_ShouldMergeTrackers_WhenManagerIsSlapType(t *testing.T) {
 	// given:
-	input := engine.Engine{
+	input := &engine.EngineConfig{
 		SLAPTrackers: []string{"http://slaptracker.com"},
 		Managers: map[string]engine.TopicManager{
 			"tm_slap": fakeTopicManager{},
@@ -97,7 +88,7 @@ func TestEngine_NewEngine_ShouldMergeTrackers_WhenManagerIsSlapType(t *testing.T
 
 func TestEngine_NewEngine_ShouldNotMergeTrackers_WhenTypeIsNotPeers(t *testing.T) {
 	// given:
-	input := engine.Engine{
+	input := &engine.EngineConfig{
 		SHIPTrackers: []string{"http://tracker-should-not-merge.com"},
 		Managers: map[string]engine.TopicManager{
 			"tm_ship": fakeTopicManager{},

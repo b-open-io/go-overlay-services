@@ -47,7 +47,7 @@ func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 		},
 	}
 
-	sut := engine.NewEngine(engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",
@@ -102,7 +102,7 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 		},
 	}
 
-	sut := engine.NewEngine(engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",
@@ -155,7 +155,7 @@ func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
 		},
 	}
 
-	sut := engine.NewEngine(engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",

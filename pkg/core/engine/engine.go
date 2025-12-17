@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/bsv-blockchain/go-sdk/chainhash"
@@ -88,6 +89,32 @@ type LookupResolverProvider interface {
 
 // Engine is the core overlay services engine
 type Engine struct {
+	// managers holds the registered topic managers (access via thread-safe methods)
+	managers map[string]TopicManager
+	// lookupServices holds the registered lookup services (access via thread-safe methods)
+	lookupServices          map[string]LookupService
+	Storage                 Storage
+	ChainTracker            chaintracker.ChainTracker
+	HostingURL              string
+	SHIPTrackers            []string
+	SLAPTrackers            []string
+	Broadcaster             transaction.Broadcaster
+	Advertiser              advertiser.Advertiser
+	SyncConfiguration       map[string]SyncConfiguration
+	LogTime                 bool
+	LogPrefix               string
+	ErrorOnBroadcastFailure bool
+	BroadcastFacilitator    topic.Facilitator
+	LookupResolver          LookupResolverProvider
+	// Logger				  Logger //TODO: Implement Logger Interface
+
+	// mu protects managers and lookupServices maps for concurrent access
+	mu sync.RWMutex
+}
+
+// EngineConfig holds configuration for creating a new Engine.
+// Use NewEngine with this config to create an Engine instance.
+type EngineConfig struct {
 	Managers                map[string]TopicManager
 	LookupServices          map[string]LookupService
 	Storage                 Storage
@@ -103,30 +130,56 @@ type Engine struct {
 	ErrorOnBroadcastFailure bool
 	BroadcastFacilitator    topic.Facilitator
 	LookupResolver          LookupResolverProvider
-	// Logger				  Logger //TODO: Implement Logger Interface
 }
 
 // NewEngine creates and returns a new Engine instance
-func NewEngine(cfg Engine) *Engine {
-	if cfg.SyncConfiguration == nil {
-		cfg.SyncConfiguration = make(map[string]SyncConfiguration)
-	}
-	if cfg.Managers == nil {
-		cfg.Managers = make(map[string]TopicManager)
-	}
-	if cfg.LookupServices == nil {
-		cfg.LookupServices = make(map[string]LookupService)
-	}
-	if cfg.LookupResolver == nil {
-		cfg.LookupResolver = NewLookupResolver()
+func NewEngine(cfg *EngineConfig) *Engine {
+	if cfg == nil {
+		cfg = &EngineConfig{}
 	}
 
+	e := &Engine{
+		managers:                make(map[string]TopicManager),
+		lookupServices:          make(map[string]LookupService),
+		Storage:                 cfg.Storage,
+		ChainTracker:            cfg.ChainTracker,
+		HostingURL:              cfg.HostingURL,
+		SHIPTrackers:            cfg.SHIPTrackers,
+		SLAPTrackers:            cfg.SLAPTrackers,
+		Broadcaster:             cfg.Broadcaster,
+		Advertiser:              cfg.Advertiser,
+		SyncConfiguration:       cfg.SyncConfiguration,
+		LogTime:                 cfg.LogTime,
+		LogPrefix:               cfg.LogPrefix,
+		ErrorOnBroadcastFailure: cfg.ErrorOnBroadcastFailure,
+		BroadcastFacilitator:    cfg.BroadcastFacilitator,
+		LookupResolver:          cfg.LookupResolver,
+	}
+
+	if e.SyncConfiguration == nil {
+		e.SyncConfiguration = make(map[string]SyncConfiguration)
+	}
+	if e.LookupResolver == nil {
+		e.LookupResolver = NewLookupResolver()
+	}
+
+	// Register managers using thread-safe method
 	for name, manager := range cfg.Managers {
-		config := cfg.SyncConfiguration[name]
+		e.managers[name] = manager
+	}
 
-		if name == "tm_ship" && len(cfg.SHIPTrackers) > 0 && manager != nil && config.Type == SyncConfigurationPeers {
-			combined := make(map[string]struct{}, len(cfg.SHIPTrackers)+len(config.Peers))
-			for _, peer := range cfg.SHIPTrackers {
+	// Register lookup services using thread-safe method
+	for name, service := range cfg.LookupServices {
+		e.lookupServices[name] = service
+	}
+
+	// Process sync configuration for tm_ship and tm_slap
+	for name, manager := range cfg.Managers {
+		config := e.SyncConfiguration[name]
+
+		if name == "tm_ship" && len(e.SHIPTrackers) > 0 && manager != nil && config.Type == SyncConfigurationPeers {
+			combined := make(map[string]struct{}, len(e.SHIPTrackers)+len(config.Peers))
+			for _, peer := range e.SHIPTrackers {
 				combined[peer] = struct{}{}
 			}
 			for _, peer := range config.Peers {
@@ -136,10 +189,10 @@ func NewEngine(cfg Engine) *Engine {
 			for peer := range combined {
 				config.Peers = append(config.Peers, peer)
 			}
-			cfg.SyncConfiguration[name] = config
-		} else if name == "tm_slap" && len(cfg.SLAPTrackers) > 0 && manager != nil && config.Type == SyncConfigurationPeers {
-			combined := make(map[string]struct{}, len(cfg.SHIPTrackers)+len(config.Peers))
-			for _, peer := range cfg.SLAPTrackers {
+			e.SyncConfiguration[name] = config
+		} else if name == "tm_slap" && len(e.SLAPTrackers) > 0 && manager != nil && config.Type == SyncConfigurationPeers {
+			combined := make(map[string]struct{}, len(e.SHIPTrackers)+len(config.Peers))
+			for _, peer := range e.SLAPTrackers {
 				combined[peer] = struct{}{}
 			}
 			for _, peer := range config.Peers {
@@ -149,11 +202,82 @@ func NewEngine(cfg Engine) *Engine {
 			for peer := range combined {
 				config.Peers = append(config.Peers, peer)
 			}
-			cfg.SyncConfiguration[name] = config
+			e.SyncConfiguration[name] = config
 		}
 	}
 
-	return &cfg
+	return e
+}
+
+// RegisterTopicManager adds a topic manager (thread-safe)
+func (e *Engine) RegisterTopicManager(name string, manager TopicManager) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.managers[name] = manager
+}
+
+// UnregisterTopicManager removes a topic manager (thread-safe)
+func (e *Engine) UnregisterTopicManager(name string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.managers, name)
+}
+
+// GetTopicManager returns a topic manager by name (thread-safe)
+func (e *Engine) GetTopicManager(name string) (TopicManager, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	tm, ok := e.managers[name]
+	return tm, ok
+}
+
+// HasTopicManager checks if a topic manager exists (thread-safe)
+func (e *Engine) HasTopicManager(name string) bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	_, ok := e.managers[name]
+	return ok
+}
+
+// RegisterLookupService adds a lookup service (thread-safe)
+func (e *Engine) RegisterLookupService(name string, service LookupService) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.lookupServices[name] = service
+}
+
+// UnregisterLookupService removes a lookup service (thread-safe)
+func (e *Engine) UnregisterLookupService(name string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.lookupServices, name)
+}
+
+// GetLookupService returns a lookup service by name (thread-safe)
+func (e *Engine) GetLookupService(name string) (LookupService, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	ls, ok := e.lookupServices[name]
+	return ls, ok
+}
+
+// HasLookupService checks if a lookup service exists (thread-safe)
+func (e *Engine) HasLookupService(name string) bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	_, ok := e.lookupServices[name]
+	return ok
+}
+
+// getLookupServicesSnapshot returns a snapshot of lookup services for safe iteration
+func (e *Engine) getLookupServicesSnapshot() []LookupService {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	services := make([]LookupService, 0, len(e.lookupServices))
+	for _, ls := range e.lookupServices {
+		services = append(services, ls)
+	}
+	return services
 }
 
 var (
@@ -185,12 +309,19 @@ var (
 
 // Submit submits a transaction to the overlay service
 func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady OnSteakReady) (overlay.Steak, error) {
+	// Validate topics exist and get managers snapshot (thread-safe)
+	e.mu.RLock()
+	managers := make(map[string]TopicManager, len(taggedBEEF.Topics))
 	for _, topic := range taggedBEEF.Topics {
-		if _, ok := e.Managers[topic]; !ok {
+		if manager, ok := e.managers[topic]; !ok {
+			e.mu.RUnlock()
 			slog.Error("unknown topic in Submit", "topic", topic, "error", ErrUnknownTopic)
 			return nil, ErrUnknownTopic
+		} else {
+			managers[topic] = manager
 		}
 	}
+	e.mu.RUnlock()
 
 	var tx *transaction.Transaction
 	beef, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
@@ -248,7 +379,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		if err != nil {
 			return nil, err
 		}
-		admit, err := e.Managers[topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+		admit, err := managers[topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
 		if err != nil {
 			slog.Error("failed to identify admissible outputs", "txid", txid.String(), "topic", topic, "mode", string(mode), "error", err)
 			return nil, err
@@ -272,8 +403,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			}
 		}
 		// Notify lookup services about spent outputs
+		lookupServices := e.getLookupServicesSnapshot()
 		for vin, output := range topicInputs[topic] {
-			for _, l := range e.LookupServices {
+			for _, l := range lookupServices {
 				if err := l.OutputSpent(ctx, &OutputSpent{
 					Outpoint:           &output.Outpoint,
 					Topic:              topic,
@@ -334,10 +466,11 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 
 		// Build outpoints for consumed-by tracking and notify lookup services
 		newOutpoints := make([]*transaction.Outpoint, 0, len(admit.OutputsToAdmit))
+		lookupServicesForAdmit := e.getLookupServicesSnapshot()
 		for _, vout := range admit.OutputsToAdmit {
 			outpoint := &transaction.Outpoint{Txid: *txid, Index: vout}
 			newOutpoints = append(newOutpoints, outpoint)
-			for _, l := range e.LookupServices {
+			for _, l := range lookupServicesForAdmit {
 				if err := l.OutputAdmittedByTopic(ctx, &OutputAdmittedByTopic{
 					Topic:          topic,
 					OutputIndex:    vout,
@@ -401,7 +534,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 
 // Lookup performs a lookup query on the overlay service
 func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*lookup.LookupAnswer, error) {
-	l, ok := e.LookupServices[question.Service]
+	l, ok := e.GetLookupService(question.Service)
 	if !ok {
 		slog.Error("unknown lookup service", "service", question.Service, "error", ErrUnknownTopic)
 		return nil, ErrUnknownTopic
@@ -519,18 +652,21 @@ func (e *Engine) SyncAdvertisements(ctx context.Context) error {
 	if e.Advertiser == nil {
 		return nil
 	}
-	configuredTopics := make([]string, 0, len(e.Managers))
-	requiredSHIPAdvertisements := make(map[string]struct{}, len(configuredTopics))
-	for name := range e.Managers {
+	// Take snapshot of configured topics and services under read lock
+	e.mu.RLock()
+	configuredTopics := make([]string, 0, len(e.managers))
+	requiredSHIPAdvertisements := make(map[string]struct{}, len(e.managers))
+	for name := range e.managers {
 		configuredTopics = append(configuredTopics, name)
 		requiredSHIPAdvertisements[name] = struct{}{}
 	}
-	configuredServices := make([]string, 0, len(e.LookupServices))
-	requiredSLAPAdvertisements := make(map[string]struct{}, len(configuredServices))
-	for name := range e.LookupServices {
+	configuredServices := make([]string, 0, len(e.lookupServices))
+	requiredSLAPAdvertisements := make(map[string]struct{}, len(e.lookupServices))
+	for name := range e.lookupServices {
 		configuredServices = append(configuredServices, name)
 		requiredSLAPAdvertisements[name] = struct{}{}
 	}
+	e.mu.RUnlock()
 	currentSHIPAdvertisements, err := e.Advertiser.FindAllAdvertisements("SHIP")
 	if err != nil {
 		slog.Error("failed to find SHIP advertisements", "error", err)
@@ -998,7 +1134,8 @@ func (e *Engine) deleteUTXODeep(ctx context.Context, output *Output) error {
 			slog.Error("failed to delete output in deleteUTXODeep", "outpoint", output.Outpoint.String(), "topic", output.Topic, "error", err)
 			return err
 		}
-		for _, l := range e.LookupServices {
+		lookupServices := e.getLookupServicesSnapshot()
+		for _, l := range lookupServices {
 			if err := l.OutputNoLongerRetainedInHistory(ctx, &output.Outpoint, output.Topic); err != nil {
 				slog.Error("failed to notify lookup service about output removal", "outpoint", output.Outpoint.String(), "topic", output.Topic, "error", err)
 				return err
@@ -1175,7 +1312,8 @@ func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash,
 				return err
 			}
 		}
-		for _, l := range e.LookupServices {
+		lookupServices := e.getLookupServicesSnapshot()
+		for _, l := range lookupServices {
 			if err := l.OutputBlockHeightUpdated(ctx, txid, blockHeight, *blockIdx); err != nil {
 				slog.Error("failed to notify lookup service about block height update", "txid", txid, "blockHeight", blockHeight, "error", err)
 				return err
@@ -1185,27 +1323,31 @@ func (e *Engine) HandleNewMerkleProof(ctx context.Context, txid *chainhash.Hash,
 	return nil
 }
 
-// ListTopicManagers returns a list of topic managers and their metadata
+// ListTopicManagers returns a list of topic managers and their metadata (thread-safe)
 func (e *Engine) ListTopicManagers() map[string]*overlay.MetaData {
-	result := make(map[string]*overlay.MetaData, len(e.Managers))
-	for name, manager := range e.Managers {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	result := make(map[string]*overlay.MetaData, len(e.managers))
+	for name, manager := range e.managers {
 		result[name] = manager.GetMetaData()
 	}
 	return result
 }
 
-// ListLookupServiceProviders returns a list of lookup service providers and their metadata
+// ListLookupServiceProviders returns a list of lookup service providers and their metadata (thread-safe)
 func (e *Engine) ListLookupServiceProviders() map[string]*overlay.MetaData {
-	result := make(map[string]*overlay.MetaData, len(e.LookupServices))
-	for name, provider := range e.LookupServices {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	result := make(map[string]*overlay.MetaData, len(e.lookupServices))
+	for name, provider := range e.lookupServices {
 		result[name] = provider.GetMetaData()
 	}
 	return result
 }
 
-// GetDocumentationForTopicManager returns documentation for a topic manager
+// GetDocumentationForTopicManager returns documentation for a topic manager (thread-safe)
 func (e *Engine) GetDocumentationForTopicManager(manager string) (string, error) {
-	tm, ok := e.Managers[manager]
+	tm, ok := e.GetTopicManager(manager)
 	if !ok {
 		err := errors.New("no documentation found")
 		slog.Error("topic manager not found", "manager", manager, "error", err)
@@ -1214,9 +1356,9 @@ func (e *Engine) GetDocumentationForTopicManager(manager string) (string, error)
 	return tm.GetDocumentation(), nil
 }
 
-// GetDocumentationForLookupServiceProvider returns documentation for a lookup service provider
+// GetDocumentationForLookupServiceProvider returns documentation for a lookup service provider (thread-safe)
 func (e *Engine) GetDocumentationForLookupServiceProvider(provider string) (string, error) {
-	l, ok := e.LookupServices[provider]
+	l, ok := e.GetLookupService(provider)
 	if !ok {
 		err := errors.New("no documentation found")
 		slog.Error("lookup service provider not found", "provider", provider, "error", err)
