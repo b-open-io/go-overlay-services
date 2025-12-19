@@ -195,6 +195,7 @@ func New(opts ...Option) *HTTP {
 		AdminBearerToken: srv.cfg.AdminBearerToken,
 		Engine:           srv.engine,
 		OctetStreamLimit: srv.cfg.OctetStreamLimit,
+		BaseURL:          "/api/v1",
 	})
 
 	srv.app.Get("/metrics", monitor.New(monitor.Config{Title: "Overlay-services API"}))
