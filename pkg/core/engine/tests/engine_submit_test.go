@@ -27,7 +27,7 @@ func TestEngine_Submit_Success(t *testing.T) {
 	// given:
 	ctx := context.Background()
 
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
 				identifyAdmissibleOutputsFunc: func(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
@@ -65,7 +65,7 @@ func TestEngine_Submit_Success(t *testing.T) {
 				return true, nil
 			},
 		},
-	}
+	})
 
 	taggedBEEF := overlay.TaggedBEEF{
 		Topics: []string{"test-topic"},
@@ -90,7 +90,7 @@ func TestEngine_Submit_Success(t *testing.T) {
 func TestEngine_Submit_InvalidBeef_ShouldReturnError(t *testing.T) {
 	// given:
 	ctx := context.Background()
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
 				identifyAdmissibleOutputsFunc: func(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
@@ -102,7 +102,7 @@ func TestEngine_Submit_InvalidBeef_ShouldReturnError(t *testing.T) {
 		},
 		Storage:      fakeStorage{},
 		ChainTracker: fakeChainTracker{},
-	}
+	})
 
 	taggedBEEF := overlay.TaggedBEEF{
 		Topics: []string{"test-topic"},
@@ -121,7 +121,7 @@ func TestEngine_Submit_InvalidBeef_ShouldReturnError(t *testing.T) {
 func TestEngine_Submit_SPVFail_ShouldReturnError(t *testing.T) {
 	// given:
 	ctx := context.Background()
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
 				identifyAdmissibleOutputsFunc: func(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
@@ -146,7 +146,7 @@ func TestEngine_Submit_SPVFail_ShouldReturnError(t *testing.T) {
 			},
 		},
 		ChainTracker: fakeChainTrackerSPVFail{},
-	}
+	})
 
 	taggedBEEF := overlay.TaggedBEEF{
 		Topics: []string{"test-topic"},
@@ -165,7 +165,7 @@ func TestEngine_Submit_SPVFail_ShouldReturnError(t *testing.T) {
 func TestEngine_Submit_DuplicateTransaction_ShouldReturnEmptySteak(t *testing.T) {
 	// given:
 	ctx := context.Background()
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{},
 		},
@@ -179,7 +179,7 @@ func TestEngine_Submit_DuplicateTransaction_ShouldReturnEmptySteak(t *testing.T)
 				return true, nil
 			},
 		},
-	}
+	})
 	taggedBEEF := overlay.TaggedBEEF{
 		Topics: []string{"test-topic"},
 		Beef:   createDummyBEEF(t),
@@ -202,11 +202,11 @@ func TestEngine_Submit_DuplicateTransaction_ShouldReturnEmptySteak(t *testing.T)
 func TestEngine_Submit_MissingTopic_ShouldReturnError(t *testing.T) {
 	// given:
 	ctx := context.Background()
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Managers:     map[string]engine.TopicManager{},
 		Storage:      fakeStorage{},
 		ChainTracker: fakeChainTracker{},
-	}
+	})
 	taggedBEEF := overlay.TaggedBEEF{
 		Topics: []string{"unknown-topic"},
 		Beef:   createDummyBEEF(t),
@@ -223,7 +223,7 @@ func TestEngine_Submit_MissingTopic_ShouldReturnError(t *testing.T) {
 func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 	// given:
 	ctx := context.Background()
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
 				identifyAdmissibleOutputsFunc: func(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
@@ -263,7 +263,7 @@ func TestEngine_Submit_BroadcastFails_ShouldReturnError(t *testing.T) {
 				return nil, &transaction.BroadcastFailure{Description: "forced failure for testing"}
 			},
 		},
-	}
+	})
 
 	taggedBEEF := overlay.TaggedBEEF{
 		Topics: []string{"test-topic"},
@@ -285,7 +285,7 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 	taggedBEEF, prevTxID := createDummyValidTaggedBEEF(t)
 	expectedErr := errors.New("insert-failed")
 
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Managers: map[string]engine.TopicManager{
 			"test-topic": fakeManager{
 				identifyAdmissibleOutputsFunc: func(ctx context.Context, beef []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
@@ -332,7 +332,7 @@ func TestEngine_Submit_OutputInsertFails_ShouldReturnError(t *testing.T) {
 			},
 		},
 		ChainTracker: fakeChainTracker{},
-	}
+	})
 
 	// when:
 	steak, err := sut.Submit(ctx, taggedBEEF, engine.SubmitModeCurrent, nil)

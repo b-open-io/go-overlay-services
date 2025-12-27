@@ -51,6 +51,10 @@ type RegisterRoutesConfig struct {
 	// When false (default), the app owner should provide their own logger.
 	// When true, includes a logger with request_id, status, method, path, and error logging.
 	IncludeLogger bool
+
+	// BaseURL is the base path prefix for all routes (e.g., "/api/v1").
+	// When empty, routes are registered at the root level.
+	BaseURL string
 }
 
 // RegisterRoutesWithErrorHandler wraps RegisterRoutes by injecting a predefined error handler
@@ -93,6 +97,7 @@ func RegisterRoutes(app *fiber.App, cfg *RegisterRoutesConfig) *fiber.App {
 	})
 
 	openapi.RegisterHandlersWithOptions(app, registry, openapi.FiberServerOptions{
+		BaseURL: cfg.BaseURL,
 		HandlerMiddleware: []fiber.Handler{
 			middleware.BearerTokenAuthorizationMiddleware(cfg.AdminBearerToken),
 		},

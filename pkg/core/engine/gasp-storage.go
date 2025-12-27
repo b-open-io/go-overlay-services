@@ -226,17 +226,19 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 }
 
 func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
-	if _, ok := s.Engine.Managers[s.Topic]; !ok {
+	manager, ok := s.Engine.GetTopicManager(s.Topic)
+	if !ok {
 		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic (identify admissible outputs): " + s.Topic)
 	}
-	return s.Engine.Managers[s.Topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+	return manager.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
 }
 
 func (s *OverlayGASPStorage) IdentifyNeededInputs(ctx context.Context, beefBytes []byte) ([]*transaction.Outpoint, error) {
-	if _, ok := s.Engine.Managers[s.Topic]; !ok {
+	manager, ok := s.Engine.GetTopicManager(s.Topic)
+	if !ok {
 		return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
 	}
-	return s.Engine.Managers[s.Topic].IdentifyNeededInputs(ctx, beefBytes)
+	return manager.IdentifyNeededInputs(ctx, beefBytes)
 }
 
 func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {

@@ -86,7 +86,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.EngineConfig{
 			Storage:        mockStorage,
 			LookupServices: map[string]engine.LookupService{"test-service": mockLookupService},
 			ChainTracker: fakeChainTracker{
@@ -94,7 +94,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 					return true, nil
 				},
 			},
-		}
+		})
 
 		// when
 		err = sut.HandleNewMerkleProof(ctx, txid, merklePath)
@@ -139,14 +139,14 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.EngineConfig{
 			Storage: mockStorage,
 			ChainTracker: fakeChainTracker{
 				isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
 					return true, nil
 				},
 			},
-		}
+		})
 
 		// when
 		err := sut.HandleNewMerkleProof(ctx, txid, merklePath)
@@ -176,14 +176,14 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.EngineConfig{
 			Storage: mockStorage,
 			ChainTracker: fakeChainTracker{
 				isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
 					return true, nil
 				},
 			},
-		}
+		})
 
 		// when
 		err := sut.HandleNewMerkleProof(ctx, txid, merklePath)
@@ -212,14 +212,14 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.EngineConfig{
 			Storage: mockStorage,
 			ChainTracker: fakeChainTracker{
 				isValidRootForHeight: func(ctx context.Context, root *chainhash.Hash, height uint32) (bool, error) {
 					return true, nil
 				},
 			},
-		}
+		})
 
 		// when
 		err := sut.HandleNewMerkleProof(ctx, txid, merklePath)
@@ -314,7 +314,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.EngineConfig{
 			Storage:        mockStorage,
 			LookupServices: map[string]engine.LookupService{},
 			ChainTracker: fakeChainTracker{
@@ -322,7 +322,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 					return true, nil
 				},
 			},
-		}
+		})
 
 		// when
 		err = sut.HandleNewMerkleProof(ctx, txid2, merklePath)
