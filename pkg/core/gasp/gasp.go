@@ -212,7 +212,7 @@ func (g *GASP) Sync(ctx context.Context, _ string, limit uint32) error {
 						<-g.limiter
 						wg.Done()
 					}()
-					slog.Info(fmt.Sprintf("%s Hydrating GASP node for UTXO: %s.%d", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
+					slog.Debug(fmt.Sprintf("%s Hydrating GASP node for UTXO: %s.%d", g.LogPrefix, utxo.Txid, utxo.OutputIndex))
 					outpoint := utxo.Outpoint()
 					outgoingNode, err := g.Storage.HydrateGASPNode(ctx, outpoint, outpoint, true)
 					if err != nil {
@@ -238,7 +238,7 @@ func (g *GASP) Sync(ctx context.Context, _ string, limit uint32) error {
 
 // GetInitialResponse processes an initial GASP request and returns known UTXOs.
 func (g *GASP) GetInitialResponse(ctx context.Context, request *InitialRequest) (resp *InitialResponse, err error) {
-	slog.Info(fmt.Sprintf("%s Received initial request: %v", g.LogPrefix, request))
+	slog.Debug(fmt.Sprintf("%s Received initial request: %v", g.LogPrefix, request))
 	if request.Version != g.Version {
 		slog.Error(fmt.Sprintf("%s GASP version mismatch", g.LogPrefix))
 		return nil, NewVersionMismatchError(
@@ -261,13 +261,13 @@ func (g *GASP) GetInitialResponse(ctx context.Context, request *InitialRequest) 
 
 // GetInitialReply processes an initial response and returns UTXOs not in the response list.
 func (g *GASP) GetInitialReply(ctx context.Context, response *InitialResponse) (resp *InitialReply, err error) {
-	slog.Info(fmt.Sprintf("%s Received initial response: %v", g.LogPrefix, response))
+	slog.Debug(fmt.Sprintf("%s Received initial response: %v", g.LogPrefix, response))
 	knownUtxos, err := g.Storage.FindKnownUTXOs(ctx, response.Since, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	slog.Info(fmt.Sprintf("%s Found %d known UTXOs since %f", g.LogPrefix, len(knownUtxos), response.Since))
+	slog.Debug(fmt.Sprintf("%s Found %d known UTXOs since %f", g.LogPrefix, len(knownUtxos), response.Since))
 	resp = &InitialReply{
 		UTXOList: make([]*Output, 0),
 	}
@@ -279,13 +279,13 @@ func (g *GASP) GetInitialReply(ctx context.Context, response *InitialResponse) (
 			resp.UTXOList = append(resp.UTXOList, knownUtxo)
 		}
 	}
-	slog.Info(fmt.Sprintf("%s Built initial reply: %v", g.LogPrefix, resp))
+	slog.Debug(fmt.Sprintf("%s Built initial reply: %v", g.LogPrefix, resp))
 	return resp, nil
 }
 
 // RequestNode handles a request for a specific node in the GASP graph.
 func (g *GASP) RequestNode(ctx context.Context, graphID, outpoint *transaction.Outpoint, metadata bool) (node *Node, err error) {
-	slog.Info(fmt.Sprintf("%s Remote is requesting node with graphID: %s, txid: %s, outputIndex: %d, metadata: %v", g.LogPrefix, graphID.String(), outpoint.Txid.String(), outpoint.Index, metadata))
+	slog.Debug(fmt.Sprintf("%s Remote is requesting node with graphID: %s, txid: %s, outputIndex: %d, metadata: %v", g.LogPrefix, graphID.String(), outpoint.Txid.String(), outpoint.Index, metadata))
 	if node, err = g.Storage.HydrateGASPNode(ctx, graphID, outpoint, metadata); err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func (g *GASP) RequestNode(ctx context.Context, graphID, outpoint *transaction.O
 
 // SubmitNode processes a submitted node and returns any needed inputs.
 func (g *GASP) SubmitNode(ctx context.Context, node *Node) (requestedInputs *NodeResponse, err error) {
-	slog.Info(fmt.Sprintf("%s Remote is submitting node: %v", g.LogPrefix, node))
+	slog.Debug(fmt.Sprintf("%s Remote is submitting node: %v", g.LogPrefix, node))
 	if err = g.Storage.AppendToGraph(ctx, node, nil); err != nil {
 		return nil, err
 	} else if requestedInputs, err = g.Storage.FindNeededInputs(ctx, node); err != nil {
@@ -314,7 +314,9 @@ func (g *GASP) CompleteGraph(ctx context.Context, graphID *transaction.Outpoint)
 	if err = g.Storage.ValidateGraphAnchor(ctx, graphID); err == nil {
 		slog.Debug(fmt.Sprintf("%s Graph validated for node: %s", g.LogPrefix, graphID.String()))
 		if finalizeErr := g.Storage.FinalizeGraph(ctx, graphID); finalizeErr == nil {
-			slog.Info(fmt.Sprintf("%s Graph finalized for node: %s", g.LogPrefix, graphID.String()))
+			slog.Debug(fmt.Sprintf("%s Graph finalized for node: %s", g.LogPrefix, graphID.String()))
+			// Clean up temp graph nodes after successful finalization
+			_ = g.Storage.DiscardGraph(ctx, graphID)
 			return nil
 		}
 	}
@@ -351,7 +353,7 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 	if neededInputs != nil && len(neededInputs.RequestedInputs) > 0 {
 		slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), neededInputs))
 		for outpoint, data := range neededInputs.RequestedInputs {
-			slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
+			slog.Debug(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
 			if err := g.ProcessUTXOToCompletion(ctx, &outpoint, nodeOutpoint, seenNodes); err != nil {
 				slog.Warn(fmt.Sprintf("%s Error processing dependency %s: %v", g.LogPrefix, outpoint.String(), err))
 			}
@@ -402,7 +404,7 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 				defer wg.Done()
 				var hydratedNode *Node
 				var err error
-				slog.Info(fmt.Sprintf("%s Hydrating node for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
+				slog.Debug(fmt.Sprintf("%s Hydrating node for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
 				if hydratedNode, err = g.Storage.HydrateGASPNode(ctx, node.GraphID, &outpoint, data.Metadata); err == nil {
 					slog.Debug(fmt.Sprintf("%s Sending hydrated node: %v", g.LogPrefix, hydratedNode))
 					if err = g.processOutgoingNode(ctx, hydratedNode, seenNodes); err == nil {

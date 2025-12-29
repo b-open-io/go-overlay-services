@@ -429,7 +429,7 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 				slog.Error("[GASP] Failed to submit transaction", "txid", txid.String(), "error", state.err)
 				return state.err
 			}
-			slog.Info(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
+			slog.Debug(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
 		}
 	}
 	return nil
