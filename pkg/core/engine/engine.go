@@ -239,7 +239,11 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 		for vin, output := range outputs {
 			if output != nil {
-				beef.MergeBeefBytes(output.Beef)
+				if len(output.Beef) > 0 {
+					if err := beef.MergeBeefBytes(output.Beef); err != nil {
+						slog.Warn("failed to merge stored BEEF, continuing without it", "topic", topic, "vin", vin, "error", err)
+					}
+				}
 				previousCoins = append(previousCoins, uint32(vin)) //nolint:gosec // index bounded by slice length
 				topicInputs[topic][uint32(vin)] = output           //nolint:gosec // index bounded by slice length
 			}
