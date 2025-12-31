@@ -175,7 +175,7 @@ func (g *GASP) Sync(ctx context.Context, _ string, limit uint32) error {
 
 			if err := g.ProcessUTXOToCompletion(processingCtx, outpoint, nil, seenNodes); err != nil {
 				slog.Error("error processing UTXO", "outpoint", outpoint, "error", err)
-				return fmt.Errorf("error processing UTXO: %s %x", outpoint, err)
+				return fmt.Errorf("error processing UTXO: %s: %w", outpoint, err)
 			}
 			sharedOutpoints.Store(*outpoint, struct{}{})
 			return nil
@@ -352,18 +352,16 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 		slog.Debug(fmt.Sprintf("%s Needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), neededInputs))
 		for outpoint, data := range neededInputs.RequestedInputs {
 			slog.Info(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
-			if err := g.ProcessUTXOToCompletion(ctx, &outpoint, nodeOutpoint, seenNodes); err != nil {
+			childSpentBy := spentBy
+			if childSpentBy == nil {
+				childSpentBy = nodeOutpoint
+			}
+			if err := g.ProcessUTXOToCompletion(ctx, &outpoint, childSpentBy, seenNodes); err != nil {
 				slog.Warn(fmt.Sprintf("%s Error processing dependency %s: %v", g.LogPrefix, outpoint.String(), err))
 			}
 		}
-		neededInputs, err = g.Storage.FindNeededInputs(ctx, node)
-		if err != nil {
-			slog.Error(fmt.Sprintf("%s Error re-checking needed inputs for node %s: %v", g.LogPrefix, nodeOutpoint.String(), err))
-			return err
-		}
-		if neededInputs != nil && len(neededInputs.RequestedInputs) > 0 {
-			return fmt.Errorf("not all inputs could be resolved for node %s after processing dependencies", nodeOutpoint.String())
-		}
+		// Note: Don't re-check FindNeededInputs here - dependencies are added to the temp graph,
+		// not persistent storage, so they won't be found by stripAlreadyKnowInputs until FinalizeGraph
 	}
 	return nil
 }
@@ -419,7 +417,7 @@ func (g *GASP) processOutgoingNode(ctx context.Context, node *Node, seenNodes *s
 	return nil
 }
 
-// processUTXOToCompletion handles the complete UTXO processing pipeline with result sharing deduplication
+// ProcessUTXOToCompletion handles the complete UTXO processing pipeline with result sharing deduplication
 func (g *GASP) ProcessUTXOToCompletion(ctx context.Context, outpoint, spentBy *transaction.Outpoint, seenNodes *sync.Map) error {
 	// Pre-initialize the processing state to avoid race conditions
 	newState := &utxoProcessingState{}
@@ -448,9 +446,11 @@ func (g *GASP) ProcessUTXOToCompletion(ctx context.Context, outpoint, spentBy *t
 			return state.err
 		}
 
-		// Complete the graph (submit to engine) using the outpoint we requested
-		if err = g.CompleteGraph(ctx, outpoint); err != nil {
-			state.err = fmt.Errorf("error completing graph for %s: %w", outpoint, err)
+		// Complete the graph using the GraphID from the resolved node (not the requested outpoint)
+		// The GraphID is the actual root of the graph, which may differ from what we requested
+		// (e.g., when processing dependencies)
+		if err = g.CompleteGraph(ctx, resolvedNode.GraphID); err != nil {
+			state.err = fmt.Errorf("error completing graph for %s: %w", resolvedNode.GraphID, err)
 			return state.err
 		}
 
@@ -468,7 +468,7 @@ func (g *GASP) computeTxID(rawtx string) (txID *chainhash.Hash, err error) {
 		}
 	}()
 
-		// Decode hex to validate and check for malicious VarInt patterns
+	// Decode hex to validate and check for malicious VarInt patterns
 	txBytes, err := hex.DecodeString(rawtx)
 	if err != nil {
 		return nil, fmt.Errorf("invalid hex: %w", err)
