@@ -20,9 +20,9 @@ var (
 
 func TestEngine_SyncAdvertisements_ShouldReturnNil_WhenAdvertiserIsNil(t *testing.T) {
 	// given
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Advertiser: nil,
-	}
+	})
 
 	// when
 	err := sut.SyncAdvertisements(context.Background())
@@ -33,7 +33,7 @@ func TestEngine_SyncAdvertisements_ShouldReturnNil_WhenAdvertiserIsNil(t *testin
 
 func TestEngine_SyncAdvertisements_ShouldNotFail_WhenCreateAdvertisementsFails(t *testing.T) {
 	// given
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Advertiser: fakeAdvertiser{
 			findAllAdvertisementsFunc: func(_ overlay.Protocol) ([]*advertiser.Advertisement, error) {
 				return []*advertiser.Advertisement{}, nil
@@ -44,7 +44,7 @@ func TestEngine_SyncAdvertisements_ShouldNotFail_WhenCreateAdvertisementsFails(t
 		},
 		Managers:   map[string]engine.TopicManager{"test-topic": fakeTopicManager{}},
 		HostingURL: "http://localhost",
-	}
+	})
 
 	// when
 	err := sut.SyncAdvertisements(context.Background())
@@ -55,7 +55,7 @@ func TestEngine_SyncAdvertisements_ShouldNotFail_WhenCreateAdvertisementsFails(t
 
 func TestEngine_SyncAdvertisements_ShouldCompleteSuccessfully(t *testing.T) {
 	// given
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Advertiser: fakeAdvertiser{
 			findAllAdvertisementsFunc: func(_ overlay.Protocol) ([]*advertiser.Advertisement, error) {
 				return []*advertiser.Advertisement{}, nil
@@ -70,7 +70,7 @@ func TestEngine_SyncAdvertisements_ShouldCompleteSuccessfully(t *testing.T) {
 		Managers:       map[string]engine.TopicManager{"test-topic": fakeTopicManager{}},
 		LookupServices: map[string]engine.LookupService{"test-service": fakeLookupService{}},
 		HostingURL:     "http://localhost",
-	}
+	})
 
 	// when
 	err := sut.SyncAdvertisements(context.Background())
@@ -81,7 +81,7 @@ func TestEngine_SyncAdvertisements_ShouldCompleteSuccessfully(t *testing.T) {
 
 func TestEngine_SyncAdvertisements_ShouldLogAndContinue_WhenCreateOrRevokeFails(t *testing.T) {
 	// given
-	sut := &engine.Engine{
+	sut := engine.NewEngine(&engine.EngineConfig{
 		Advertiser: fakeAdvertiser{
 			findAllAdvertisementsFunc: func(_ overlay.Protocol) ([]*advertiser.Advertisement, error) {
 				return []*advertiser.Advertisement{}, nil
@@ -96,7 +96,7 @@ func TestEngine_SyncAdvertisements_ShouldLogAndContinue_WhenCreateOrRevokeFails(
 		Managers:       map[string]engine.TopicManager{"test-topic": fakeTopicManager{}},
 		LookupServices: map[string]engine.LookupService{"test-service": fakeLookupService{}},
 		HostingURL:     "http://localhost",
-	}
+	})
 
 	// when
 	err := sut.SyncAdvertisements(context.Background())
@@ -124,7 +124,7 @@ func TestEngine_SyncAdvertisements_ShouldSkip_WhenHostingURLIsInvalid(t *testing
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// given
-			sut := &engine.Engine{
+			sut := engine.NewEngine(&engine.EngineConfig{
 				Advertiser: fakeAdvertiser{
 					findAllAdvertisementsFunc: func(_ overlay.Protocol) ([]*advertiser.Advertisement, error) {
 						return []*advertiser.Advertisement{}, nil
@@ -135,7 +135,7 @@ func TestEngine_SyncAdvertisements_ShouldSkip_WhenHostingURLIsInvalid(t *testing
 				},
 				Managers:   map[string]engine.TopicManager{"test-topic": fakeTopicManager{}},
 				HostingURL: tt.hostingURL,
-			}
+			})
 
 			// when
 			err := sut.SyncAdvertisements(context.Background())

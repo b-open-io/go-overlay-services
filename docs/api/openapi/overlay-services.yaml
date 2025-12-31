@@ -4,14 +4,14 @@ info:
   title: Overlay HTTP API
   description: The overlay server API
 servers:
-  - url: 'http://localhost:3000'
+  - url: 'http://localhost:3000/api/v1'
 tags:
   - name: admin
     description: Admin API endpoints
   - name: non-admin
     description: Non Admin API endpoints
 paths:
-  /api/v1/admin/syncAdvertisements:
+  /admin/syncAdvertisements:
     post:
       tags:
         - admin
@@ -34,7 +34,7 @@ paths:
                   - message
         '500':
           $ref: '#/components/responses/InternalServerErrorResponse'
-  /api/v1/listLookupServiceProviders:
+  /listLookupServiceProviders:
     get:
       tags:
         - non-admin
@@ -45,7 +45,7 @@ paths:
       responses:
         '200':
           $ref: '#/paths/~1api~1v1~1listTopicManagers/get/responses/200'
-  /api/v1/listTopicManagers:
+  /listTopicManagers:
     get:
       tags:
         - non-admin
@@ -80,7 +80,7 @@ paths:
                     - iconURL
                     - version
                     - informationURL
-  /api/v1/getDocumentationForLookupServiceProvider:
+  /getDocumentationForLookupServiceProvider:
     get:
       tags:
         - non-admin
@@ -113,7 +113,7 @@ paths:
           $ref: '#/components/responses/BadRequestResponse'
         '500':
           $ref: '#/components/responses/InternalServerErrorResponse'
-  /api/v1/admin/startGASPSync:
+  /admin/startGASPSync:
     post:
       tags:
         - admin
@@ -134,7 +134,7 @@ paths:
                     type: string
                 required:
                   - message
-  /api/v1/getDocumentationForTopicManager:
+  /getDocumentationForTopicManager:
     get:
       tags:
         - non-admin
@@ -167,7 +167,7 @@ paths:
           $ref: '#/components/responses/BadRequestResponse'
         '500':
           $ref: '#/components/responses/InternalServerErrorResponse'
-  /api/v1/submit:
+  /submit:
     post:
       tags:
         - non-admin
@@ -244,7 +244,7 @@ paths:
           $ref: '#/components/responses/RequestTimeoutResponse'
         '500':
           $ref: '#/components/responses/InternalServerErrorResponse'
-  /api/v1/requestSyncResponse:
+  /requestSyncResponse:
     post:
       tags:
         - non-admin
@@ -314,7 +314,7 @@ paths:
           $ref: '#/components/responses/BadRequestResponse'
         '500':
           $ref: '#/components/responses/InternalServerErrorResponse'
-  /api/v1/requestForeignGASPNode:
+  /requestForeignGASPNode:
     post:
       tags:
         - non-admin
@@ -401,7 +401,7 @@ paths:
           $ref: '#/components/responses/BadRequestResponse'
         '500':
           $ref: '#/components/responses/InternalServerErrorResponse'
-  /api/v1/lookup:
+  /lookup:
     post:
       tags:
         - non-admin
