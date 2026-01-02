@@ -445,14 +445,12 @@ func TestOverlayGASPStorage_HydrateGASPNode(t *testing.T) {
 
 		beef, err := transaction.NewBeefFromTransaction(tx)
 		require.NoError(t, err)
-		beefBytes, err := beef.AtomicBytes(tx.TxID())
-		require.NoError(t, err)
 
 		mockStorage := &mockStorage{
 			findOutputFunc: func(_ context.Context, outpoint *transaction.Outpoint, _ *string, _ *bool, _ bool) (*engine.Output, error) {
 				return &engine.Output{
 					Outpoint: *outpoint,
-					Beef:     beefBytes,
+					Beef:     beef,
 				}, nil
 			},
 		}
@@ -545,7 +543,7 @@ func (m *mockStorage) InsertAppliedTransaction(_ context.Context, _ *overlay.App
 	return nil
 }
 
-func (m *mockStorage) UpdateTransactionBEEF(_ context.Context, _ *chainhash.Hash, _ []byte) error {
+func (m *mockStorage) UpdateTransactionBEEF(_ context.Context, _ *chainhash.Hash, _ *transaction.Beef) error {
 	return nil
 }
 
@@ -553,7 +551,7 @@ func (m *mockStorage) MarkUTXOsAsSpent(_ context.Context, _ []*transaction.Outpo
 	return nil
 }
 
-func (m *mockStorage) InsertOutputs(_ context.Context, _ string, _ *chainhash.Hash, _ []uint32, _ []*transaction.Outpoint, _ []byte, _ []*chainhash.Hash) error {
+func (m *mockStorage) InsertOutputs(_ context.Context, _ string, _ *chainhash.Hash, _ []uint32, _ []*transaction.Outpoint, _ *transaction.Beef, _ []*chainhash.Hash) error {
 	return nil
 }
 

@@ -41,7 +41,7 @@ type Output struct {
 	BlockHeight     uint32
 	BlockIdx        uint64
 	Score           float64 // sort score for outputs. Usage is up to Storage implementation.
-	Beef            []byte
+	Beef            *transaction.Beef
 	AncillaryTxids  []*chainhash.Hash
 	MerkleRoot      *chainhash.Hash // Merkle root extracted from the merkle path
 	MerkleState     MerkleState     // Validation state of the merkle proof

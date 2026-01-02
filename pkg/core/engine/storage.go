@@ -15,7 +15,7 @@ var ErrNotFound = fmt.Errorf("not-found")
 // Storage defines the interface for persisting and retrieving overlay transaction data.
 type Storage interface {
 	// Add a transaction's outputs to storage.
-	InsertOutputs(ctx context.Context, topic string, txid *chainhash.Hash, outputs []uint32, outpointsConsumed []*transaction.Outpoint, beef []byte, ancillaryTxids []*chainhash.Hash) error
+	InsertOutputs(ctx context.Context, topic string, txid *chainhash.Hash, outputs []uint32, outpointsConsumed []*transaction.Outpoint, beef *transaction.Beef, ancillaryTxids []*chainhash.Hash) error
 
 	// Finds an output from storage
 	FindOutput(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*Output, error)
@@ -38,7 +38,7 @@ type Storage interface {
 	UpdateConsumedBy(ctx context.Context, outpoint *transaction.Outpoint, topic string, consumedBy []*transaction.Outpoint) error
 
 	// Updates the beef data for a transaction
-	UpdateTransactionBEEF(ctx context.Context, txid *chainhash.Hash, beef []byte) error
+	UpdateTransactionBEEF(ctx context.Context, txid *chainhash.Hash, beef *transaction.Beef) error
 
 	// Updates the block height on an output
 	UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error

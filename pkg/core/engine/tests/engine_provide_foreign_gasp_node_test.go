@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
 
@@ -16,8 +17,9 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 	// given:
 	ctx := context.Background()
 	graphID := &transaction.Outpoint{}
-	BEEF := createDummyBEEF(t)
-	tx := parseBEEFToTx(t, BEEF)
+	beefBytes := createDummyBEEF(t)
+	beef, tx, _, err := transaction.ParseBeef(beefBytes)
+	require.NoError(t, err)
 	txid := tx.TxID()
 
 	// The outpoint must match a transaction that exists in the BEEF
@@ -37,7 +39,7 @@ func TestEngine_ProvideForeignGASPNode_Success(t *testing.T) {
 			findOutputFunc: func(ctx context.Context, op *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
 				return &engine.Output{
 					Outpoint: *op,
-					Beef:     BEEF,
+					Beef:     beef,
 				}, nil
 			},
 		},
@@ -102,10 +104,16 @@ func TestEngine_ProvideForeignGASPNode_TransactionNotFound_ShouldReturnError(t *
 	graphID := &transaction.Outpoint{}
 	outpoint := &transaction.Outpoint{}
 
+	// Create an empty BEEF with no transactions
+	emptyBeef := &transaction.Beef{
+		Version:      transaction.BEEF_V2,
+		Transactions: make(map[chainhash.Hash]*transaction.BeefTx),
+	}
+
 	sut := &engine.Engine{
 		Storage: fakeStorage{
 			findOutputFunc: func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error) {
-				return &engine.Output{Beef: []byte{0x00}}, nil
+				return &engine.Output{Beef: emptyBeef}, nil
 			},
 		},
 	}
@@ -114,6 +122,6 @@ func TestEngine_ProvideForeignGASPNode_TransactionNotFound_ShouldReturnError(t *
 	node, err := sut.ProvideForeignGASPNode(ctx, graphID, outpoint, "test-topic")
 
 	// then:
-	require.ErrorContains(t, err, "invalid-version") // temp solution
+	require.Error(t, err)
 	require.Nil(t, node)
 }

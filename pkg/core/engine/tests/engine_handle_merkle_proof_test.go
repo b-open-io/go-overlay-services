@@ -37,8 +37,6 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// Create BEEF from the transaction
 		beef, err := transaction.NewBeefFromTransaction(tx)
 		require.NoError(t, err)
-		beefBytes, err := beef.AtomicBytes(txid)
-		require.NoError(t, err)
 
 		// Create merkle path
 		merklePath := &transaction.MerklePath{
@@ -60,7 +58,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			Topic:       "test-topic",
 			BlockHeight: 0,
 			BlockIdx:    0,
-			Beef:        beefBytes,
+			Beef:        beef,
 		}
 
 		// Mock storage
@@ -260,8 +258,6 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				*txid2: {Transaction: tx2},
 			},
 		}
-		beef2Bytes, err := beef.AtomicBytes(txid2)
-		require.NoError(t, err)
 
 		// Create merkle path for tx2
 		merklePath := &transaction.MerklePath{
@@ -291,7 +287,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 			Topic:           "test-topic",
 			OutputsConsumed: []*transaction.Outpoint{{Txid: *txid1, Index: 0}},
-			Beef:            beef2Bytes,
+			Beef:            beef,
 		}
 
 		updateCount := 0
@@ -325,7 +321,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		})
 
 		// when
-		err = sut.HandleNewMerkleProof(ctx, txid2, merklePath)
+		err := sut.HandleNewMerkleProof(ctx, txid2, merklePath)
 
 		// then
 		require.NoError(t, err)
@@ -394,7 +390,7 @@ func (m *mockHandleMerkleProofStorage) FindOutputs(_ context.Context, _ []*trans
 	return nil, nil
 }
 
-func (m *mockHandleMerkleProofStorage) InsertOutputs(_ context.Context, _ string, _ *chainhash.Hash, _ []uint32, _ []*transaction.Outpoint, _ []byte, _ []*chainhash.Hash) error {
+func (m *mockHandleMerkleProofStorage) InsertOutputs(_ context.Context, _ string, _ *chainhash.Hash, _ []uint32, _ []*transaction.Outpoint, _ *transaction.Beef, _ []*chainhash.Hash) error {
 	return nil
 }
 
@@ -410,7 +406,7 @@ func (m *mockHandleMerkleProofStorage) MarkUTXOsAsSpent(_ context.Context, _ []*
 	return nil
 }
 
-func (m *mockHandleMerkleProofStorage) UpdateTransactionBEEF(_ context.Context, _ *chainhash.Hash, _ []byte) error {
+func (m *mockHandleMerkleProofStorage) UpdateTransactionBEEF(_ context.Context, _ *chainhash.Hash, _ *transaction.Beef) error {
 	return nil
 }
 

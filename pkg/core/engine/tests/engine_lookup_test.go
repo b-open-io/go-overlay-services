@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay/lookup"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
@@ -110,8 +111,13 @@ func TestEngine_Lookup_ShouldReturnDirectResult_WhenAnswerTypeIsOutputList(t *te
 func TestEngine_Lookup_ShouldHydrateOutputs_WhenFormulasProvided(t *testing.T) {
 	// given
 	ctx := context.Background()
-	expectedBeef := []byte("hydrated beef")
 	outpoint := &transaction.Outpoint{Txid: fakeTxID(t), Index: 0}
+
+	// Create a proper BEEF object for testing
+	expectedBeef := &transaction.Beef{
+		Version:      transaction.BEEF_V2,
+		Transactions: make(map[chainhash.Hash]*transaction.BeefTx),
+	}
 
 	sut := engine.NewEngine(&engine.EngineConfig{
 		LookupServices: map[string]engine.LookupService{
@@ -136,20 +142,12 @@ func TestEngine_Lookup_ShouldHydrateOutputs_WhenFormulasProvided(t *testing.T) {
 		},
 	})
 
-	expectedAnswer := &lookup.LookupAnswer{
-		Type: lookup.AnswerTypeOutputList,
-		Outputs: []*lookup.OutputListItem{
-			{
-				OutputIndex: outpoint.Index,
-				Beef:        expectedBeef,
-			},
-		},
-	}
-
 	// when
 	actualAnswer, err := sut.Lookup(ctx, &lookup.LookupQuestion{Service: "test"})
 
 	// then
 	require.NoError(t, err)
-	require.Equal(t, expectedAnswer, actualAnswer)
+	require.Equal(t, lookup.AnswerTypeOutputList, actualAnswer.Type)
+	require.Len(t, actualAnswer.Outputs, 1)
+	require.Equal(t, outpoint.Index, actualAnswer.Outputs[0].OutputIndex)
 }

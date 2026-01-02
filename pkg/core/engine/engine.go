@@ -309,10 +309,27 @@ var (
 
 // Submit submits a transaction to the overlay service
 func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode SumbitMode, onSteakReady OnSteakReady) (overlay.Steak, error) {
+	// Parse the BEEF bytes once at the entry point
+	beef, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
+	if err != nil {
+		slog.Error("failed to parse BEEF in Submit", "error", err)
+		return nil, err
+	} else if tx == nil {
+		slog.Error("invalid BEEF in Submit - tx is nil", "error", ErrInvalidBeef)
+		return nil, ErrInvalidBeef
+	}
+	// Delegate to SubmitParsedBeef with the parsed objects
+	return e.SubmitParsedBeef(ctx, beef, txid, taggedBEEF.Topics, taggedBEEF.Beef, taggedBEEF.OffChainValues, mode, onSteakReady)
+}
+
+// SubmitParsedBeef processes a pre-parsed BEEF transaction for submission to overlay topics.
+// This is the core submission logic; Submit() is a convenience wrapper that parses TaggedBEEF first.
+// The atomicBeef parameter is the original serialized bytes for use in lookup service notifications.
+func (e *Engine) SubmitParsedBeef(ctx context.Context, beef *transaction.Beef, txid *chainhash.Hash, topics []string, atomicBeef []byte, offChainValues []byte, mode SumbitMode, onSteakReady OnSteakReady) (overlay.Steak, error) {
 	// Validate topics exist and get managers snapshot (thread-safe)
 	e.mu.RLock()
-	managers := make(map[string]TopicManager, len(taggedBEEF.Topics))
-	for _, topic := range taggedBEEF.Topics {
+	managers := make(map[string]TopicManager, len(topics))
+	for _, topic := range topics {
 		if manager, ok := e.managers[topic]; !ok {
 			e.mu.RUnlock()
 			slog.Error("unknown topic in Submit", "topic", topic, "error", ErrUnknownTopic)
@@ -323,12 +340,9 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 	}
 	e.mu.RUnlock()
 
-	var tx *transaction.Transaction
-	beef, tx, txid, err := transaction.ParseBeef(taggedBEEF.Beef)
-	if err != nil {
-		slog.Error("failed to parse BEEF in Submit", "error", err)
-		return nil, err
-	} else if tx == nil {
+	// Get the transaction from the parsed BEEF
+	tx := beef.FindTransactionForSigningByHash(txid)
+	if tx == nil {
 		slog.Error("invalid BEEF in Submit - tx is nil", "error", ErrInvalidBeef)
 		return nil, ErrInvalidBeef
 	}
@@ -339,7 +353,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		slog.Error("invalid transaction in Submit", "txid", txid, "error", ErrInvalidTransaction)
 		return nil, ErrInvalidTransaction
 	}
-	steak := make(overlay.Steak, len(taggedBEEF.Topics))
+	steak := make(overlay.Steak, len(topics))
 	topicInputs := make(map[string]map[uint32]*Output, len(tx.Inputs))
 	inpoints := make([]*transaction.Outpoint, 0, len(tx.Inputs))
 	for _, input := range tx.Inputs {
@@ -348,8 +362,8 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 			Index: input.SourceTxOutIndex,
 		})
 	}
-	dupeTopics := make(map[string]struct{}, len(taggedBEEF.Topics))
-	for _, topic := range taggedBEEF.Topics {
+	dupeTopics := make(map[string]struct{}, len(topics))
+	for _, topic := range topics {
 		if exists, err := e.Storage.DoesAppliedTransactionExist(ctx, &overlay.AppliedTransaction{
 			Txid:  txid,
 			Topic: topic,
@@ -370,16 +384,16 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 		for vin, output := range outputs {
 			if output != nil {
-				beef.MergeBeefBytes(output.Beef)
+				if output.Beef != nil {
+					beef.MergeBeef(output.Beef)
+				}
 				previousCoins = append(previousCoins, uint32(vin)) //nolint:gosec // index bounded by slice length
 				topicInputs[topic][uint32(vin)] = output           //nolint:gosec // index bounded by slice length
 			}
 		}
-		beefBytes, err := beef.AtomicBytes(txid)
-		if err != nil {
-			return nil, err
-		}
-		admit, err := managers[topic].IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+		// Clone beef so topic managers cannot modify the shared instance
+		topicBeef := beef.Clone()
+		admit, err := managers[topic].IdentifyAdmissibleOutputs(ctx, topicBeef, txid, previousCoins)
 		if err != nil {
 			slog.Error("failed to identify admissible outputs", "txid", txid.String(), "topic", topic, "mode", string(mode), "error", err)
 			return nil, err
@@ -387,7 +401,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		steak[topic] = &admit
 	}
 
-	for _, topic := range taggedBEEF.Topics {
+	for _, topic := range topics {
 		if _, ok := dupeTopics[topic]; ok {
 			continue
 		}
@@ -413,7 +427,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 					InputIndex:         vin, //nolint:gosec // index bounded by slice length
 					UnlockingScript:    tx.Inputs[vin].UnlockingScript,
 					SequenceNumber:     tx.Inputs[vin].SequenceNumber,
-					SpendingAtomicBEEF: taggedBEEF.Beef,
+					SpendingAtomicBEEF: atomicBeef,
 				}); err != nil {
 					slog.Error("failed to notify lookup service about spent output", "topic", topic, "txid", txid, "error", err)
 					return nil, err
@@ -432,7 +446,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		onSteakReady(&steak)
 	}
 
-	for _, topic := range taggedBEEF.Topics {
+	for _, topic := range topics {
 		if _, ok := dupeTopics[topic]; ok {
 			continue
 		}
@@ -459,7 +473,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		}
 
 		// Insert all outputs in a single batch call
-		if err := e.Storage.InsertOutputs(ctx, topic, txid, admit.OutputsToAdmit, outpointsConsumed, taggedBEEF.Beef, admit.AncillaryTxids); err != nil {
+		if err := e.Storage.InsertOutputs(ctx, topic, txid, admit.OutputsToAdmit, outpointsConsumed, beef, admit.AncillaryTxids); err != nil {
 			slog.Error("failed to insert outputs", "topic", topic, "txid", txid.String(), "error", err)
 			return nil, err
 		}
@@ -474,8 +488,8 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 				if err := l.OutputAdmittedByTopic(ctx, &OutputAdmittedByTopic{
 					Topic:          topic,
 					OutputIndex:    vout,
-					AtomicBEEF:     taggedBEEF.Beef,
-					OffChainValues: taggedBEEF.OffChainValues,
+					AtomicBEEF:     atomicBeef,
+					OffChainValues: offChainValues,
 				}); err != nil {
 					slog.Error("failed to notify lookup service about admitted output", "topic", topic, "outpoint", outpoint.String(), "error", err)
 					return nil, err
@@ -504,7 +518,7 @@ func (e *Engine) Submit(ctx context.Context, taggedBEEF overlay.TaggedBEEF, mode
 		return steak, nil
 	}
 
-	releventTopics := make([]string, 0, len(taggedBEEF.Topics))
+	releventTopics := make([]string, 0, len(topics))
 	for topic, steak := range steak {
 		if steak.OutputsToAdmit == nil && steak.CoinsToRetain == nil {
 			continue
@@ -565,9 +579,14 @@ func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*
 				slog.Error("failed to get UTXO history in Lookup", "outpoint", formula.Outpoint.String(), "error", err)
 				return nil, err
 			}
-			if hydratedOutput != nil {
+			if hydratedOutput != nil && hydratedOutput.Beef != nil {
+				beefBytes, err := hydratedOutput.Beef.AtomicBytes(&hydratedOutput.Outpoint.Txid)
+				if err != nil {
+					slog.Error("failed to serialize BEEF in Lookup", "outpoint", formula.Outpoint.String(), "error", err)
+					return nil, err
+				}
 				hydratedOutputs = append(hydratedOutputs, &lookup.OutputListItem{
-					Beef:        hydratedOutput.Beef,
+					Beef:        beefBytes,
 					OutputIndex: hydratedOutput.Outpoint.Index,
 				})
 			}
@@ -579,7 +598,7 @@ func (e *Engine) Lookup(ctx context.Context, question *lookup.LookupQuestion) (*
 	}, nil
 }
 
-func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySelector func(beef []byte, outputIndex uint32, currentDepth uint32) bool, currentDepth uint32) (*Output, error) {
+func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySelector func(beef *transaction.Beef, outputIndex uint32, currentDepth uint32) bool, currentDepth uint32) (*Output, error) {
 	if historySelector == nil {
 		return output, nil
 	}
@@ -615,10 +634,10 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 		}
 	}
 
-	tx, err := transaction.NewTransactionFromBEEF(output.Beef)
-	if err != nil {
-		slog.Error("failed to create transaction from BEEF in GetUTXOHistory", "outpoint", output.Outpoint.String(), "error", err)
-		return nil, err
+	tx := output.Beef.FindTransactionForSigningByHash(&output.Outpoint.Txid)
+	if tx == nil {
+		slog.Error("failed to find transaction in BEEF in GetUTXOHistory", "outpoint", output.Outpoint.String())
+		return nil, ErrMissingBeef
 	}
 	for _, txin := range tx.Inputs {
 		outpoint := &transaction.Outpoint{
@@ -631,19 +650,24 @@ func (e *Engine) GetUTXOHistory(ctx context.Context, output *Output, historySele
 				slog.Error("missing BEEF in GetUTXOHistory", "outpoint", outpoint.String(), "error", beefErr)
 				return nil, beefErr
 			}
-			txin.SourceTransaction, err = transaction.NewTransactionFromBEEF(input.Beef)
-			if err != nil {
-				slog.Error("failed to create source transaction from BEEF", "outpoint", outpoint.String(), "error", err)
-				return nil, err
+			txin.SourceTransaction = input.Beef.FindTransactionForSigningByHash(&outpoint.Txid)
+			if txin.SourceTransaction == nil {
+				slog.Error("failed to find source transaction in BEEF", "outpoint", outpoint.String())
+				return nil, ErrMissingBeef
 			}
 		}
 	}
-	beef, err := tx.BEEF()
+	// Rebuild beef from the transaction with its now-populated source transactions
+	beefBytes, err := tx.BEEF()
 	if err != nil {
 		slog.Error("failed to get BEEF from transaction in GetUTXOHistory", "outpoint", output.Outpoint.String(), "error", err)
 		return nil, err
 	}
-	output.Beef = beef
+	output.Beef, _, _, err = transaction.ParseBeef(beefBytes)
+	if err != nil {
+		slog.Error("failed to parse rebuilt BEEF in GetUTXOHistory", "outpoint", output.Outpoint.String(), "error", err)
+		return nil, err
+	}
 	return output, nil
 }
 
@@ -1073,15 +1097,9 @@ func (e *Engine) ProvideForeignGASPNode(ctx context.Context, graphId *transactio
 			return nil, err
 		}
 
-		// Parse BEEF and recursively search through the transaction tree
-		beef, _, _, err := transaction.ParseBeef(output.Beef)
-		if err != nil {
-			slog.Error("failed to parse BEEF in ProvideForeignGASPNode hydrator", "outpoint", output.Outpoint.String(), "error", err)
-			return nil, err
-		}
-
+		// Search through the BEEF transaction tree
 		// If found in BEEF, return the node
-		if correctTx := beef.FindTransactionByHash(&outpoint.Txid); correctTx != nil {
+		if correctTx := output.Beef.FindTransactionByHash(&outpoint.Txid); correctTx != nil {
 			node := &gasp.Node{
 				GraphID:     graphId,
 				RawTx:       correctTx.Hex(),
@@ -1200,16 +1218,13 @@ func (e *Engine) updateInputProofs(ctx context.Context, tx *transaction.Transact
 }
 
 func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid chainhash.Hash, proof *transaction.MerklePath) error {
-	if len(output.Beef) == 0 {
+	if output.Beef == nil {
 		err := ErrMissingBeef
 		slog.Error("missing BEEF in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
 		return err
 	}
-	_, tx, _, err := transaction.ParseBeef(output.Beef)
-	if err != nil {
-		slog.Error("failed to parse BEEF in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", err)
-		return err
-	} else if tx == nil {
+	tx := output.Beef.FindTransactionForSigningByHash(&output.Outpoint.Txid)
+	if tx == nil {
 		txErr := ErrMissingTransaction
 		slog.Error("missing transaction in updateMerkleProof", "outpoint", output.Outpoint.String(), "error", txErr)
 		return txErr
@@ -1225,7 +1240,7 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 			return nil
 		}
 	}
-	if err = e.updateInputProofs(ctx, tx, txid, proof); err != nil {
+	if err := e.updateInputProofs(ctx, tx, txid, proof); err != nil {
 		slog.Error("failed to update input proofs in updateMerkleProof", "txid", txid, "error", err)
 		return err
 	}
@@ -1233,6 +1248,11 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 	if atomicErr != nil {
 		slog.Error("failed to get atomic BEEF", "txid", txid, "error", atomicErr)
 		return atomicErr
+	}
+	updatedBeef, _, _, parseErr := transaction.ParseBeef(atomicBytes)
+	if parseErr != nil {
+		slog.Error("failed to parse updated BEEF", "txid", txid, "error", parseErr)
+		return parseErr
 	}
 
 	output.BlockHeight = proof.BlockHeight
@@ -1242,7 +1262,7 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 			break
 		}
 	}
-	if err = e.Storage.UpdateTransactionBEEF(ctx, &output.Outpoint.Txid, atomicBytes); err != nil {
+	if err := e.Storage.UpdateTransactionBEEF(ctx, &output.Outpoint.Txid, updatedBeef); err != nil {
 		slog.Error("failed to update transaction BEEF", "txid", output.Outpoint.Txid, "error", err)
 		return err
 	}
@@ -1255,8 +1275,9 @@ func (e *Engine) updateMerkleProof(ctx context.Context, output *Output, txid cha
 		for _, consuming := range consumingOutputs {
 			// Check if consuming transaction has its own merkle path
 			// If it does, it's mined and doesn't include parent transactions anymore
-			if len(consuming.Beef) > 0 {
-				if _, consumingTx, _, err := transaction.ParseBeef(consuming.Beef); err == nil && consumingTx != nil && consumingTx.MerklePath != nil {
+			if consuming.Beef != nil {
+				consumingTx := consuming.Beef.FindTransactionForSigningByHash(&consuming.Outpoint.Txid)
+				if consumingTx != nil && consumingTx.MerklePath != nil {
 					continue
 				}
 			}

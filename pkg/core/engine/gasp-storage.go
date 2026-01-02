@@ -117,13 +117,8 @@ func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID, outpo
 	if output == nil || output.Beef == nil {
 		return nil, ErrMissingInput
 	}
-	// Parse BEEF to get the transaction
-	_, tx, _, err := transaction.ParseBeef(output.Beef)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if we got a valid transaction
+	// Get the transaction from BEEF
+	tx := output.Beef.FindTransactionForSigningByHash(&outpoint.Txid)
 	if tx == nil {
 		return nil, ErrParsedBEEFReturnedNilTx
 	}
@@ -198,18 +193,17 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 		}
 		for vin, output := range outputs {
 			if output != nil {
-				beef.MergeBeefBytes(output.Beef)
+				if output.Beef != nil {
+					beef.MergeBeef(output.Beef)
+				}
 				previousCoins = append(previousCoins, uint32(vin))
 			}
 		}
 
-		beefBytes, err := beef.AtomicBytes(tx.TxID())
-		if err != nil {
-			return nil, err
-		}
-		admit, _ := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+		txid := tx.TxID()
+		admit, _ := s.IdentifyAdmissibleOutputs(ctx, beef, txid, previousCoins)
 		if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
-			neededInputs, err := s.IdentifyNeededInputs(ctx, beefBytes)
+			neededInputs, err := s.IdentifyNeededInputs(ctx, beef, txid)
 			if err != nil {
 				return nil, err
 			}
@@ -225,20 +219,20 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	return response, nil
 }
 
-func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beefBytes []byte, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
+func (s *OverlayGASPStorage) IdentifyAdmissibleOutputs(ctx context.Context, beef *transaction.Beef, txid *chainhash.Hash, previousCoins []uint32) (overlay.AdmittanceInstructions, error) {
 	manager, ok := s.Engine.GetTopicManager(s.Topic)
 	if !ok {
 		return overlay.AdmittanceInstructions{}, errors.New("no manager for topic (identify admissible outputs): " + s.Topic)
 	}
-	return manager.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins)
+	return manager.IdentifyAdmissibleOutputs(ctx, beef, txid, previousCoins)
 }
 
-func (s *OverlayGASPStorage) IdentifyNeededInputs(ctx context.Context, beefBytes []byte) ([]*transaction.Outpoint, error) {
+func (s *OverlayGASPStorage) IdentifyNeededInputs(ctx context.Context, beef *transaction.Beef, txid *chainhash.Hash) ([]*transaction.Outpoint, error) {
 	manager, ok := s.Engine.GetTopicManager(s.Topic)
 	if !ok {
 		return nil, errors.New("no manager for topic (identify needed inputs): " + s.Topic)
 	}
-	return manager.IdentifyNeededInputs(ctx, beefBytes)
+	return manager.IdentifyNeededInputs(ctx, beef, txid)
 }
 
 func (s *OverlayGASPStorage) stripAlreadyKnowInputs(ctx context.Context, response *gasp.NodeResponse) (*gasp.NodeResponse, error) {
@@ -332,20 +326,20 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 			} else {
 				for vin, output := range outputs {
 					if output != nil {
-						beef.MergeBeefBytes(output.Beef)
+						if output.Beef != nil {
+							beef.MergeBeef(output.Beef)
+						}
 						previousCoins = append(previousCoins, uint32(vin))
 					}
 				}
 			}
-			if beefBytes, err = beef.AtomicBytes(txid); err != nil {
-				return err
-			} else if admit, err := s.IdentifyAdmissibleOutputs(ctx, beefBytes, previousCoins); err != nil {
+			if admit, err := s.IdentifyAdmissibleOutputs(ctx, beef, txid, previousCoins); err != nil {
 				slog.Error("[GASP] ValidateGraphAnchor failed to identify admissible outputs", "error", err)
 				return err
 			} else {
 				for _, vout := range admit.OutputsToAdmit {
 					outpoint := &transaction.Outpoint{
-						Txid:  *tx.TxID(),
+						Txid:  *txid,
 						Index: vout,
 					}
 					coins[*outpoint] = struct{}{}
