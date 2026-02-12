@@ -470,7 +470,7 @@ func (g *GASP) computeTxID(rawtx string) (txID *chainhash.Hash, err error) {
 		}
 	}()
 
-		// Decode hex to validate and check for malicious VarInt patterns
+	// Decode hex to validate and check for malicious VarInt patterns
 	txBytes, err := hex.DecodeString(rawtx)
 	if err != nil {
 		return nil, fmt.Errorf("invalid hex: %w", err)

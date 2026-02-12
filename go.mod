@@ -2,10 +2,8 @@ module github.com/bsv-blockchain/go-overlay-services
 
 go 1.25.4
 
-replace github.com/bsv-blockchain/go-sdk => ../go-sdk
-
 require (
-	github.com/bsv-blockchain/go-sdk v1.2.13
+	github.com/bsv-blockchain/go-sdk v1.2.18
 	github.com/bsv-blockchain/universal-test-vectors v0.6.1
 	github.com/go-resty/resty/v2 v2.17.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
@@ -56,12 +54,12 @@ require (
 	github.com/valyala/fasthttp v1.68.0 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/mod v0.30.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
-	golang.org/x/tools v0.39.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/mod v0.31.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
+	golang.org/x/tools v0.40.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
