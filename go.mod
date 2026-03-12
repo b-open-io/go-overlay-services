@@ -2,10 +2,8 @@ module github.com/bsv-blockchain/go-overlay-services
 
 go 1.25.4
 
-replace github.com/bsv-blockchain/go-sdk => ../go-sdk
-
 require (
-	github.com/bsv-blockchain/go-sdk v1.2.13
+	github.com/bsv-blockchain/go-sdk v1.2.18
 	github.com/bsv-blockchain/universal-test-vectors v0.6.1
 	github.com/go-resty/resty/v2 v2.17.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
