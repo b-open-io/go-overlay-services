@@ -28,6 +28,8 @@ var (
 	ErrTransactionHexTooLong = errors.New("transaction hex too long")
 	// ErrMaliciousVarInt is returned when a VarInt value exceeds reasonable limits.
 	ErrMaliciousVarInt = errors.New("malicious VarInt detected")
+	// ErrGraphNoTopicalAdmittance indicates that the graph did not result in topical admittance of the root node.
+	ErrGraphNoTopicalAdmittance = errors.New("graph did not result in topical admittance of the root node")
 )
 
 // utxoProcessingState tracks the state of a UTXO processing operation with result sharing
@@ -175,7 +177,7 @@ func (g *GASP) Sync(ctx context.Context, _ string, limit uint32) error {
 
 			if err := g.ProcessUTXOToCompletion(processingCtx, outpoint, nil, seenNodes); err != nil {
 				slog.Error("error processing UTXO", "outpoint", outpoint, "error", err)
-				return fmt.Errorf("error processing UTXO: %s %x", outpoint, err)
+				return fmt.Errorf("error processing UTXO %s: %w", outpoint, err)
 			}
 			sharedOutpoints.Store(*outpoint, struct{}{})
 			return nil
@@ -357,6 +359,9 @@ func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *tra
 		for outpoint, data := range neededInputs.RequestedInputs {
 			slog.Debug(fmt.Sprintf("%s Processing dependency for outpoint: %s, metadata: %v", g.LogPrefix, outpoint.String(), data.Metadata))
 			if err := g.ProcessUTXOToCompletion(ctx, &outpoint, nodeOutpoint, seenNodes); err != nil {
+				if errors.Is(err, ErrGraphNoTopicalAdmittance) {
+					return fmt.Errorf("dependency %s not admitted: %w", outpoint.String(), err)
+				}
 				slog.Warn(fmt.Sprintf("%s Error processing dependency %s: %v", g.LogPrefix, outpoint.String(), err))
 			}
 		}

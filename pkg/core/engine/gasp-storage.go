@@ -28,8 +28,8 @@ var (
 	// ErrGraphAnchorInvalidTx indicates that the graph anchor is not a valid transaction
 	ErrGraphAnchorInvalidTx = errors.New("graph anchor is not a valid transaction")
 
-	// ErrGraphNoTopicalAdmittance indicates that the graph did not result in topical admittance of the root node
-	ErrGraphNoTopicalAdmittance = errors.New("graph did not result in topical admittance of the root node. rejecting")
+	// ErrGraphNoTopicalAdmittance is an alias for gasp.ErrGraphNoTopicalAdmittance for backward compatibility.
+	ErrGraphNoTopicalAdmittance = gasp.ErrGraphNoTopicalAdmittance
 	// ErrUnableToFindRootNodeInGraph indicates that the root node could not be found in the graph for finalization
 	ErrUnableToFindRootNodeInGraph = errors.New("unable to find root node in graph for finalization")
 	// ErrRequiredInputNodeNotFoundInTempGraph indicates that a required input node was not found in the temporary graph store
