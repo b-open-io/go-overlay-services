@@ -315,13 +315,15 @@ func (g *GASP) CompleteGraph(ctx context.Context, graphID *transaction.Outpoint)
 		slog.Debug(fmt.Sprintf("%s Graph validated for node: %s", g.LogPrefix, graphID.String()))
 		if finalizeErr := g.Storage.FinalizeGraph(ctx, graphID); finalizeErr == nil {
 			slog.Debug(fmt.Sprintf("%s Graph finalized for node: %s", g.LogPrefix, graphID.String()))
-			// Clean up temp graph nodes after successful finalization
 			_ = g.Storage.DiscardGraph(ctx, graphID)
 			return nil
+		} else {
+			err = finalizeErr
 		}
 	}
 	slog.Warn(fmt.Sprintf("%s Error completing graph %s: %v", g.LogPrefix, graphID.String(), err))
-	return g.Storage.DiscardGraph(ctx, graphID)
+	_ = g.Storage.DiscardGraph(ctx, graphID)
+	return err
 }
 
 func (g *GASP) processIncomingNode(ctx context.Context, node *Node, spentBy *transaction.Outpoint, seenNodes *sync.Map) error {
@@ -470,7 +472,7 @@ func (g *GASP) computeTxID(rawtx string) (txID *chainhash.Hash, err error) {
 		}
 	}()
 
-		// Decode hex to validate and check for malicious VarInt patterns
+	// Decode hex to validate and check for malicious VarInt patterns
 	txBytes, err := hex.DecodeString(rawtx)
 	if err != nil {
 		return nil, fmt.Errorf("invalid hex: %w", err)

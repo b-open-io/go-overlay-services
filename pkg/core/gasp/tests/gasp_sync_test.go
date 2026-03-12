@@ -436,7 +436,7 @@ func TestGASP_SyncBasicScenarios(t *testing.T) {
 		err := gasp2.Sync(ctx, "test-host", 0)
 
 		// then
-		require.NoError(t, err) // Sync should complete despite validation failure
+		require.Error(t, err) // Sync should return the validation error
 
 		result2, _ := storage2.FindKnownUTXOs(ctx, 0, 0)
 		require.Empty(t, result2) // No UTXOs should be synchronized
