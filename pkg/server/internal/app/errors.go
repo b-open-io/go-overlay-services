@@ -25,6 +25,8 @@ var (
 	ErrorTypeRawDataProcessing = ErrorType{"raw-data-processing"}
 	// ErrorTypeUnsupportedOperation indicates that the requested operation is not supported.
 	ErrorTypeUnsupportedOperation = ErrorType{"unsupported-operation"}
+	// ErrorTypeNotFound indicates that the requested resource was not found.
+	ErrorTypeNotFound = ErrorType{"not-found"}
 )
 
 // Error defines a generic application-layer error that should be translated
@@ -85,6 +87,16 @@ func NewProviderFailureError(err, slug string) Error {
 		slug:      slug,
 		err:       err,
 		errorType: ErrorTypeProviderFailure,
+	}
+}
+
+// NewNotFoundError returns an error that handles resource not found failures,
+// such as when a requested output, transaction, or other resource doesn't exist.
+func NewNotFoundError(err, slug string) Error {
+	return Error{
+		slug:      slug,
+		err:       err,
+		errorType: ErrorTypeNotFound,
 	}
 }
 

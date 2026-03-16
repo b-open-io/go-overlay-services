@@ -37,8 +37,6 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// Create BEEF from the transaction
 		beef, err := transaction.NewBeefFromTransaction(tx)
 		require.NoError(t, err)
-		beefBytes, err := beef.AtomicBytes(txid)
-		require.NoError(t, err)
 
 		// Create merkle path
 		merklePath := &transaction.MerklePath{
@@ -58,10 +56,9 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				Index: 0,
 			},
 			Topic:       "test-topic",
-			Satoshis:    1000,
 			BlockHeight: 0,
 			BlockIdx:    0,
-			Beef:        beefBytes,
+			Beef:        beef,
 		}
 
 		// Mock storage
@@ -69,7 +66,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			findOutputsForTransactionFunc: func(_ context.Context, _ *chainhash.Hash, _ bool) ([]*engine.Output, error) {
 				return []*engine.Output{output}, nil
 			},
-			updateOutputBlockHeightFunc: func(_ context.Context, _ *transaction.Outpoint, _ string, blockHeight uint32, blockIdx uint64, _ []byte) error {
+			updateOutputBlockHeightFunc: func(_ context.Context, _ *transaction.Outpoint, _ string, blockHeight uint32, blockIdx uint64) error {
 				// Verify the block height and index are updated
 				require.Equal(t, uint32(814435), blockHeight)
 				require.Equal(t, uint64(123), blockIdx)
@@ -87,10 +84,15 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.Config{
 			Storage:        mockStorage,
 			LookupServices: map[string]engine.LookupService{"test-service": mockLookupService},
-		}
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(_ context.Context, _ *chainhash.Hash, _ uint32) (bool, error) {
+					return true, nil
+				},
+			},
+		})
 
 		// when
 		err = sut.HandleNewMerkleProof(ctx, txid, merklePath)
@@ -135,9 +137,14 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.Config{
 			Storage: mockStorage,
-		}
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(_ context.Context, _ *chainhash.Hash, _ uint32) (bool, error) {
+					return true, nil
+				},
+			},
+		})
 
 		// when
 		err := sut.HandleNewMerkleProof(ctx, txid, merklePath)
@@ -151,7 +158,15 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// given
 		ctx := context.Background()
 		txid := &chainhash.Hash{1, 2, 3}
-		merklePath := &transaction.MerklePath{}
+		merklePath := &transaction.MerklePath{
+			BlockHeight: 814435,
+			Path: [][]*transaction.PathElement{{
+				{
+					Hash:   txid,
+					Offset: 123,
+				},
+			}},
+		}
 
 		mockStorage := &mockHandleMerkleProofStorage{
 			findOutputsForTransactionFunc: func(_ context.Context, _ *chainhash.Hash, _ bool) ([]*engine.Output, error) {
@@ -159,9 +174,14 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.Config{
 			Storage: mockStorage,
-		}
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(_ context.Context, _ *chainhash.Hash, _ uint32) (bool, error) {
+					return true, nil
+				},
+			},
+		})
 
 		// when
 		err := sut.HandleNewMerkleProof(ctx, txid, merklePath)
@@ -174,7 +194,15 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 		// given
 		ctx := context.Background()
 		txid := &chainhash.Hash{1, 2, 3}
-		merklePath := &transaction.MerklePath{}
+		merklePath := &transaction.MerklePath{
+			BlockHeight: 814435,
+			Path: [][]*transaction.PathElement{{
+				{
+					Hash:   txid,
+					Offset: 123,
+				},
+			}},
+		}
 
 		mockStorage := &mockHandleMerkleProofStorage{
 			findOutputsForTransactionFunc: func(_ context.Context, _ *chainhash.Hash, _ bool) ([]*engine.Output, error) {
@@ -182,9 +210,14 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.Config{
 			Storage: mockStorage,
-		}
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(_ context.Context, _ *chainhash.Hash, _ uint32) (bool, error) {
+					return true, nil
+				},
+			},
+		})
 
 		// when
 		err := sut.HandleNewMerkleProof(ctx, txid, merklePath)
@@ -225,8 +258,6 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				*txid2: {Transaction: tx2},
 			},
 		}
-		beef2Bytes, err := beef.AtomicBytes(txid2)
-		require.NoError(t, err)
 
 		// Create merkle path for tx2
 		merklePath := &transaction.MerklePath{
@@ -256,7 +287,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 			},
 			Topic:           "test-topic",
 			OutputsConsumed: []*transaction.Outpoint{{Txid: *txid1, Index: 0}},
-			Beef:            beef2Bytes,
+			Beef:            beef,
 		}
 
 		updateCount := 0
@@ -273,19 +304,24 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 				}
 				return nil, errOutputNotFound
 			},
-			updateOutputBlockHeightFunc: func(_ context.Context, _ *transaction.Outpoint, _ string, _ uint32, _ uint64, _ []byte) error {
+			updateOutputBlockHeightFunc: func(_ context.Context, _ *transaction.Outpoint, _ string, _ uint32, _ uint64) error {
 				updateCount++
 				return nil
 			},
 		}
 
-		sut := &engine.Engine{
+		sut := engine.NewEngine(&engine.Config{
 			Storage:        mockStorage,
 			LookupServices: map[string]engine.LookupService{},
-		}
+			ChainTracker: fakeChainTracker{
+				isValidRootForHeight: func(_ context.Context, _ *chainhash.Hash, _ uint32) (bool, error) {
+					return true, nil
+				},
+			},
+		})
 
 		// when
-		err = sut.HandleNewMerkleProof(ctx, txid2, merklePath)
+		err := sut.HandleNewMerkleProof(ctx, txid2, merklePath)
 
 		// then
 		require.NoError(t, err)
@@ -297,7 +333,7 @@ func TestEngine_HandleNewMerkleProof(t *testing.T) {
 type mockHandleMerkleProofStorage struct {
 	findOutputsForTransactionFunc func(_ context.Context, _ *chainhash.Hash, _ bool) ([]*engine.Output, error)
 	findOutputFunc                func(_ context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error)
-	updateOutputBlockHeightFunc   func(_ context.Context, _ *transaction.Outpoint, _ string, blockHeight uint32, blockIdx uint64, _ []byte) error
+	updateOutputBlockHeightFunc   func(_ context.Context, _ *transaction.Outpoint, _ string, blockHeight uint32, blockIdx uint64) error
 }
 
 func (m *mockHandleMerkleProofStorage) FindOutputsForTransaction(ctx context.Context, txid *chainhash.Hash, includeBEEF bool) ([]*engine.Output, error) {
@@ -314,9 +350,9 @@ func (m *mockHandleMerkleProofStorage) FindOutput(ctx context.Context, outpoint 
 	return nil, errMockFunctionNotSet
 }
 
-func (m *mockHandleMerkleProofStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64, ancillaryBeef []byte) error {
+func (m *mockHandleMerkleProofStorage) UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIdx uint64) error {
 	if m.updateOutputBlockHeightFunc != nil {
-		return m.updateOutputBlockHeightFunc(ctx, outpoint, topic, blockHeight, blockIdx, ancillaryBeef)
+		return m.updateOutputBlockHeightFunc(ctx, outpoint, topic, blockHeight, blockIdx)
 	}
 	return nil
 }
@@ -354,7 +390,7 @@ func (m *mockHandleMerkleProofStorage) FindOutputs(_ context.Context, _ []*trans
 	return nil, nil
 }
 
-func (m *mockHandleMerkleProofStorage) InsertOutput(_ context.Context, _ *engine.Output) error {
+func (m *mockHandleMerkleProofStorage) InsertOutputs(_ context.Context, _ string, _ *chainhash.Hash, _ []uint32, _ []*transaction.Outpoint, _ *transaction.Beef, _ []*chainhash.Hash) error {
 	return nil
 }
 
@@ -370,7 +406,7 @@ func (m *mockHandleMerkleProofStorage) MarkUTXOsAsSpent(_ context.Context, _ []*
 	return nil
 }
 
-func (m *mockHandleMerkleProofStorage) UpdateTransactionBEEF(_ context.Context, _ *chainhash.Hash, _ []byte) error {
+func (m *mockHandleMerkleProofStorage) UpdateTransactionBEEF(_ context.Context, _ *chainhash.Hash, _ *transaction.Beef) error {
 	return nil
 }
 
@@ -380,6 +416,18 @@ func (m *mockHandleMerkleProofStorage) UpdateLastInteraction(_ context.Context, 
 
 func (m *mockHandleMerkleProofStorage) GetLastInteraction(_ context.Context, _, _ string) (float64, error) {
 	return 0, nil
+}
+
+func (m *mockHandleMerkleProofStorage) FindOutpointsByMerkleState(_ context.Context, _ string, _ engine.MerkleState, _ uint32) ([]*transaction.Outpoint, error) {
+	return nil, nil
+}
+
+func (m *mockHandleMerkleProofStorage) ReconcileMerkleRoot(_ context.Context, _ string, _ uint32, _ *chainhash.Hash) error {
+	return nil
+}
+
+func (m *mockHandleMerkleProofStorage) LoadAncillaryBeef(_ context.Context, _ *engine.Output) error {
+	return nil
 }
 
 // Mock lookup service

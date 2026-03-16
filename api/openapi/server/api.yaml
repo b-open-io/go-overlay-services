@@ -5,7 +5,7 @@ info:
   description: The overlay server API
 
 servers:
-  - url: http://localhost:3000
+  - url: http://localhost:3000/api/v1
 
 tags:
   - name: admin
@@ -14,7 +14,7 @@ tags:
     description: Non Admin API endpoints
 
 paths:
-  /api/v1/admin/syncAdvertisements:
+  /admin/syncAdvertisements:
     post:
       tags:
         - admin
@@ -28,7 +28,7 @@ paths:
         500:
           $ref: '#/components/responses/InternalServerErrorResponse'
 
-  /api/v1/listLookupServiceProviders:
+  /listLookupServiceProviders:
     get:
       tags:
         - non-admin
@@ -40,7 +40,7 @@ paths:
         200:
           $ref: '../paths/non_admin/responses.yaml#/components/responses/MetadataResponse'
 
-  /api/v1/listTopicManagers:
+  /listTopicManagers:
     get:
       tags:
         - non-admin
@@ -52,7 +52,7 @@ paths:
         200:
           $ref: '../paths/non_admin/responses.yaml#/components/responses/MetadataResponse'
 
-  /api/v1/getDocumentationForLookupServiceProvider:
+  /getDocumentationForLookupServiceProvider:
     get:
       tags:
         - non-admin
@@ -75,7 +75,7 @@ paths:
         500:
           $ref: '#/components/responses/InternalServerErrorResponse'
 
-  /api/v1/admin/startGASPSync:
+  /admin/startGASPSync:
     post:
       tags:
         - admin
@@ -87,7 +87,7 @@ paths:
         200:
           $ref: '../paths/admin/responses.yaml#/components/responses/StartGASPSyncResponse'
 
-  /api/v1/getDocumentationForTopicManager:
+  /getDocumentationForTopicManager:
     get:
       tags:
         - non-admin
@@ -110,7 +110,7 @@ paths:
         500:
           $ref: '#/components/responses/InternalServerErrorResponse'
 
-  /api/v1/submit:
+  /submit:
     post:
       tags:
         - non-admin
@@ -141,7 +141,7 @@ paths:
         409:
           $ref: '#/components/responses/RequestTimeoutResponse'
 
-  /api/v1/requestSyncResponse:
+  /requestSyncResponse:
     post:
       tags:
         - non-admin
@@ -167,7 +167,7 @@ paths:
         500:
           $ref: '#/components/responses/InternalServerErrorResponse'
 
-  /api/v1/requestForeignGASPNode:
+  /requestForeignGASPNode:
     post:
       tags:
         - non-admin
@@ -192,7 +192,7 @@ paths:
         500:
           $ref: '#/components/responses/InternalServerErrorResponse'
 
-  /api/v1/lookup:
+  /lookup:
     post:
       tags:
         - non-admin
@@ -211,7 +211,7 @@ paths:
         500:
           $ref: '#/components/responses/InternalServerErrorResponse'
 
-  /api/v1/arc-ingest:
+  /arc-ingest:
     post:
       tags:
         - non-admin

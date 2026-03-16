@@ -445,14 +445,12 @@ func TestOverlayGASPStorage_HydrateGASPNode(t *testing.T) {
 
 		beef, err := transaction.NewBeefFromTransaction(tx)
 		require.NoError(t, err)
-		beefBytes, err := beef.AtomicBytes(tx.TxID())
-		require.NoError(t, err)
 
 		mockStorage := &mockStorage{
 			findOutputFunc: func(_ context.Context, outpoint *transaction.Outpoint, _ *string, _ *bool, _ bool) (*engine.Output, error) {
 				return &engine.Output{
 					Outpoint: *outpoint,
-					Beef:     beefBytes,
+					Beef:     beef,
 				}, nil
 			},
 		}
@@ -545,7 +543,7 @@ func (m *mockStorage) InsertAppliedTransaction(_ context.Context, _ *overlay.App
 	return nil
 }
 
-func (m *mockStorage) UpdateTransactionBEEF(_ context.Context, _ *chainhash.Hash, _ []byte) error {
+func (m *mockStorage) UpdateTransactionBEEF(_ context.Context, _ *chainhash.Hash, _ *transaction.Beef) error {
 	return nil
 }
 
@@ -553,7 +551,7 @@ func (m *mockStorage) MarkUTXOsAsSpent(_ context.Context, _ []*transaction.Outpo
 	return nil
 }
 
-func (m *mockStorage) InsertOutput(_ context.Context, _ *engine.Output) error {
+func (m *mockStorage) InsertOutputs(_ context.Context, _ string, _ *chainhash.Hash, _ []uint32, _ []*transaction.Outpoint, _ *transaction.Beef, _ []*chainhash.Hash) error {
 	return nil
 }
 
@@ -561,7 +559,7 @@ func (m *mockStorage) FindOutputsForTransaction(_ context.Context, _ *chainhash.
 	return nil, nil
 }
 
-func (m *mockStorage) UpdateOutputBlockHeight(_ context.Context, _ *transaction.Outpoint, _ string, _ uint32, _ uint64, _ []byte) error {
+func (m *mockStorage) UpdateOutputBlockHeight(_ context.Context, _ *transaction.Outpoint, _ string, _ uint32, _ uint64) error {
 	return nil
 }
 
@@ -571,4 +569,16 @@ func (m *mockStorage) UpdateLastInteraction(_ context.Context, _, _ string, _ fl
 
 func (m *mockStorage) GetLastInteraction(_ context.Context, _, _ string) (float64, error) {
 	return 0, nil
+}
+
+func (m *mockStorage) FindOutpointsByMerkleState(_ context.Context, _ string, _ engine.MerkleState, _ uint32) ([]*transaction.Outpoint, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) ReconcileMerkleRoot(_ context.Context, _ string, _ uint32, _ *chainhash.Hash) error {
+	return nil
+}
+
+func (m *mockStorage) LoadAncillaryBeef(_ context.Context, _ *engine.Output) error {
+	return nil
 }

@@ -34,7 +34,7 @@ func (h *RequestForeignGASPNodeHandler) Handle(c *fiber.Ctx, params openapi.Requ
 
 	node, err := h.service.RequestForeignGASPNode(c.Context(), app.RequestForeignGASPNodeDTO{
 		GraphID:     body.GraphID,
-		TxID:        body.TxID,
+		TxID:        body.Txid,
 		OutputIndex: body.OutputIndex,
 		Topic:       params.XBSVTopic,
 	})
@@ -87,6 +87,5 @@ func NewRequestForeignGASPNodeSuccessResponse(node *gasp.Node) openapi.GASPNode 
 		TxMetadata:     node.TxMetadata,
 		OutputMetadata: node.OutputMetadata,
 		Inputs:         inputs,
-		AncillaryBeef:  node.AncillaryBeef,
 	}
 }

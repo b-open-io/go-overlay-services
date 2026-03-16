@@ -55,11 +55,10 @@ type Node struct {
 	GraphID        *transaction.Outpoint `json:"graphID"`
 	RawTx          string                `json:"rawTx"`
 	OutputIndex    uint32                `json:"outputIndex"`
-	Proof          *string               `json:"proof"`
-	TxMetadata     string                `json:"txMetadata"`
-	OutputMetadata string                `json:"outputMetadata"`
-	Inputs         map[string]*Input     `json:"inputs"`
-	AncillaryBeef  []byte                `json:"ancillaryBeef"`
+	Proof          *string               `json:"proof,omitempty"`
+	TxMetadata     string                `json:"txMetadata,omitempty"`
+	OutputMetadata string                `json:"outputMetadata,omitempty"`
+	Inputs         map[string]*Input     `json:"inputs,omitempty"`
 }
 
 // NodeResponseData contains metadata flags for a node response.
@@ -69,7 +68,7 @@ type NodeResponseData struct {
 
 // NodeResponse represents the response when submitting a node, indicating which inputs are needed.
 type NodeResponse struct {
-	RequestedInputs map[string]*NodeResponseData `json:"requestedInputs"`
+	RequestedInputs map[transaction.Outpoint]*NodeResponseData `json:"requestedInputs"`
 }
 
 // VersionMismatchError represents an error that occurs when GASP versions do not match between nodes.

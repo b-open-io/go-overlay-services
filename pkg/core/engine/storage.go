@@ -2,7 +2,7 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
@@ -10,12 +10,12 @@ import (
 )
 
 // ErrNotFound is returned when a requested item is not found in storage.
-var ErrNotFound = fmt.Errorf("not-found")
+var ErrNotFound = errors.New("not-found")
 
 // Storage defines the interface for persisting and retrieving overlay transaction data.
 type Storage interface {
-	// Adds a new output to storage
-	InsertOutput(ctx context.Context, utxo *Output) error
+	// Add a transaction's outputs to storage.
+	InsertOutputs(ctx context.Context, topic string, txid *chainhash.Hash, outputs []uint32, outpointsConsumed []*transaction.Outpoint, beef *transaction.Beef, ancillaryTxids []*chainhash.Hash) error
 
 	// Finds an output from storage
 	FindOutput(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*Output, error)
@@ -38,10 +38,10 @@ type Storage interface {
 	UpdateConsumedBy(ctx context.Context, outpoint *transaction.Outpoint, topic string, consumedBy []*transaction.Outpoint) error
 
 	// Updates the beef data for a transaction
-	UpdateTransactionBEEF(ctx context.Context, txid *chainhash.Hash, beef []byte) error
+	UpdateTransactionBEEF(ctx context.Context, txid *chainhash.Hash, beef *transaction.Beef) error
 
 	// Updates the block height on an output
-	UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64, ancillaryBeef []byte) error
+	UpdateOutputBlockHeight(ctx context.Context, outpoint *transaction.Outpoint, topic string, blockHeight uint32, blockIndex uint64) error
 
 	// Inserts record of the applied transaction
 	InsertAppliedTransaction(ctx context.Context, tx *overlay.AppliedTransaction) error
@@ -55,4 +55,19 @@ type Storage interface {
 	// Retrieves the last interaction score for a given host and topic
 	// Returns 0 if no record exists
 	GetLastInteraction(ctx context.Context, host, topic string) (float64, error)
+
+	// Finds outpoints with a specific merkle validation state
+	// Returns only the outpoints (not full output data) for efficiency
+	FindOutpointsByMerkleState(ctx context.Context, topic string, state MerkleState, limit uint32) ([]*transaction.Outpoint, error)
+
+	// Reconciles validation state for all outputs at a given block height
+	// Compares outputs' merkle roots with the authoritative root and updates states:
+	// - Matching roots become Validated (or Immutable if old enough)
+	// - Non-matching roots become Invalidated
+	// - Null roots remain Unmined
+	ReconcileMerkleRoot(ctx context.Context, topic string, blockHeight uint32, merkleRoot *chainhash.Hash) error
+
+	// LoadAncillaryBeef merges an output's AncillaryTxids into its Beef field.
+	// This is used when the full BEEF with all ancillary transactions is needed.
+	LoadAncillaryBeef(ctx context.Context, output *Output) error
 }

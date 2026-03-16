@@ -26,7 +26,7 @@ func TestRequestForeignGASPNodeHandler_InvalidCases(t *testing.T) {
 			payload: openapi.RequestForeignGASPNodeBody{
 				GraphID:     testabilities.DefaultValidGraphID,
 				OutputIndex: testabilities.DefaultValidOutputIndex,
-				TxID:        testabilities.DefaultValidTxID,
+				Txid:        testabilities.DefaultValidTxID,
 			},
 			headers: map[string]string{
 				fiber.HeaderContentType: fiber.MIMEApplicationJSON,
@@ -104,7 +104,7 @@ func TestRequestForeignGASPNodeHandler_ValidCase(t *testing.T) {
 		SetBody(openapi.RequestForeignGASPNodeBody{
 			GraphID:     testabilities.DefaultValidGraphID,
 			OutputIndex: testabilities.DefaultValidOutputIndex,
-			TxID:        testabilities.DefaultValidTxID,
+			Txid:        testabilities.DefaultValidTxID,
 		}).
 		SetResult(&actualResponse).
 		Post("/api/v1/requestForeignGASPNode")

@@ -68,14 +68,14 @@ type LookupQuestionJSONBody struct {
 
 // RequestForeignGASPNodeJSONBody defines parameters for RequestForeignGASPNode.
 type RequestForeignGASPNodeJSONBody struct {
-	// GraphID The graph ID in the format of "txID.outputIndex"
+	// GraphID The graph ID in the format of "txid.outputIndex"
 	GraphID string `json:"graphID"`
 
 	// OutputIndex The output index
 	OutputIndex uint32 `json:"outputIndex"`
 
-	// TxID The transaction ID
-	TxID string `json:"txID"`
+	// Txid The transaction ID
+	Txid string `json:"txid"`
 }
 
 // RequestForeignGASPNodeParams defines parameters for RequestForeignGASPNode.
@@ -85,6 +85,9 @@ type RequestForeignGASPNodeParams struct {
 
 // RequestSyncResponseJSONBody defines parameters for RequestSyncResponse.
 type RequestSyncResponseJSONBody struct {
+	// Limit Maximum number of items to return
+	Limit uint32 `json:"limit"`
+
 	// Since Timestamp or sequence number from which to start synchronization
 	Since float64 `json:"since"`
 
@@ -117,37 +120,38 @@ type RequestSyncResponseJSONRequestBody RequestSyncResponseJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// (POST /api/v1/admin/startGASPSync)
+
+	// (POST /admin/startGASPSync)
 	StartGASPSync(c *fiber.Ctx) error
 
-	// (POST /api/v1/admin/syncAdvertisements)
+	// (POST /admin/syncAdvertisements)
 	AdvertisementsSync(c *fiber.Ctx) error
 
-	// (POST /api/v1/arc-ingest)
+	// (POST /arc-ingest)
 	ArcIngest(c *fiber.Ctx) error
 
-	// (GET /api/v1/getDocumentationForLookupServiceProvider)
+	// (GET /getDocumentationForLookupServiceProvider)
 	GetLookupServiceProviderDocumentation(c *fiber.Ctx, params GetLookupServiceProviderDocumentationParams) error
 
-	// (GET /api/v1/getDocumentationForTopicManager)
+	// (GET /getDocumentationForTopicManager)
 	GetTopicManagerDocumentation(c *fiber.Ctx, params GetTopicManagerDocumentationParams) error
 
-	// (GET /api/v1/listLookupServiceProviders)
+	// (GET /listLookupServiceProviders)
 	ListLookupServiceProviders(c *fiber.Ctx) error
 
-	// (GET /api/v1/listTopicManagers)
+	// (GET /listTopicManagers)
 	ListTopicManagers(c *fiber.Ctx) error
 
-	// (POST /api/v1/lookup)
+	// (POST /lookup)
 	LookupQuestion(c *fiber.Ctx) error
 
-	// (POST /api/v1/requestForeignGASPNode)
+	// (POST /requestForeignGASPNode)
 	RequestForeignGASPNode(c *fiber.Ctx, params RequestForeignGASPNodeParams) error
 
-	// (POST /api/v1/requestSyncResponse)
+	// (POST /requestSyncResponse)
 	RequestSyncResponse(c *fiber.Ctx, params RequestSyncResponseParams) error
 
-	// (POST /api/v1/submit)
+	// (POST /submit)
 	SubmitTransaction(c *fiber.Ctx, params SubmitTransactionParams) error
 }
 
@@ -160,6 +164,7 @@ type ServerInterfaceWrapper struct {
 
 // StartGASPSync operation middleware
 func (siw *ServerInterfaceWrapper) StartGASPSync(c *fiber.Ctx) error {
+
 	c.Context().SetUserValue(BearerAuthScopes, []string{"admin"})
 
 	for _, m := range siw.handlerMiddleware {
@@ -172,6 +177,7 @@ func (siw *ServerInterfaceWrapper) StartGASPSync(c *fiber.Ctx) error {
 
 // AdvertisementsSync operation middleware
 func (siw *ServerInterfaceWrapper) AdvertisementsSync(c *fiber.Ctx) error {
+
 	c.Context().SetUserValue(BearerAuthScopes, []string{"admin"})
 
 	for _, m := range siw.handlerMiddleware {
@@ -184,6 +190,7 @@ func (siw *ServerInterfaceWrapper) AdvertisementsSync(c *fiber.Ctx) error {
 
 // ArcIngest operation middleware
 func (siw *ServerInterfaceWrapper) ArcIngest(c *fiber.Ctx) error {
+
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
 
 	for _, m := range siw.handlerMiddleware {
@@ -196,6 +203,7 @@ func (siw *ServerInterfaceWrapper) ArcIngest(c *fiber.Ctx) error {
 
 // GetLookupServiceProviderDocumentation operation middleware
 func (siw *ServerInterfaceWrapper) GetLookupServiceProviderDocumentation(c *fiber.Ctx) error {
+
 	var err error
 
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
@@ -212,6 +220,7 @@ func (siw *ServerInterfaceWrapper) GetLookupServiceProviderDocumentation(c *fibe
 	// ------------- Required query parameter "lookupService" -------------
 
 	if paramValue := c.Query("lookupService"); paramValue != "" {
+
 	} else {
 		return fiber.NewError(fiber.StatusBadRequest, "A valid lookupService must be provided to retrieve documentation.")
 	}
@@ -231,6 +240,7 @@ func (siw *ServerInterfaceWrapper) GetLookupServiceProviderDocumentation(c *fibe
 
 // GetTopicManagerDocumentation operation middleware
 func (siw *ServerInterfaceWrapper) GetTopicManagerDocumentation(c *fiber.Ctx) error {
+
 	var err error
 
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
@@ -247,6 +257,7 @@ func (siw *ServerInterfaceWrapper) GetTopicManagerDocumentation(c *fiber.Ctx) er
 	// ------------- Required query parameter "topicManager" -------------
 
 	if paramValue := c.Query("topicManager"); paramValue != "" {
+
 	} else {
 		return fiber.NewError(fiber.StatusBadRequest, "A valid topicManager must be provided to retrieve documentation.")
 	}
@@ -266,6 +277,7 @@ func (siw *ServerInterfaceWrapper) GetTopicManagerDocumentation(c *fiber.Ctx) er
 
 // ListLookupServiceProviders operation middleware
 func (siw *ServerInterfaceWrapper) ListLookupServiceProviders(c *fiber.Ctx) error {
+
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
 
 	for _, m := range siw.handlerMiddleware {
@@ -278,6 +290,7 @@ func (siw *ServerInterfaceWrapper) ListLookupServiceProviders(c *fiber.Ctx) erro
 
 // ListTopicManagers operation middleware
 func (siw *ServerInterfaceWrapper) ListTopicManagers(c *fiber.Ctx) error {
+
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
 
 	for _, m := range siw.handlerMiddleware {
@@ -290,6 +303,7 @@ func (siw *ServerInterfaceWrapper) ListTopicManagers(c *fiber.Ctx) error {
 
 // LookupQuestion operation middleware
 func (siw *ServerInterfaceWrapper) LookupQuestion(c *fiber.Ctx) error {
+
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
 
 	for _, m := range siw.handlerMiddleware {
@@ -302,6 +316,7 @@ func (siw *ServerInterfaceWrapper) LookupQuestion(c *fiber.Ctx) error {
 
 // RequestForeignGASPNode operation middleware
 func (siw *ServerInterfaceWrapper) RequestForeignGASPNode(c *fiber.Ctx) error {
+
 	var err error
 
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
@@ -336,6 +351,7 @@ func (siw *ServerInterfaceWrapper) RequestForeignGASPNode(c *fiber.Ctx) error {
 
 // RequestSyncResponse operation middleware
 func (siw *ServerInterfaceWrapper) RequestSyncResponse(c *fiber.Ctx) error {
+
 	var err error
 
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
@@ -370,6 +386,7 @@ func (siw *ServerInterfaceWrapper) RequestSyncResponse(c *fiber.Ctx) error {
 
 // SubmitTransaction operation middleware
 func (siw *ServerInterfaceWrapper) SubmitTransaction(c *fiber.Ctx) error {
+
 	var err error
 
 	c.Context().SetUserValue(BearerAuthScopes, []string{"user"})
@@ -426,25 +443,26 @@ func RegisterHandlersWithOptions(router fiber.Router, si ServerInterface, option
 		router.Use(m)
 	}
 
-	router.Post(options.BaseURL+"/api/v1/admin/startGASPSync", wrapper.StartGASPSync)
+	router.Post(options.BaseURL+"/admin/startGASPSync", wrapper.StartGASPSync)
 
-	router.Post(options.BaseURL+"/api/v1/admin/syncAdvertisements", wrapper.AdvertisementsSync)
+	router.Post(options.BaseURL+"/admin/syncAdvertisements", wrapper.AdvertisementsSync)
 
-	router.Post(options.BaseURL+"/api/v1/arc-ingest", wrapper.ArcIngest)
+	router.Post(options.BaseURL+"/arc-ingest", wrapper.ArcIngest)
 
-	router.Get(options.BaseURL+"/api/v1/getDocumentationForLookupServiceProvider", wrapper.GetLookupServiceProviderDocumentation)
+	router.Get(options.BaseURL+"/getDocumentationForLookupServiceProvider", wrapper.GetLookupServiceProviderDocumentation)
 
-	router.Get(options.BaseURL+"/api/v1/getDocumentationForTopicManager", wrapper.GetTopicManagerDocumentation)
+	router.Get(options.BaseURL+"/getDocumentationForTopicManager", wrapper.GetTopicManagerDocumentation)
 
-	router.Get(options.BaseURL+"/api/v1/listLookupServiceProviders", wrapper.ListLookupServiceProviders)
+	router.Get(options.BaseURL+"/listLookupServiceProviders", wrapper.ListLookupServiceProviders)
 
-	router.Get(options.BaseURL+"/api/v1/listTopicManagers", wrapper.ListTopicManagers)
+	router.Get(options.BaseURL+"/listTopicManagers", wrapper.ListTopicManagers)
 
-	router.Post(options.BaseURL+"/api/v1/lookup", wrapper.LookupQuestion)
+	router.Post(options.BaseURL+"/lookup", wrapper.LookupQuestion)
 
-	router.Post(options.BaseURL+"/api/v1/requestForeignGASPNode", wrapper.RequestForeignGASPNode)
+	router.Post(options.BaseURL+"/requestForeignGASPNode", wrapper.RequestForeignGASPNode)
 
-	router.Post(options.BaseURL+"/api/v1/requestSyncResponse", wrapper.RequestSyncResponse)
+	router.Post(options.BaseURL+"/requestSyncResponse", wrapper.RequestSyncResponse)
 
-	router.Post(options.BaseURL+"/api/v1/submit", wrapper.SubmitTransaction)
+	router.Post(options.BaseURL+"/submit", wrapper.SubmitTransaction)
+
 }

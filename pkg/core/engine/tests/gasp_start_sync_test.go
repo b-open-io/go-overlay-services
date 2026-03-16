@@ -13,13 +13,12 @@ import (
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 )
 
-var errInternalQueryCallFailure = errors.New("internal query call failure")
-
 func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 	// given:
 	resolver := LookupResolverMock{
 		ExpectQueryCall:       true,
 		ExpectSetTrackersCall: true,
+		ExpectTrackersAccess:  true,
 		ExpectedAnswer: &lookup.LookupAnswer{
 			Type: lookup.AnswerTypeOutputList,
 			Outputs: []*lookup.OutputListItem{
@@ -37,18 +36,18 @@ func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 	}
 
 	mockStorage := &fakeStorage{
-		getLastInteractionFunc: func(_ context.Context, _, _ string) (float64, error) {
+		getLastInteractionFunc: func(_ context.Context, _ string, _ string) (float64, error) {
 			return 0, nil
 		},
 		findUTXOsForTopicFunc: func(_ context.Context, _ string, _ float64, _ uint32, _ bool) ([]*engine.Output, error) {
 			return []*engine.Output{}, nil
 		},
-		updateLastInteractionFunc: func(_ context.Context, _, _ string, _ float64) error {
+		updateLastInteractionFunc: func(_ context.Context, _ string, _ string, _ float64) error {
 			return nil
 		},
 	}
 
-	sut := engine.NewEngine(engine.Engine{
+	sut := engine.NewEngine(&engine.Config{
 		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",
@@ -68,11 +67,12 @@ func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 
 func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 	// given:
-	// Use the static error variable
+	expectedQueryCallErr := errors.New("internal query call failure") //nolint:err113 // test sentinel
 	resolver := LookupResolverMock{
 		ExpectQueryCall:       true,
 		ExpectSetTrackersCall: true,
-		ExpectedError:         errInternalQueryCallFailure,
+		ExpectTrackersAccess:  true,
+		ExpectedError:         expectedQueryCallErr,
 		ExpectedAnswer: &lookup.LookupAnswer{
 			Type: lookup.AnswerTypeOutputList,
 			Outputs: []*lookup.OutputListItem{
@@ -91,18 +91,18 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 	}
 
 	mockStorage := &fakeStorage{
-		getLastInteractionFunc: func(_ context.Context, _, _ string) (float64, error) {
+		getLastInteractionFunc: func(_ context.Context, _ string, _ string) (float64, error) {
 			return 0, nil
 		},
 		findUTXOsForTopicFunc: func(_ context.Context, _ string, _ float64, _ uint32, _ bool) ([]*engine.Output, error) {
 			return []*engine.Output{}, nil
 		},
-		updateLastInteractionFunc: func(_ context.Context, _, _ string, _ float64) error {
+		updateLastInteractionFunc: func(_ context.Context, _ string, _ string, _ float64) error {
 			return nil
 		},
 	}
 
-	sut := engine.NewEngine(engine.Engine{
+	sut := engine.NewEngine(&engine.Config{
 		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",
@@ -115,7 +115,7 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 	err := sut.StartGASPSync(context.Background())
 
 	// then:
-	require.ErrorIs(t, err, errInternalQueryCallFailure)
+	require.ErrorIs(t, err, expectedQueryCallErr)
 
 	resolver.AssertCalled(t)
 }
@@ -125,6 +125,7 @@ func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
 	resolver := LookupResolverMock{
 		ExpectQueryCall:       true,
 		ExpectSetTrackersCall: true,
+		ExpectTrackersAccess:  true,
 		ExpectedAnswer: &lookup.LookupAnswer{
 			Type: lookup.AnswerTypeOutputList,
 			Outputs: []*lookup.OutputListItem{
@@ -143,18 +144,18 @@ func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
 	}
 
 	mockStorage := &fakeStorage{
-		getLastInteractionFunc: func(_ context.Context, _, _ string) (float64, error) {
+		getLastInteractionFunc: func(_ context.Context, _ string, _ string) (float64, error) {
 			return 0, nil
 		},
 		findUTXOsForTopicFunc: func(_ context.Context, _ string, _ float64, _ uint32, _ bool) ([]*engine.Output, error) {
 			return []*engine.Output{}, nil
 		},
-		updateLastInteractionFunc: func(_ context.Context, _, _ string, _ float64) error {
+		updateLastInteractionFunc: func(_ context.Context, _ string, _ string, _ float64) error {
 			return nil
 		},
 	}
 
-	sut := engine.NewEngine(engine.Engine{
+	sut := engine.NewEngine(&engine.Config{
 		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",

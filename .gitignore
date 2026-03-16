@@ -1,3 +1,6 @@
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -45,3 +48,11 @@ node_modules/
 /config.yaml
 /config.yml
 /config.json
+
+# Visual Studio Code
+.vscode/
+
+# AI context
+CLAUDE.md
+AGENT.md
+.claude

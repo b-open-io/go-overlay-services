@@ -14,6 +14,7 @@ import (
 
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/adapters"
+	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports"
 	"github.com/bsv-blockchain/go-overlay-services/pkg/server/internal/ports/middleware"
 )
 
@@ -52,6 +53,9 @@ type Config struct {
 
 	// ARCCallbackToken is the token for authenticating ARC callback requests.
 	ARCCallbackToken string `mapstructure:"arc_callback_token"`
+
+	// BaseURL is the base path prefix for all API routes (e.g., "/api/v1").
+	BaseURL string `mapstructure:"base_url"`
 }
 
 // DefaultConfig provides a default configuration with reasonable values for local development.
@@ -65,6 +69,7 @@ var DefaultConfig = Config{
 	ConnectionReadTimeout: 10 * time.Second,
 	ARCAPIKey:             "",
 	ARCCallbackToken:      uuid.NewString(),
+	BaseURL:               "/api/v1",
 }
 
 // Option defines a functional option for configuring an HTTP server.
@@ -179,22 +184,23 @@ func New(opts ...Option) *HTTP {
 		o(srv)
 	}
 
-	srv.app = RegisterRoutesWithErrorHandler(
-		fiber.New(fiber.Config{
-			CaseSensitive: true,
-			StrictRouting: true,
-			ServerHeader:  srv.cfg.ServerHeader,
-			AppName:       srv.cfg.AppName,
-			ReadTimeout:   srv.cfg.ConnectionReadTimeout,
-		}),
-		&RegisterRoutesConfig{
-			ARCAPIKey:        srv.cfg.ARCAPIKey,
-			ARCCallbackToken: srv.cfg.ARCCallbackToken,
-			AdminBearerToken: srv.cfg.AdminBearerToken,
-			Engine:           srv.engine,
-			OctetStreamLimit: srv.cfg.OctetStreamLimit,
-		},
-	)
+	srv.app = fiber.New(fiber.Config{
+		CaseSensitive: true,
+		StrictRouting: true,
+		ServerHeader:  srv.cfg.ServerHeader,
+		AppName:       srv.cfg.AppName,
+		ReadTimeout:   srv.cfg.ConnectionReadTimeout,
+		ErrorHandler:  ports.ErrorHandler(),
+	})
+
+	RegisterRoutes(srv.app, &RegisterRoutesConfig{
+		ARCAPIKey:        srv.cfg.ARCAPIKey,
+		ARCCallbackToken: srv.cfg.ARCCallbackToken,
+		AdminBearerToken: srv.cfg.AdminBearerToken,
+		Engine:           srv.engine,
+		OctetStreamLimit: srv.cfg.OctetStreamLimit,
+		BaseURL:          srv.cfg.BaseURL,
+	})
 
 	srv.app.Get("/metrics", monitor.New(monitor.Config{Title: "Overlay-services API"}))
 

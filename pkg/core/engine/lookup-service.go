@@ -12,11 +12,10 @@ import (
 
 // OutputAdmittedByTopic contains information about an output that has been admitted by a topic manager.
 type OutputAdmittedByTopic struct {
-	Topic         string
-	Outpoint      *transaction.Outpoint
-	Satoshis      uint64
-	LockingScript *script.Script
-	AtomicBEEF    []byte
+	Topic          string
+	OutputIndex    uint32
+	AtomicBEEF     []byte
+	OffChainValues []byte
 }
 
 // OutputSpent contains information about an output that has been spent.

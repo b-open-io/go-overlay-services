@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bsv-blockchain/go-sdk/chainhash"
 	"github.com/bsv-blockchain/go-sdk/overlay"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 	t.Run("should initialize empty sync configuration when not provided", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			Managers: map[string]engine.TopicManager{
 				"tm_helloworld": &mockTopicManager{},
 				"tm_custom":     &mockTopicManager{},
@@ -30,7 +31,6 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 		// Unlike the TypeScript implementation, the Go version does NOT
 		// automatically set undefined managers to SHIP by default.
-		// This is a behavioral difference that should be considered.
 		_, hasHelloworld := result.SyncConfiguration["tm_helloworld"]
 		_, hasCustom := result.SyncConfiguration["tm_custom"]
 		require.False(t, hasHelloworld)
@@ -39,7 +39,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 	t.Run("should preserve explicit sync configuration", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			Managers: map[string]engine.TopicManager{
 				"tm_helloworld": &mockTopicManager{},
 				"tm_custom":     &mockTopicManager{},
@@ -66,7 +66,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 	t.Run("should handle mixed configuration with undefined managers", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			Managers: map[string]engine.TopicManager{
 				"tm_defined":   &mockTopicManager{},
 				"tm_undefined": &mockTopicManager{},
@@ -90,7 +90,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 	t.Run("should combine ship trackers with existing peers for tm_ship", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			SHIPTrackers: []string{"tracker1", "tracker2"},
 			Managers: map[string]engine.TopicManager{
 				"tm_ship": &mockTopicManager{},
@@ -111,7 +111,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 	t.Run("should combine slap trackers with existing peers for tm_slap", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			SLAPTrackers: []string{"slap1", "slap2"},
 			Managers: map[string]engine.TopicManager{
 				"tm_slap": &mockTopicManager{},
@@ -132,7 +132,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 	t.Run("should not modify tm_ship when sync type is not Peers", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			SHIPTrackers: []string{"tracker1", "tracker2"},
 			Managers: map[string]engine.TopicManager{
 				"tm_ship": &mockTopicManager{},
@@ -152,7 +152,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 	t.Run("should not modify tm_ship when it's set to None", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			SHIPTrackers: []string{"tracker1", "tracker2"},
 			Managers: map[string]engine.TopicManager{
 				"tm_ship": &mockTopicManager{},
@@ -172,7 +172,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 	t.Run("should handle empty managers gracefully", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			Managers:          map[string]engine.TopicManager{},
 			SyncConfiguration: nil,
 		}
@@ -187,7 +187,7 @@ func TestEngine_SyncConfiguration_DefaultBehavior(t *testing.T) {
 
 	t.Run("should set concurrency if provided in sync configuration", func(t *testing.T) {
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			Managers: map[string]engine.TopicManager{
 				"tm_concurrent": &mockTopicManager{},
 			},
@@ -215,7 +215,7 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 		// The Go implementation might differ in behavior
 
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			Managers: map[string]engine.TopicManager{
 				"tm_helloworld": &mockTopicManager{},
 				"tm_undefined":  &mockTopicManager{},
@@ -242,7 +242,7 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 		// Test that disabled sync is respected
 
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			Managers: map[string]engine.TopicManager{
 				"tm_helloworld": &mockTopicManager{},
 			},
@@ -262,7 +262,7 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 		// Test deduplication when combining trackers
 
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			SHIPTrackers: []string{"tracker1", "tracker2", "tracker1"}, // tracker1 appears twice
 			SLAPTrackers: []string{"slap1", "slap2", "slap1"},          // slap1 appears twice
 			Managers: map[string]engine.TopicManager{
@@ -296,7 +296,7 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 		// Test that sync can be disabled for specific topics
 
 		// given
-		input := engine.Engine{
+		input := &engine.Config{
 			Managers: map[string]engine.TopicManager{
 				"tm_sync":   &mockTopicManager{},
 				"tm_nosync": &mockTopicManager{},
@@ -320,15 +320,11 @@ func TestEngine_SyncConfiguration_TypeScriptParity(t *testing.T) {
 // Mock topic manager for testing
 type mockTopicManager struct{}
 
-func (m *mockTopicManager) IdentifyAdmissibleOutputs(_ context.Context, _ []byte, _ map[uint32]*transaction.TransactionOutput) (overlay.AdmittanceInstructions, error) {
+func (m *mockTopicManager) IdentifyAdmissibleOutputs(_ context.Context, _ *transaction.Beef, _ *chainhash.Hash, _ []uint32) (overlay.AdmittanceInstructions, error) {
 	return overlay.AdmittanceInstructions{}, nil
 }
 
-func (m *mockTopicManager) ProcessOutput(_ context.Context, _, _ []byte, _ uint32, _ string) error {
-	return nil
-}
-
-func (m *mockTopicManager) IdentifyNeededInputs(_ context.Context, _ []byte) ([]*transaction.Outpoint, error) {
+func (m *mockTopicManager) IdentifyNeededInputs(_ context.Context, _ *transaction.Beef, _ *chainhash.Hash) ([]*transaction.Outpoint, error) {
 	return nil, nil
 }
 
