@@ -17,6 +17,11 @@ import (
 	"github.com/bsv-blockchain/go-overlay-services/pkg/core/engine"
 )
 
+const (
+	testTopic = "test-topic"
+	tmShip    = "tm_ship"
+)
+
 type fakeStorage struct {
 	findOutputFunc                  func(ctx context.Context, outpoint *transaction.Outpoint, topic *string, spent *bool, includeBEEF bool) (*engine.Output, error)
 	findOutputsFunc                 func(ctx context.Context, outpoints []*transaction.Outpoint, topic string, spent *bool, includeBEEF bool) ([]*engine.Output, error)
@@ -414,7 +419,7 @@ func createDummyValidTaggedBEEF(t *testing.T) (overlay.TaggedBEEF, *chainhash.Ha
 	beefBytes, err := beef.AtomicBytes(currentTxID)
 	require.NoError(t, err)
 
-	return overlay.TaggedBEEF{Topics: []string{"test-topic"}, Beef: beefBytes}, prevTxID
+	return overlay.TaggedBEEF{Topics: []string{testTopic}, Beef: beefBytes}, prevTxID
 }
 
 // fakeTxID returns a fixed valid chainhash.Hash for testing purposes.

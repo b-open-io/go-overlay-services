@@ -48,7 +48,7 @@ func TestEngine_StartGASPSync_CallsSyncSuccessfully(t *testing.T) {
 	}
 
 	sut := engine.NewEngine(&engine.Config{
-		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
+		SyncConfiguration: map[string]engine.SyncConfiguration{testTopic: {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",
 		SHIPTrackers:      []string{"http://localhost"},
@@ -103,7 +103,7 @@ func TestEngine_StartGASPSync_ResolverQueryFails(t *testing.T) {
 	}
 
 	sut := engine.NewEngine(&engine.Config{
-		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
+		SyncConfiguration: map[string]engine.SyncConfiguration{testTopic: {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",
 		SHIPTrackers:      []string{"http://localhost"},
@@ -156,7 +156,7 @@ func TestEngine_StartGASPSync_GaspSyncFails(t *testing.T) {
 	}
 
 	sut := engine.NewEngine(&engine.Config{
-		SyncConfiguration: map[string]engine.SyncConfiguration{"test-topic": {Type: engine.SyncConfigurationSHIP}},
+		SyncConfiguration: map[string]engine.SyncConfiguration{testTopic: {Type: engine.SyncConfigurationSHIP}},
 		Advertiser:        &advertiser,
 		HostingURL:        "http://localhost",
 		SHIPTrackers:      []string{"http://localhost"},
