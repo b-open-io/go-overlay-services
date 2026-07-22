@@ -64,6 +64,7 @@ type OverlayGASPStorage struct {
 	Topic              string
 	Engine             *Engine
 	MaxNodesInGraph    *int
+	Logger             *slog.Logger // Optional; defaults to slog.Default() when nil.
 	tempGraphNodeRefs  sync.Map
 	tempGraphNodeCount int
 	submissionTracker  sync.Map // map[chainhash.Hash]*submissionState
@@ -76,6 +77,14 @@ func NewOverlayGASPStorage(topic string, engine *Engine, maxNodesInGraph *int) *
 		Engine:          engine,
 		MaxNodesInGraph: maxNodesInGraph,
 	}
+}
+
+// log returns the configured logger or slog.Default() when no logger has been set.
+func (s *OverlayGASPStorage) log() *slog.Logger {
+	if s.Logger != nil {
+		return s.Logger
+	}
+	return slog.Default()
 }
 
 // ErrNoKnownUTXOs is returned when no UTXOs are found
@@ -134,11 +143,10 @@ func (s *OverlayGASPStorage) HydrateGASPNode(ctx context.Context, graphID, outpo
 	node := &gasp.Node{
 		GraphID:     graphID,
 		OutputIndex: outpoint.Index,
-		RawTx:       tx.Hex(),
+		RawTx:       tx.Bytes(),
 	}
 	if tx.MerklePath != nil {
-		proof := tx.MerklePath.Hex()
-		node.Proof = &proof
+		node.Proof = tx.MerklePath.Bytes()
 	}
 	return node, nil
 }
@@ -151,13 +159,13 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	response := &gasp.NodeResponse{
 		RequestedInputs: make(map[transaction.Outpoint]*gasp.NodeResponseData),
 	}
-	tx, err := transaction.NewTransactionFromHex(gaspTx.RawTx)
+	tx, err := transaction.NewTransactionFromBytes(gaspTx.RawTx)
 	if err != nil {
 		return nil, err
 	}
 	// Commented out: This was requesting ALL inputs for unmined transactions
 	// but should use IdentifyNeededInputs to get only relevant inputs
-	if gaspTx.Proof == nil || *gaspTx.Proof == "" {
+	if len(gaspTx.Proof) == 0 {
 		for _, input := range tx.Inputs {
 			outpoint := &transaction.Outpoint{
 				Txid:  *input.SourceTXID,
@@ -172,8 +180,8 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 	}
 
 	// Process merkle proof if present
-	if gaspTx.Proof != nil && *gaspTx.Proof != "" {
-		if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
+	if len(gaspTx.Proof) > 0 {
+		if tx.MerklePath, err = transaction.NewMerklePathFromBinary(gaspTx.Proof); err != nil {
 			return nil, err
 		}
 	}
@@ -211,10 +219,7 @@ func (s *OverlayGASPStorage) FindNeededInputs(ctx context.Context, gaspTx *gasp.
 		}
 
 		txid := tx.TxID()
-		admit, admitErr := s.IdentifyAdmissibleOutputs(ctx, beef, txid, previousCoins)
-		if admitErr != nil {
-			return nil, fmt.Errorf("failed to identify admissible outputs: %w", admitErr)
-		}
+		admit, _ := s.IdentifyAdmissibleOutputs(ctx, beef, txid, previousCoins)
 		if !slices.Contains(admit.OutputsToAdmit, gaspTx.OutputIndex) {
 			neededInputs, err := s.IdentifyNeededInputs(ctx, beef, txid)
 			if err != nil {
@@ -267,14 +272,14 @@ func (s *OverlayGASPStorage) AppendToGraph(_ context.Context, gaspTx *gasp.Node,
 		return ErrGraphFull
 	}
 
-	tx, err := transaction.NewTransactionFromHex(gaspTx.RawTx)
+	tx, err := transaction.NewTransactionFromBytes(gaspTx.RawTx)
 	if err != nil {
 		return err
 	}
 	txid := tx.TxID()
-	if gaspTx.Proof != nil && *gaspTx.Proof != "" {
-		if tx.MerklePath, err = transaction.NewMerklePathFromHex(*gaspTx.Proof); err != nil {
-			slog.Error("Failed to parse merkle path", "error", err, "proofLength", len(*gaspTx.Proof))
+	if len(gaspTx.Proof) > 0 {
+		if tx.MerklePath, err = transaction.NewMerklePathFromBinary(gaspTx.Proof); err != nil {
+			s.log().Error("Failed to parse merkle path", "error", err, "proofLength", len(gaspTx.Proof))
 			return err
 		}
 	}
@@ -353,7 +358,7 @@ func (s *OverlayGASPStorage) ValidateGraphAnchor(ctx context.Context, graphID *t
 		}
 		admit, err := s.IdentifyAdmissibleOutputs(ctx, beef, txid, previousCoins)
 		if err != nil {
-			slog.Error("[GASP] ValidateGraphAnchor failed to identify admissible outputs", "error", err)
+			s.log().Error("[GASP] ValidateGraphAnchor failed to identify admissible outputs", "error", err)
 			return err
 		}
 		for _, vout := range admit.OutputsToAdmit {
@@ -437,10 +442,10 @@ func (s *OverlayGASPStorage) FinalizeGraph(ctx context.Context, graphID *transac
 				nil,
 			)
 			if state.err != nil {
-				slog.Error("[GASP] Failed to submit transaction", "txid", txid.String(), "error", state.err)
+				s.log().Error("[GASP] Failed to submit transaction", "txid", txid.String(), "error", state.err)
 				return state.err
 			}
-			slog.Debug(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
+			s.log().Debug(fmt.Sprintf("[GASP] Transaction processed: %s", txid.String()))
 		}
 	}
 	return nil
@@ -486,22 +491,22 @@ func (s *OverlayGASPStorage) computeOrderedBEEFsForGraph(_ context.Context, grap
 
 func (s *OverlayGASPStorage) getBEEFForNode(node *GraphNode) ([]byte, error) {
 	if node == nil {
-		slog.Error("getBEEFForNode called with nil node", "goroutines", runtime.NumGoroutine())
+		s.log().Error("getBEEFForNode called with nil node", "goroutines", runtime.NumGoroutine())
 		return nil, ErrNilNode
 	}
 
 	var hydrator func(node *GraphNode) (*transaction.Transaction, error)
 	hydrator = func(node *GraphNode) (*transaction.Transaction, error) {
 		if node == nil {
-			slog.Error("hydrator called with nil node", "goroutines", runtime.NumGoroutine())
+			s.log().Error("hydrator called with nil node", "goroutines", runtime.NumGoroutine())
 			return nil, ErrNilNode
 		}
-		tx, err := transaction.NewTransactionFromHex(node.RawTx)
+		tx, err := transaction.NewTransactionFromBytes(node.RawTx)
 		if err != nil {
 			return nil, err
 		}
-		if node.Proof != nil && *node.Proof != "" {
-			if tx.MerklePath, err = transaction.NewMerklePathFromHex(*node.Proof); err != nil {
+		if len(node.Proof) > 0 {
+			if tx.MerklePath, err = transaction.NewMerklePathFromBinary(node.Proof); err != nil {
 				return nil, err
 			}
 			return tx, nil
